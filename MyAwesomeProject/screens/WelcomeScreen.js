@@ -1,18 +1,11 @@
 import React from 'react';
-import {
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  StyleSheet,
-  Dimensions,
-  StatusBar,
-} from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Dimensions, StatusBar, Image } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { BlurView } from 'expo-blur';
 
 const { width, height } = Dimensions.get('window');
 
-const WelcomeScreen = () => {
+export default function LoginScreen({ navigation }) {
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" />
@@ -43,59 +36,57 @@ const WelcomeScreen = () => {
             <Text style={styles.headerText}>SYSTEM</Text>
           </View>
           
-          {/* Form Container */}
-          <View style={styles.formContainer}>
-            <Text style={styles.formTitle}>
-              LOGIN
-            </Text>
+          {/* Status Window Content */}
+          <View style={styles.windowContent}>
+            <Text style={styles.appTitle}>LEVEL UP</Text>
             
             <View style={styles.divider} />
             
-            <View style={styles.inputsSection}>
-              <View style={styles.inputContainer}>
-                <Text style={styles.inputLabel}>USERNAME</Text>
-                <TextInput
-                  style={styles.inputField}
-                  placeholder="Enter username"
-                  placeholderTextColor="rgba(200, 214, 229, 0.5)"
-                />
-              </View>
-
-              <View style={styles.inputContainer}>
-                <Text style={styles.inputLabel}>PASSWORD</Text>
-                <TextInput
-                  style={styles.inputField}
-                  placeholder="Enter password"
-                  placeholderTextColor="rgba(200, 214, 229, 0.5)"
-                  secureTextEntry
-                />
-              </View>
-            </View>
+            <Text style={styles.welcomeText}>WELCOME, HUNTER</Text>
+            <Text style={styles.subtitleText}>Please log in or register to continue</Text>
             
             <View style={styles.statsContainer}>
               <View style={styles.statItem}>
                 <Text style={styles.statLabel}>STATUS</Text>
-                <Text style={styles.statValue}>VERIFICATION</Text>
+                <Text style={styles.statValue}>STANDBY</Text>
               </View>
               <View style={styles.statItem}>
-                <Text style={styles.statLabel}>SECURITY</Text>
-                <Text style={styles.statValue}>LEVEL 1</Text>
+                <Text style={styles.statLabel}>ACCESS</Text>
+                <Text style={styles.statValue}>PENDING</Text>
               </View>
             </View>
             
-            <TouchableOpacity style={styles.actionButton}>
-              <LinearGradient
-                colors={['#4dabf7', '#3250b4']}
-                style={styles.buttonGradient}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
+            <View style={styles.buttonsContainer}>
+              <TouchableOpacity 
+                style={styles.button} 
+                onPress={() => navigation.navigate('Login')}
               >
-                <Text style={styles.buttonText}>
-                  LOG IN
-                </Text>
-              </LinearGradient>
-              <View style={styles.buttonGlow} />
-            </TouchableOpacity>
+                <LinearGradient
+                  colors={['#4dabf7', '#3250b4']}
+                  style={styles.buttonGradient}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                >
+                  <Text style={styles.buttonText}>LOG IN</Text>
+                </LinearGradient>
+                <View style={styles.buttonGlow} />
+              </TouchableOpacity>
+              
+              <TouchableOpacity 
+                style={[styles.button, { marginTop: 15 }]} 
+                onPress={() => navigation.navigate('Registration')}
+              >
+                <LinearGradient
+                  colors={['#4dabf7', '#3250b4']}
+                  style={styles.buttonGradient}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                >
+                  <Text style={styles.buttonText}>REGISTER</Text>
+                </LinearGradient>
+                <View style={styles.buttonGlow} />
+              </TouchableOpacity>
+            </View>
           </View>
           
           {/* Footer */}
@@ -106,7 +97,7 @@ const WelcomeScreen = () => {
       </LinearGradient>
     </View>
   );
-};
+}
 
 const styles = StyleSheet.create({
   container: {
@@ -129,7 +120,6 @@ const styles = StyleSheet.create({
   },
   statusWindow: {
     width: width * 0.85,
-    height: height * 0.8,
     backgroundColor: 'rgba(16, 20, 45, 0.75)',
     borderRadius: 8,
     borderWidth: 1,
@@ -156,16 +146,15 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     letterSpacing: 1,
   },
-  formContainer: {
-    flex: 1,
+  windowContent: {
     padding: 20,
+    alignItems: 'center',
   },
-  formTitle: {
+  appTitle: {
     color: '#4dabf7',
-    fontSize: 28,
+    fontSize: 36,
     fontWeight: 'bold',
-    letterSpacing: 2,
-    textAlign: 'center',
+    letterSpacing: 3,
     textShadowColor: '#4dabf7',
     textShadowOffset: { width: 0, height: 0 },
     textShadowRadius: 10,
@@ -177,34 +166,23 @@ const styles = StyleSheet.create({
     marginVertical: 15,
     opacity: 0.5,
   },
-  inputsSection: {
-    marginBottom: 15,
-  },
-  inputContainer: {
-    marginBottom: 15,
-  },
-  inputLabel: {
-    color: '#c8d6e5',
-    fontSize: 12,
-    marginBottom: 5,
-    letterSpacing: 1,
-    fontWeight: 'bold',
-  },
-  inputField: {
-    backgroundColor: 'rgba(16, 24, 48, 0.8)',
-    borderWidth: 1,
-    borderColor: '#3250b4',
+  welcomeText: {
     color: '#ffffff',
-    height: 45,
-    paddingHorizontal: 10,
-    borderRadius: 4,
+    fontSize: 20,
+    fontWeight: 'bold',
+    letterSpacing: 1,
+    marginBottom: 8,
+  },
+  subtitleText: {
+    color: '#c8d6e5',
     fontSize: 14,
+    marginBottom: 20,
   },
   statsContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     width: '100%',
-    marginBottom: 20,
+    marginBottom: 25,
     paddingHorizontal: 10,
   },
   statItem: {
@@ -220,12 +198,14 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
   },
-  actionButton: {
+  buttonsContainer: {
+    width: '100%',
+  },
+  button: {
     height: 50,
     borderRadius: 6,
     overflow: 'hidden',
     position: 'relative',
-    marginBottom: 15,
   },
   buttonGradient: {
     flex: 1,
@@ -266,5 +246,3 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
   },
 });
-
-export default WelcomeScreen;
