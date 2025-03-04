@@ -8,6 +8,8 @@ import WelcomeScreen from './screens/WelcomeScreen';
 import ProfileScreen from './screens/ProfileScreen';
 import PomodoroScreen from './screens/PomodoroScreen';
 import CaloriesScreen from './screens/CaloriesScreen';
+import EducationalScreen from './screens/EducationalScreen';
+import GroupsScreen from './screens/GroupScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -49,6 +51,16 @@ export default function App() {
           name="Nutrition" 
           component={CaloriesScreen} 
           options={{ title: 'Питание' }} 
+        />
+        <Stack.Screen 
+          name="Learn" 
+          component={EducationalScreen} 
+          options={{ title: 'Образование' }} 
+        />
+        <Stack.Screen 
+          name="Groups" 
+          component={GroupsScreen} 
+          options={{ title: 'Группы' }} 
         />
       </Stack.Navigator>
     </NavigationContainer>

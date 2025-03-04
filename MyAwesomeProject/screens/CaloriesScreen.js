@@ -497,9 +497,12 @@ export default function CaloriesScreen({ navigation }) {
         </View>
         
         {/* Main Content */}
-        <View style={styles.mainContent}>
-          {activeTab === 'meals' ? renderMealsTab() : renderStatsTab()}
-        </View>
+        <ScrollView
+  style={styles.mainContent}
+  contentContainerStyle={{ flexGrow: 1, paddingBottom: 80 }} // paddingBottom для обеспечения видимости нижней навигации
+>
+  {activeTab === 'meals' ? renderMealsTab() : renderStatsTab()}
+        </ScrollView>
         
         {/* Bottom Navigation */}
         <View style={styles.bottomNav}>

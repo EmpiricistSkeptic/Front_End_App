@@ -105,7 +105,7 @@ const styles = StyleSheet.create({
   },
   background: {
     flex: 1,
-    justifyContent: 'center',
+    justifyContent: 'center', // можно изменить на 'flex-start', если нужно еще больше отодвинуть содержимое от верха
     alignItems: 'center',
   },
   particlesContainer: {
@@ -125,6 +125,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#4dabf7',
     overflow: 'hidden',
+    minHeight: height * 0.7, // расширяет окно по высоте
+    justifyContent: 'space-between', // распределяет содержимое по вертикали
+    marginVertical: 30, // отступы сверху и снизу
   },
   windowHeader: {
     flexDirection: 'row',
@@ -246,3 +249,5 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
   },
 });
+
+

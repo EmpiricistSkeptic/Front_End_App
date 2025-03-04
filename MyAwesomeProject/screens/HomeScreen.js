@@ -72,6 +72,19 @@ export default function HomeScreen({ navigation }) {
     setSelectedQuest(null);
   };
   
+  const handleAddTask = () => {
+    // Здесь можно, например, открыть модальное окно создания задачи или перейти на экран создания
+    console.log("Add Task pressed");
+  };
+
+  const handleEditTask = (quest) => {
+    console.log("Edit Task", quest);
+  };
+
+  const handleDeleteTask = (quest) => {
+    console.log("Delete Task", quest);
+  };
+  
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" />
@@ -117,7 +130,12 @@ export default function HomeScreen({ navigation }) {
         
         {/* Main Content */}
         <View style={styles.mainContent}>
-          <Text style={styles.sectionTitle}>ACTIVE QUESTS</Text>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>ACTIVE QUESTS</Text>
+            <TouchableOpacity style={styles.addButton} onPress={handleAddTask}>
+              <Ionicons name="add" size={24} color="#ffffff" />
+            </TouchableOpacity>
+          </View>
           
           <ScrollView style={styles.questsContainer}>
             {QUESTS.map(quest => (
@@ -133,7 +151,7 @@ export default function HomeScreen({ navigation }) {
                   <View 
                     style={[
                       styles.difficultyBadge, 
-                      {backgroundColor: getDifficultyColor(quest.difficulty)}
+                      { backgroundColor: getDifficultyColor(quest.difficulty) }
                     ]}
                   >
                     <Text style={styles.difficultyText}>{quest.difficulty}</Text>
@@ -193,7 +211,7 @@ export default function HomeScreen({ navigation }) {
                 <View 
                   style={[
                     styles.modalDifficultyBadge, 
-                    {backgroundColor: getDifficultyColor(selectedQuest.difficulty)}
+                    { backgroundColor: getDifficultyColor(selectedQuest.difficulty) }
                   ]}
                 >
                   <Text style={styles.difficultyText}>{selectedQuest.difficulty}</Text>
@@ -220,7 +238,7 @@ export default function HomeScreen({ navigation }) {
                   <Text 
                     style={[
                       styles.modalInfoValue, 
-                      {color: selectedQuest.completed ? '#34c759' : '#ff9500'}
+                      { color: selectedQuest.completed ? '#34c759' : '#ff9500' }
                     ]}
                   >
                     {selectedQuest.completed ? 'COMPLETED' : 'IN PROGRESS'}
@@ -230,6 +248,30 @@ export default function HomeScreen({ navigation }) {
                 <View style={styles.descriptionContainer}>
                   <Text style={styles.descriptionLabel}>Description:</Text>
                   <Text style={styles.descriptionText}>{selectedQuest.description}</Text>
+                </View>
+                
+                {/* Кнопки для редактирования и удаления задачи */}
+                <View style={styles.editDeleteContainer}>
+                  <TouchableOpacity style={styles.editButton} onPress={() => handleEditTask(selectedQuest)}>
+                    <LinearGradient
+                      colors={['#4dabf7', '#3250b4']}
+                      style={styles.editDeleteGradient}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 1 }}
+                    >
+                      <Text style={styles.editDeleteText}>Edit</Text>
+                    </LinearGradient>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.deleteButton} onPress={() => handleDeleteTask(selectedQuest)}>
+                    <LinearGradient
+                      colors={['#ff2d55', '#d11a3a']}
+                      style={styles.editDeleteGradient}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 1 }}
+                    >
+                      <Text style={styles.editDeleteText}>Delete</Text>
+                    </LinearGradient>
+                  </TouchableOpacity>
                 </View>
                 
                 <TouchableOpacity 
@@ -298,21 +340,21 @@ const styles = StyleSheet.create({
   },
   expBarContainer: {
     width: '100%',
-    height: 10,
+    height: 6,
     backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    borderRadius: 5,
+    borderRadius: 3,
     overflow: 'hidden',
   },
   expBar: {
-    width: '62.5%', // Based on sample exp: 1250/2000
+    width: '62.5%',
     height: '100%',
     backgroundColor: '#4dabf7',
-    borderRadius: 5,
+    borderRadius: 3,
   },
   expText: {
     position: 'absolute',
     right: 0,
-    top: 12,
+    top: 8,
     color: '#c8d6e5',
     fontSize: 10,
   },
@@ -320,9 +362,9 @@ const styles = StyleSheet.create({
     marginLeft: 15,
   },
   profileImage: {
-    width: 45,
-    height: 45,
-    borderRadius: 22.5,
+    width: 70,
+    height: 70,
+    borderRadius: 35,
     backgroundColor: '#3250b4',
     justifyContent: 'center',
     alignItems: 'center',
@@ -339,12 +381,25 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 20,
   },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
   sectionTitle: {
     color: '#ffffff',
     fontSize: 16,
     fontWeight: 'bold',
-    marginBottom: 15,
     letterSpacing: 1,
+  },
+  addButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#4dabf7',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   questsContainer: {
     flex: 1,
@@ -540,4 +595,31 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     shadowOffset: { width: 0, height: 0 },
   },
+  editDeleteContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 15,
+  },
+  editButton: {
+    flex: 1,
+    marginRight: 10,
+  },
+  deleteButton: {
+    flex: 1,
+  },
+  editDeleteGradient: {
+    paddingVertical: 10,
+    borderRadius: 6,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  editDeleteText: {
+    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
 });
+
+
+
+
