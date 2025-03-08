@@ -68,6 +68,7 @@ export default function EducationalScreen({ navigation }) {
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" />
+      {/* Компонент LinearGradient (с colors) отвечает за фон */}
       <LinearGradient colors={['#121539', '#080b20']} style={styles.background}>
         {/* Фон с частицами */}
         <View style={styles.particlesContainer}>
@@ -91,6 +92,13 @@ export default function EducationalScreen({ navigation }) {
         {/* Хедер */}
         <View style={styles.header}>
           <Text style={styles.headerTitle}>Educational Content</Text>
+          {/* Кнопка добавления образовательного контента */}
+          <TouchableOpacity 
+            style={styles.addContentButton} 
+            onPress={() => navigation.navigate('AddEducationalContent')}
+          >
+            <Ionicons name="add-circle-outline" size={24} color="#4dabf7" />
+          </TouchableOpacity>
           <TouchableOpacity style={styles.profileButton} onPress={() => navigation.navigate('Profile')}>
             <View style={styles.profileImage}>
               <Text style={styles.profileInitial}>E</Text>
@@ -263,7 +271,6 @@ const styles = StyleSheet.create({
   },
   header: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
     paddingTop: 50,
     paddingHorizontal: 20,
@@ -272,9 +279,13 @@ const styles = StyleSheet.create({
     borderBottomColor: 'rgba(77, 171, 247, 0.3)',
   },
   headerTitle: {
+    flex: 1,
     color: '#ffffff',
     fontSize: 20,
     fontWeight: 'bold',
+  },
+  addContentButton: {
+    marginRight: 10,
   },
   profileButton: {
     marginLeft: 15,

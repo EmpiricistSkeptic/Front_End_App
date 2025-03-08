@@ -10,13 +10,14 @@ import PomodoroScreen from './screens/PomodoroScreen';
 import CaloriesScreen from './screens/CaloriesScreen';
 import EducationalScreen from './screens/EducationalScreen';
 import GroupsScreen from './screens/GroupScreen';
+import CreateTaskScreen from './screens/CreateTaskScreen';
 
 const Stack = createNativeStackNavigator();
 
 export default function App() {
   return (
     <NavigationContainer>
-      <Stack.Navigator initialRouteName="Home">
+      <Stack.Navigator initialRouteName="Main">
         <Stack.Screen 
           name="Login" 
           component={LoginScreen} 
@@ -61,6 +62,11 @@ export default function App() {
           name="Groups" 
           component={GroupsScreen} 
           options={{ title: 'Группы' }} 
+        />
+        <Stack.Screen 
+          name="CreateTask" 
+          component={CreateTaskScreen} 
+          options={{ headerShown: false }} 
         />
       </Stack.Navigator>
     </NavigationContainer>

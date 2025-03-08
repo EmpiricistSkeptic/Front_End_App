@@ -1,10 +1,78 @@
-import React from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Dimensions, StatusBar } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, Dimensions, StatusBar, Alert, ActivityIndicator } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 
 const { width, height } = Dimensions.get('window');
 
 export default function RegistrationScreen({ navigation }) {
+  // Состояния для хранения введенных пользователем данных
+  const [username, setUsername] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
+
+  // Функция для отправки данных на сервер
+  const handleRegistration = async () => {
+    // Сбросить сообщение об ошибке
+    setErrorMessage('');
+    
+    // Проверки валидности введенных данных
+    if (!username || !email || !password || !confirmPassword) {
+      setErrorMessage('Пожалуйста, заполните все поля');
+      return;
+    }
+    
+    if (password !== confirmPassword) {
+      setErrorMessage('Пароли не совпадают');
+      return;
+    }
+    
+    // Базовая проверка формата email
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      setErrorMessage('Пожалуйста, введите корректный email');
+      return;
+    }
+    
+    try {
+      setLoading(true);
+      
+      // Отправка запроса на регистрацию
+      const response = await fetch('https://drf-project-6vzx.onrender.com/register/', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          username,
+          email,
+          password
+        }),
+      });
+      
+      const data = await response.json();
+      
+      if (!response.ok) {
+        // Обработка ошибок от API
+        throw new Error(data.detail || JSON.stringify(data));
+      }
+      
+      // Регистрация успешна
+      Alert.alert('Успешно', 'Вы успешно зарегистрировались!', [
+        { text: 'OK', onPress: () => navigation.navigate('Login') }
+      ]);
+      
+    } catch (error) {
+      // Отображение ошибки пользователю
+      setErrorMessage(`Ошибка регистрации: ${error.message}`);
+      console.error('Ошибка регистрации:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" />
@@ -44,6 +112,12 @@ export default function RegistrationScreen({ navigation }) {
             <Text style={styles.welcomeText}>NEW HUNTER</Text>
             <Text style={styles.subtitleText}>Create your hunter profile</Text>
             
+            {errorMessage ? (
+              <View style={styles.errorContainer}>
+                <Text style={styles.errorText}>{errorMessage}</Text>
+              </View>
+            ) : null}
+            
             <View style={styles.formContainer}>
               <View style={styles.inputContainer}>
                 <Text style={styles.inputLabel}>USERNAME</Text>
@@ -51,6 +125,8 @@ export default function RegistrationScreen({ navigation }) {
                   style={styles.inputField}
                   placeholder="Enter username"
                   placeholderTextColor="rgba(200, 214, 229, 0.5)"
+                  value={username}
+                  onChangeText={setUsername}
                 />
               </View>
               
@@ -61,6 +137,9 @@ export default function RegistrationScreen({ navigation }) {
                   placeholder="Enter email"
                   placeholderTextColor="rgba(200, 214, 229, 0.5)"
                   keyboardType="email-address"
+                  value={email}
+                  onChangeText={setEmail}
+                  autoCapitalize="none"
                 />
               </View>
               
@@ -71,6 +150,8 @@ export default function RegistrationScreen({ navigation }) {
                   placeholder="Enter password"
                   placeholderTextColor="rgba(200, 214, 229, 0.5)"
                   secureTextEntry
+                  value={password}
+                  onChangeText={setPassword}
                 />
               </View>
               
@@ -81,6 +162,8 @@ export default function RegistrationScreen({ navigation }) {
                   placeholder="Confirm password"
                   placeholderTextColor="rgba(200, 214, 229, 0.5)"
                   secureTextEntry
+                  value={confirmPassword}
+                  onChangeText={setConfirmPassword}
                 />
               </View>
             </View>
@@ -98,8 +181,9 @@ export default function RegistrationScreen({ navigation }) {
             
             <View style={styles.buttonsContainer}>
               <TouchableOpacity 
-                style={styles.button} 
-                onPress={() => navigation.navigate('Home')}
+                style={[styles.button, loading && styles.disabledButton]} 
+                onPress={handleRegistration}
+                disabled={loading}
               >
                 <LinearGradient
                   colors={['#4dabf7', '#3250b4']}
@@ -107,7 +191,11 @@ export default function RegistrationScreen({ navigation }) {
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 1 }}
                 >
-                  <Text style={styles.buttonText}>REGISTER</Text>
+                  {loading ? (
+                    <ActivityIndicator color="#ffffff" size="small" />
+                  ) : (
+                    <Text style={styles.buttonText}>REGISTER</Text>
+                  )}
                 </LinearGradient>
                 <View style={styles.buttonGlow} />
               </TouchableOpacity>
@@ -263,6 +351,9 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     position: 'relative',
   },
+  disabledButton: {
+    opacity: 0.7,
+  },
   buttonGradient: {
     flex: 1,
     justifyContent: 'center',
@@ -308,5 +399,18 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: 'bold',
     letterSpacing: 1,
+  },
+  errorContainer: {
+    backgroundColor: 'rgba(220, 53, 69, 0.2)',
+    padding: 10,
+    borderRadius: 5,
+    borderWidth: 1,
+    borderColor: '#dc3545',
+    marginBottom: 15,
+    width: '100%',
+  },
+  errorText: {
+    color: '#ff8a8a',
+    textAlign: 'center',
   },
 });

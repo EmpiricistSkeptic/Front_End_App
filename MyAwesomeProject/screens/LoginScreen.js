@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -7,12 +7,83 @@ import {
   StyleSheet,
   Dimensions,
   StatusBar,
+  Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const { width, height } = Dimensions.get('window');
 
-const WelcomeScreen = () => {
+const LoginScreen = ({ navigation }) => {
+  // Состояния для хранения введенных пользователем данных
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
+
+  // Функция для отправки данных на сервер
+  const handleLogin = async () => {
+    // Сбросить сообщение об ошибке
+    setErrorMessage('');
+    
+    // Проверки валидности введенных данных
+    if (!username || !password) {
+      setErrorMessage('Пожалуйста, введите имя пользователя и пароль');
+      return;
+    }
+    
+    try {
+      setLoading(true);
+      
+      // Отправка запроса на аутентификацию
+      const response = await fetch('https://drf-project-6vzx.onrender.com/login/', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          username,
+          password
+        }),
+      });
+      
+      const data = await response.json();
+      
+      if (!response.ok) {
+        // Обработка ошибок от API
+        throw new Error(data.detail || 'Неверное имя пользователя или пароль');
+      }
+      
+      // Сохранение токена аутентификации
+      if (data.token) {
+        await AsyncStorage.setItem('userToken', data.token);
+        
+        // Если в ответе есть дополнительные данные пользователя, можно сохранить и их
+        if (data.user) {
+          await AsyncStorage.setItem('userData', JSON.stringify(data.user));
+        }
+        
+        // Переход на главный экран приложения
+        navigation.navigate('Home');
+      } else {
+        throw new Error('Токен не получен');
+      }
+      
+    } catch (error) {
+      // Отображение ошибки пользователю
+      setErrorMessage(`Ошибка входа: ${error.message}`);
+      console.error('Ошибка входа:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Функция для перехода на экран регистрации
+  const goToRegistration = () => {
+    navigation.navigate('Registration');
+  };
+
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" />
@@ -50,6 +121,12 @@ const WelcomeScreen = () => {
             </Text>
             
             <View style={styles.divider} />
+
+            {errorMessage ? (
+              <View style={styles.errorContainer}>
+                <Text style={styles.errorText}>{errorMessage}</Text>
+              </View>
+            ) : null}
             
             <View style={styles.inputsSection}>
               <View style={styles.inputContainer}>
@@ -58,6 +135,9 @@ const WelcomeScreen = () => {
                   style={styles.inputField}
                   placeholder="Enter username"
                   placeholderTextColor="rgba(200, 214, 229, 0.5)"
+                  value={username}
+                  onChangeText={setUsername}
+                  autoCapitalize="none"
                 />
               </View>
 
@@ -68,6 +148,8 @@ const WelcomeScreen = () => {
                   placeholder="Enter password"
                   placeholderTextColor="rgba(200, 214, 229, 0.5)"
                   secureTextEntry
+                  value={password}
+                  onChangeText={setPassword}
                 />
               </View>
             </View>
@@ -83,18 +165,33 @@ const WelcomeScreen = () => {
               </View>
             </View>
             
-            <TouchableOpacity style={styles.actionButton}>
+            <TouchableOpacity 
+              style={[styles.actionButton, loading && styles.disabledButton]}
+              onPress={handleLogin}
+              disabled={loading}
+            >
               <LinearGradient
                 colors={['#4dabf7', '#3250b4']}
                 style={styles.buttonGradient}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
               >
-                <Text style={styles.buttonText}>
-                  LOG IN
-                </Text>
+                {loading ? (
+                  <ActivityIndicator color="#ffffff" size="small" />
+                ) : (
+                  <Text style={styles.buttonText}>LOG IN</Text>
+                )}
               </LinearGradient>
               <View style={styles.buttonGlow} />
+            </TouchableOpacity>
+
+            <TouchableOpacity 
+              style={styles.registerLink}
+              onPress={goToRegistration}
+            >
+              <Text style={styles.registerLinkText}>
+                Don't have an account? REGISTER
+              </Text>
             </TouchableOpacity>
           </View>
           
@@ -227,6 +324,9 @@ const styles = StyleSheet.create({
     position: 'relative',
     marginBottom: 15,
   },
+  disabledButton: {
+    opacity: 0.7,
+  },
   buttonGradient: {
     flex: 1,
     justifyContent: 'center',
@@ -252,6 +352,14 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     shadowOffset: { width: 0, height: 0 },
   },
+  registerLink: {
+    marginTop: 15,
+    alignItems: 'center',
+  },
+  registerLinkText: {
+    color: '#4dabf7',
+    fontSize: 14,
+  },
   footer: {
     backgroundColor: 'rgba(16, 20, 45, 0.9)',
     padding: 10,
@@ -265,6 +373,19 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     letterSpacing: 1,
   },
+  errorContainer: {
+    backgroundColor: 'rgba(220, 53, 69, 0.2)',
+    padding: 10,
+    borderRadius: 5,
+    borderWidth: 1,
+    borderColor: '#dc3545',
+    marginBottom: 15,
+    width: '100%',
+  },
+  errorText: {
+    color: '#ff8a8a',
+    textAlign: 'center',
+  },
 });
 
-export default WelcomeScreen;
+export default LoginScreen;

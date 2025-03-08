@@ -1,61 +1,117 @@
-import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Dimensions, StatusBar, ScrollView, Image } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, Dimensions, StatusBar, ScrollView, Image, Alert } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons, MaterialCommunityIcons, FontAwesome5, MaterialIcons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import axios from 'axios';
 
 const { width, height } = Dimensions.get('window');
 
-// Sample quest data
-const QUESTS = [
-  {
-    id: 1,
-    title: 'Complete Morning Workout',
-    difficulty: 'B',
-    exp: 150,
-    description: 'Finish 30 minutes of cardio and strength training before 9 AM.',
-    deadline: '9:00 AM',
-    completed: false,
-  },
-  {
-    id: 2,
-    title: 'Study Programming',
-    difficulty: 'A',
-    exp: 300,
-    description: 'Learn React Native animations for 2 hours and implement a custom animation.',
-    deadline: '3:00 PM',
-    completed: false,
-  },
-  {
-    id: 3,
-    title: 'Meal Prep',
-    difficulty: 'C',
-    exp: 100,
-    description: 'Prepare healthy meals for the next 3 days following nutrition plan.',
-    deadline: '7:00 PM',
-    completed: true,
-  },
-  {
-    id: 4,
-    title: 'Language Practice',
-    difficulty: 'B',
-    exp: 200,
-    description: 'Complete 2 chapters of language exercises and practice speaking for 30 minutes.',
-    deadline: '8:00 PM',
-    completed: false,
-  },
-  {
-    id: 5,
-    title: 'Meditation Session',
-    difficulty: 'D',
-    exp: 50,
-    description: 'Complete a 15-minute guided meditation session for mental clarity.',
-    deadline: '10:00 PM',
-    completed: false,
-  },
-];
+const API_URL = 'https://drf-project-6vzx.onrender.com';
 
 export default function HomeScreen({ navigation }) {
+  const [quests, setQuests] = useState([]);
   const [selectedQuest, setSelectedQuest] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [token, setToken] = useState(null);
+  
+  // Получение токена при загрузке компонента
+  useEffect(() => {
+    const getToken = async () => {
+      try {
+        const userToken = await AsyncStorage.getItem('userToken');
+        setToken(userToken);
+        if (userToken) {
+          fetchQuests(userToken);
+        } else {
+          // Перенаправление на экран входа, если токен отсутствует
+          navigation.navigate('Login');
+        }
+      } catch (e) {
+        console.error('Failed to get token', e);
+      }
+    };
+    
+    getToken();
+  }, []);
+  
+  // Получение списка задач с сервера
+  const fetchQuests = async (userToken) => {
+    setLoading(true);
+    try {
+      const response = await axios.get(`${API_URL}/tasks`, {
+        headers: {
+          'Authorization': `Token ${userToken}`
+        }
+      });
+      setQuests(response.data);
+    } catch (error) {
+      console.error('Error fetching quests', error);
+      Alert.alert('Error', 'Failed to load your quests. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+  
+  // Добавление новой задачи
+  const handleAddTask = () => {
+    // Здесь можно открыть модальное окно создания задачи или перейти на экран создания
+    // Для примера, перенаправим на экран создания задачи
+    navigation.navigate('CreateTask');
+  };
+
+  // Редактирование задачи
+  const handleEditTask = (quest) => {
+    // Перенаправление на экран редактирования с передачей данных задачи
+    navigation.navigate('EditTask', { questId: quest.id });
+    closeQuestDetails();
+  };
+
+  // Удаление задачи
+  const handleDeleteTask = async (quest) => {
+    try {
+      await axios.delete(`${API_URL}/tasks/${quest.id}/delete/`, {
+        headers: {
+          'Authorization': `Token ${token}`
+        }
+      });
+      
+      // Обновление списка задач после удаления
+      setQuests(quests.filter(q => q.id !== quest.id));
+      Alert.alert('Success', 'Quest deleted successfully');
+      closeQuestDetails();
+    } catch (error) {
+      console.error('Error deleting quest', error);
+      Alert.alert('Error', 'Failed to delete quest. Please try again.');
+    }
+  };
+  
+  // Отметка задачи как выполненной
+  const handleCompleteTask = async (quest) => {
+    try {
+      await axios.post(`${API_URL}/tasks/complete/${quest.id}/`, {}, {
+        headers: {
+          'Authorization': `Token ${token}`
+        }
+      });
+      
+      // Обновление статуса задачи в локальном состоянии
+      const updatedQuests = quests.map(q => 
+        q.id === quest.id ? { ...q, completed: true } : q
+      );
+      setQuests(updatedQuests);
+      
+      // Обновление выбранной задачи, если она открыта
+      if (selectedQuest && selectedQuest.id === quest.id) {
+        setSelectedQuest({ ...selectedQuest, completed: true });
+      }
+      
+      Alert.alert('Success', 'Quest completed!');
+    } catch (error) {
+      console.error('Error completing quest', error);
+      Alert.alert('Error', 'Failed to complete quest. Please try again.');
+    }
+  };
   
   const getDifficultyColor = (difficulty) => {
     switch(difficulty) {
@@ -70,19 +126,6 @@ export default function HomeScreen({ navigation }) {
   
   const closeQuestDetails = () => {
     setSelectedQuest(null);
-  };
-  
-  const handleAddTask = () => {
-    // Здесь можно, например, открыть модальное окно создания задачи или перейти на экран создания
-    console.log("Add Task pressed");
-  };
-
-  const handleEditTask = (quest) => {
-    console.log("Edit Task", quest);
-  };
-
-  const handleDeleteTask = (quest) => {
-    console.log("Delete Task", quest);
   };
   
   return (
@@ -138,34 +181,40 @@ export default function HomeScreen({ navigation }) {
           </View>
           
           <ScrollView style={styles.questsContainer}>
-            {QUESTS.map(quest => (
-              <TouchableOpacity 
-                key={quest.id} 
-                style={[
-                  styles.questItem,
-                  quest.completed && styles.questCompleted
-                ]}
-                onPress={() => setSelectedQuest(quest)}
-              >
-                <View style={styles.questLeft}>
-                  <View 
-                    style={[
-                      styles.difficultyBadge, 
-                      { backgroundColor: getDifficultyColor(quest.difficulty) }
-                    ]}
-                  >
-                    <Text style={styles.difficultyText}>{quest.difficulty}</Text>
+            {loading ? (
+              <Text style={styles.loadingText}>Loading quests...</Text>
+            ) : quests.length === 0 ? (
+              <Text style={styles.noQuestsText}>No active quests. Add a new one!</Text>
+            ) : (
+              quests.map(quest => (
+                <TouchableOpacity 
+                  key={quest.id} 
+                  style={[
+                    styles.questItem,
+                    quest.completed && styles.questCompleted
+                  ]}
+                  onPress={() => setSelectedQuest(quest)}
+                >
+                  <View style={styles.questLeft}>
+                    <View 
+                      style={[
+                        styles.difficultyBadge, 
+                        { backgroundColor: getDifficultyColor(quest.difficulty) }
+                      ]}
+                    >
+                      <Text style={styles.difficultyText}>{quest.difficulty}</Text>
+                    </View>
+                    <View style={styles.questInfo}>
+                      <Text style={styles.questTitle}>{quest.title}</Text>
+                      <Text style={styles.questDeadline}>{quest.deadline}</Text>
+                    </View>
                   </View>
-                  <View style={styles.questInfo}>
-                    <Text style={styles.questTitle}>{quest.title}</Text>
-                    <Text style={styles.questDeadline}>{quest.deadline}</Text>
+                  <View style={styles.questRight}>
+                    <Text style={styles.expReward}>+{quest.exp} EXP</Text>
                   </View>
-                </View>
-                <View style={styles.questRight}>
-                  <Text style={styles.expReward}>+{quest.exp} EXP</Text>
-                </View>
-              </TouchableOpacity>
-            ))}
+                </TouchableOpacity>
+              ))
+            )}
           </ScrollView>
         </View>
         
@@ -274,22 +323,22 @@ export default function HomeScreen({ navigation }) {
                   </TouchableOpacity>
                 </View>
                 
-                <TouchableOpacity 
-                  style={styles.actionButton}
-                  onPress={closeQuestDetails}
-                >
-                  <LinearGradient
-                    colors={['#4dabf7', '#3250b4']}
-                    style={styles.buttonGradient}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 1 }}
+                {!selectedQuest.completed && (
+                  <TouchableOpacity 
+                    style={styles.actionButton}
+                    onPress={() => handleCompleteTask(selectedQuest)}
                   >
-                    <Text style={styles.buttonText}>
-                      {selectedQuest.completed ? 'DETAILS' : 'START QUEST'}
-                    </Text>
-                  </LinearGradient>
-                  <View style={styles.buttonGlow} />
-                </TouchableOpacity>
+                    <LinearGradient
+                      colors={['#4dabf7', '#3250b4']}
+                      style={styles.buttonGradient}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 1 }}
+                    >
+                      <Text style={styles.buttonText}>COMPLETE QUEST</Text>
+                    </LinearGradient>
+                    <View style={styles.buttonGlow} />
+                  </TouchableOpacity>
+                )}
               </View>
             </View>
           </View>
@@ -403,6 +452,18 @@ const styles = StyleSheet.create({
   },
   questsContainer: {
     flex: 1,
+  },
+  loadingText: {
+    color: '#ffffff',
+    textAlign: 'center',
+    marginTop: 20,
+    fontSize: 16,
+  },
+  noQuestsText: {
+    color: '#ffffff',
+    textAlign: 'center',
+    marginTop: 20,
+    fontSize: 16,
   },
   questItem: {
     flexDirection: 'row',
@@ -619,7 +680,3 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
 });
-
-
-
-
