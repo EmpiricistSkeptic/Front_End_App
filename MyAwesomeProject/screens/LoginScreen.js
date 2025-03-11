@@ -7,11 +7,10 @@ import {
   StyleSheet,
   Dimensions,
   StatusBar,
-  Alert,
   ActivityIndicator,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { saveToken } from '../services/authService'; // Импортируем функцию сохранения токена
 
 const { width, height } = Dimensions.get('window');
 
@@ -55,11 +54,13 @@ const LoginScreen = ({ navigation }) => {
         throw new Error(data.detail || 'Неверное имя пользователя или пароль');
       }
       
-      // Сохранение токена аутентификации
+      // Сохранение токена аутентификации с использованием нашего сервиса
       if (data.token) {
-        await AsyncStorage.setItem('userToken', data.token);
+        // Вместо прямого сохранения в AsyncStorage используем наш сервис
+        await saveToken(data.token);
         
-        // Если в ответе есть дополнительные данные пользователя, можно сохранить и их
+        // Если в ответе есть дополнительные данные пользователя, можно также сохранить их
+        // Это можно также перенести в отдельную функцию в authService, если нужно
         if (data.user) {
           await AsyncStorage.setItem('userData', JSON.stringify(data.user));
         }
@@ -206,6 +207,7 @@ const LoginScreen = ({ navigation }) => {
 };
 
 const styles = StyleSheet.create({
+  // стили остаются без изменений
   container: {
     flex: 1,
   },

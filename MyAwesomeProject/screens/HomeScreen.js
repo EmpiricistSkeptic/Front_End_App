@@ -1,28 +1,24 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Dimensions, StatusBar, ScrollView, Image, Alert } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Dimensions, StatusBar, ScrollView, Alert } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons, MaterialCommunityIcons, FontAwesome5, MaterialIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import axios from 'axios';
+import apiService from '../services/apiService'; // Правильный импорт - без фигурных скобок
 
 const { width, height } = Dimensions.get('window');
 
-const API_URL = 'https://drf-project-6vzx.onrender.com';
-
-export default function HomeScreen({ navigation }) {
+export default function HomeScreen({ navigation, route }) {
   const [quests, setQuests] = useState([]);
   const [selectedQuest, setSelectedQuest] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [token, setToken] = useState(null);
   
-  // Получение токена при загрузке компонента
+  // Получение токена и данных при загрузке компонента
   useEffect(() => {
-    const getToken = async () => {
+    const initializeScreen = async () => {
       try {
         const userToken = await AsyncStorage.getItem('userToken');
-        setToken(userToken);
         if (userToken) {
-          fetchQuests(userToken);
+          fetchQuests();
         } else {
           // Перенаправление на экран входа, если токен отсутствует
           navigation.navigate('Login');
@@ -32,19 +28,39 @@ export default function HomeScreen({ navigation }) {
       }
     };
     
-    getToken();
+    initializeScreen();
   }, []);
   
-  // Получение списка задач с сервера
-  const fetchQuests = async (userToken) => {
+  // Добавляем listener для обновления данных при возврате на экран
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('focus', () => {
+      // Обновляем список задач каждый раз, когда экран становится активным
+      fetchQuests();
+    });
+    
+    // Очистка listener при размонтировании компонента
+    return unsubscribe;
+  }, [navigation]);
+  
+  // Отслеживаем параметры маршрута для обновления после создания новой задачи
+  useEffect(() => {
+    if (route.params?.taskCreated || route.params?.taskUpdated) {
+      // Если задача была создана или обновлена, перезагружаем список
+      fetchQuests();
+      // Сбрасываем параметр, чтобы избежать повторного обновления
+      navigation.setParams({taskCreated: undefined, taskUpdated: undefined});
+    }
+  }, [route.params]);
+  
+  // Получение списка задач с сервера через apiService
+  const fetchQuests = async () => {
     setLoading(true);
     try {
-      const response = await axios.get(`${API_URL}/tasks`, {
-        headers: {
-          'Authorization': `Token ${userToken}`
-        }
-      });
-      setQuests(response.data);
+      const response = await apiService.get('/tasks');
+      console.log('Fetched quests:', response); // Выводим данные в консоль
+      setQuests(response);
+      // Обратите внимание: здесь мы используем просто response вместо response.data,
+      // т.к. ваш apiService.js уже возвращает распарсенные данные из JSON
     } catch (error) {
       console.error('Error fetching quests', error);
       Alert.alert('Error', 'Failed to load your quests. Please try again.');
@@ -55,26 +71,22 @@ export default function HomeScreen({ navigation }) {
   
   // Добавление новой задачи
   const handleAddTask = () => {
-    // Здесь можно открыть модальное окно создания задачи или перейти на экран создания
-    // Для примера, перенаправим на экран создания задачи
-    navigation.navigate('CreateTask');
+    navigation.navigate('CreateTask', { onGoBack: () => fetchQuests() });
   };
 
   // Редактирование задачи
   const handleEditTask = (quest) => {
-    // Перенаправление на экран редактирования с передачей данных задачи
-    navigation.navigate('EditTask', { questId: quest.id });
+    navigation.navigate('EditTask', { 
+      questId: quest.id,
+      onGoBack: () => fetchQuests() 
+    });
     closeQuestDetails();
   };
 
-  // Удаление задачи
+  // Удаление задачи через apiService
   const handleDeleteTask = async (quest) => {
     try {
-      await axios.delete(`${API_URL}/tasks/${quest.id}/delete/`, {
-        headers: {
-          'Authorization': `Token ${token}`
-        }
-      });
+      await apiService.delete(`/tasks/${quest.id}/delete/`);
       
       // Обновление списка задач после удаления
       setQuests(quests.filter(q => q.id !== quest.id));
@@ -86,14 +98,21 @@ export default function HomeScreen({ navigation }) {
     }
   };
   
-  // Отметка задачи как выполненной
+  // Отметка задачи как выполненной через apiService
   const handleCompleteTask = async (quest) => {
     try {
-      await axios.post(`${API_URL}/tasks/complete/${quest.id}/`, {}, {
-        headers: {
-          'Authorization': `Token ${token}`
+      // Пробуем использовать put, затем patch при необходимости
+      try {
+        await apiService.post(`/tasks/complete/${quest.id}/`, {});
+        // Заметьте: здесь использую post вместо put, потому что в вашем apiService нет метода put
+      } catch (putError) {
+        // Если PUT не работает, пробуем PATCH
+        if (putError.response && putError.response.status === 405) {
+          await apiService.patch(`/tasks/complete/${quest.id}/`, {});
+        } else {
+          throw putError; // если это не 405 ошибка, выбрасываем ее дальше
         }
-      });
+      }
       
       // Обновление статуса задачи в локальном состоянии
       const updatedQuests = quests.map(q => 
@@ -109,7 +128,17 @@ export default function HomeScreen({ navigation }) {
       Alert.alert('Success', 'Quest completed!');
     } catch (error) {
       console.error('Error completing quest', error);
-      Alert.alert('Error', 'Failed to complete quest. Please try again.');
+      
+      // Добавляем больше информации об ошибке
+      let errorMessage = 'Failed to complete quest. Please try again.';
+      if (error.response) {
+        errorMessage += ` Status: ${error.response.status}`;
+      }
+      
+      Alert.alert('Error', errorMessage);
+      
+      // Перезагрузим данные, чтобы убедиться, что они актуальны
+      fetchQuests();
     }
   };
   

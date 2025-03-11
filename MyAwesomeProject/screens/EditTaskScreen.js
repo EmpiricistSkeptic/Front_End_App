@@ -7,74 +7,154 @@ import {
   StyleSheet,
   ScrollView,
   Alert,
-  Dimensions
+  Dimensions,
+  ActivityIndicator
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import apiService from '../services/apiService'; // проверьте корректность пути
+import axios from 'axios';
 
 const { width } = Dimensions.get('window');
+const API_URL = 'https://drf-project-6vzx.onrender.com';
 
-export default function CreateTaskScreen({ navigation, route }) {
+export default function EditTaskScreen({ navigation, route }) {
+  const { questId } = route.params;
+  
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [difficulty, setDifficulty] = useState('B');
   const [deadline, setDeadline] = useState('');
   const [exp, setExp] = useState('');
+  const [token, setToken] = useState(null);
+  const [loading, setLoading] = useState(true);
 
-  // Запускаем эффект один раз, чтобы удалить не сериализуемый callback из navigation params
   useEffect(() => {
-    if (route?.params?.onGoBack) {
-      const { onGoBack, ...rest } = route.params;
-      navigation.setParams(rest);
-    }
-  }, []); // пустой массив зависимостей — эффект сработает только при монтировании
-
-  // Проверка наличия токена для авторизации
-  useEffect(() => {
-    const checkToken = async () => {
-      const token = await AsyncStorage.getItem('userToken');
-      if (!token) {
-        navigation.navigate('Login');
+    const getTokenAndFetchTask = async () => {
+      try {
+        const userToken = await AsyncStorage.getItem('userToken');
+        setToken(userToken);
+        if (!userToken) {
+          navigation.navigate('Login');
+          return;
+        }
+        
+        // Fetch task details
+        fetchTaskDetails(userToken);
+      } catch (e) {
+        console.error('Failed to get token', e);
+        setLoading(false);
       }
     };
-    checkToken();
-  }, [navigation]);
+    
+    getTokenAndFetchTask();
+  }, [questId]);
+  
+  const fetchTaskDetails = async (userToken) => {
+    try {
+      const response = await axios.get(`${API_URL}/tasks/${questId}/`, {
+        headers: {
+          'Authorization': `Token ${userToken}`
+        }
+      });
+      
+      const task = response.data;
+      
+      // Set form fields with task data
+      setTitle(task.title);
+      setDescription(task.description);
+      setDifficulty(task.difficulty);
+      setDeadline(task.deadline);
+      setExp(task.exp.toString());
+      
+      setLoading(false);
+    } catch (error) {
+      console.error('Error fetching task details', error);
+      Alert.alert('Error', 'Failed to load task details. Please try again.');
+      setLoading(false);
+    }
+  };
 
-  const handleCreateTask = async () => {
+  const handleUpdateTask = async () => {
+    // Validation of required fields
     if (!title || !description || !deadline) {
       Alert.alert('Error', 'Please fill in all required fields');
       return;
     }
 
+    // Check that EXP is a number
     const expNumber = parseInt(exp);
     if (isNaN(expNumber)) {
       Alert.alert('Error', 'EXP must be a number');
       return;
     }
+    
+    setLoading(true);
 
     try {
-      await apiService.post('/tasks/create/', {
+      const response = await axios.put(`${API_URL}/tasks/${questId}/update/`, {
         title,
         description,
         difficulty,
         deadline,
         exp: expNumber,
-        completed: false
+      }, {
+        headers: {
+          'Authorization': `Token ${token}`,
+          'Content-Type': 'application/json'
+        }
       });
 
-      Alert.alert('Success', 'Quest created successfully!');
-      navigation.goBack();
+      Alert.alert('Success', 'Quest updated successfully!');
+      // Navigate back with update flag
+      navigation.navigate('Home', { taskUpdated: true });
     } catch (error) {
-      console.error('Error creating quest', error.response || error);
-      Alert.alert('Error', 'Failed to create quest. Please try again.');
+      console.error('Error updating quest', error.response || error);
+      
+      // Try PATCH if PUT fails with 405 (Method Not Allowed)
+      if (error.response && error.response.status === 405) {
+        try {
+          await axios.patch(`${API_URL}/tasks/${questId}/update/`, {
+            title,
+            description,
+            difficulty,
+            deadline,
+            exp: expNumber,
+          }, {
+            headers: {
+              'Authorization': `Token ${token}`,
+              'Content-Type': 'application/json'
+            }
+          });
+          
+          Alert.alert('Success', 'Quest updated successfully!');
+          navigation.navigate('Home', { taskUpdated: true });
+        } catch (patchError) {
+          console.error('Error updating quest with PATCH', patchError);
+          Alert.alert('Error', 'Failed to update quest. Please try again.');
+        }
+      } else {
+        Alert.alert('Error', 'Failed to update quest. Please try again.');
+      }
+    } finally {
+      setLoading(false);
     }
   };
 
   const handleDifficultySelection = (value) => {
     setDifficulty(value);
   };
+
+  if (loading) {
+    return (
+      <View style={[styles.container, styles.loadingContainer]}>
+        <LinearGradient colors={['#121539', '#080b20']} style={styles.background}>
+          <ActivityIndicator size="large" color="#4dabf7" />
+          <Text style={styles.loadingText}>Loading quest details...</Text>
+        </LinearGradient>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
@@ -83,7 +163,7 @@ export default function CreateTaskScreen({ navigation, route }) {
           <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
             <Ionicons name="arrow-back" size={24} color="#ffffff" />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>CREATE NEW QUEST</Text>
+          <Text style={styles.headerTitle}>EDIT QUEST</Text>
           <View style={styles.placeholder} />
         </View>
 
@@ -154,8 +234,8 @@ export default function CreateTaskScreen({ navigation, route }) {
           />
 
           <TouchableOpacity 
-            style={styles.createButton}
-            onPress={handleCreateTask}
+            style={styles.updateButton}
+            onPress={handleUpdateTask}
           >
             <LinearGradient
               colors={['#4dabf7', '#3250b4']}
@@ -163,7 +243,7 @@ export default function CreateTaskScreen({ navigation, route }) {
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
             >
-              <Text style={styles.buttonText}>CREATE QUEST</Text>
+              <Text style={styles.buttonText}>UPDATE QUEST</Text>
             </LinearGradient>
             <View style={styles.buttonGlow} />
           </TouchableOpacity>
@@ -179,6 +259,15 @@ const styles = StyleSheet.create({
   },
   background: {
     flex: 1,
+  },
+  loadingContainer: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    color: '#ffffff',
+    marginTop: 10,
+    fontSize: 16,
   },
   header: {
     flexDirection: 'row',
@@ -200,7 +289,7 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
   },
   placeholder: {
-    width: 34,
+    width: 34, // To balance with the back button
   },
   form: {
     flex: 1,
@@ -230,7 +319,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   difficultyOption: {
-    width: (width - 60) / 5,
+    width: (width - 60) / 5, // Evenly distributed across width (accounting for padding)
     height: 40,
     borderRadius: 6,
     justifyContent: 'center',
@@ -246,7 +335,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
   },
-  createButton: {
+  updateButton: {
     height: 50,
     borderRadius: 6,
     overflow: 'hidden',

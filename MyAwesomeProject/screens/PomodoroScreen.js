@@ -1,113 +1,209 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Dimensions, StatusBar, ScrollView, Alert } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Dimensions, StatusBar, ScrollView, Alert, ActivityIndicator } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Ionicons, MaterialCommunityIcons, FontAwesome5, MaterialIcons, AntDesign } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons, FontAwesome5, MaterialIcons } from '@expo/vector-icons';
 import Slider from '@react-native-community/slider';
+import apiService from '../services/apiService'; // Импортируем apiService
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const { width, height } = Dimensions.get('window');
 
-// Sample pomodoro data
+// API endpoints (можно оставить для ясности, но запросы будут через apiService)
+const POMODORO_ENDPOINT = '/pomodoro/';
+const POMODORO_START_ENDPOINT = '/pomodoro/start/';
+
+// Default pomodoro settings (с учётом полей модели)
 const DEFAULT_POMODORO = {
-  duration_time: 25, // minutes
-  short_brake_minutes: 5,
-  long_brake_minutes: 15,
+  duration_minutes: 25,            // рабочее время (в минутах)
+  short_break_minutes: 5,          // короткий перерыв (исправлено с short_break_monutes)
+  long_break_minutes: 15,          // длинный перерыв (в минутах)
   is_completed: false,
-  sessions_completed: 0,
-  total_sessions: 4
 };
 
 export default function PomodoroScreen({ navigation }) {
-  const [pomodoro, setPomodoro] = useState({...DEFAULT_POMODORO});
+  // State переменные
+  const [pomodoro, setPomodoro] = useState({ ...DEFAULT_POMODORO });
+  const [pomodoroId, setPomodoroId] = useState(null);
   const [isRunning, setIsRunning] = useState(false);
-  const [timeLeft, setTimeLeft] = useState(pomodoro.duration_time * 60);
+  const [timeLeft, setTimeLeft] = useState(DEFAULT_POMODORO.duration_minutes * 60);
   const [currentMode, setCurrentMode] = useState('work'); // 'work', 'shortBreak', 'longBreak'
-  const [totalSeconds, setTotalSeconds] = useState(pomodoro.duration_time * 60);
-  const [sessionHistory, setSessionHistory] = useState([
-    { date: '2025-03-02', duration: 25, completed: true, task: 'Study Programming' },
-    { date: '2025-03-02', duration: 25, completed: true, task: 'Learn French' },
-    { date: '2025-03-01', duration: 25, completed: true, task: 'Project Planning' },
-    { date: '2025-03-01', duration: 25, completed: false, task: 'Reading' },
-    { date: '2025-02-28', duration: 25, completed: true, task: 'Morning Workout Planning' },
-  ]);
+  const [totalSeconds, setTotalSeconds] = useState(DEFAULT_POMODORO.duration_minutes * 60);
+  const [sessionHistory, setSessionHistory] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState(null);
   
+  // Проверяем авторизацию при загрузке компонента
+  useEffect(() => {
+    const checkAuth = async () => {
+      try {
+        const isAuthorized = await apiService.checkAuthStatus();
+        if (!isAuthorized) {
+          // Перенаправление на экран входа, если пользователь не авторизован
+          navigation.navigate('Login');
+        } else {
+          fetchPomodoroHistory();
+        }
+      } catch (error) {
+        console.error('Authentication check failed:', error);
+        navigation.navigate('Login');
+      }
+    };
+
+    checkAuth();
+  }, []);
+  
+  // Логика таймера
   useEffect(() => {
     let interval = null;
-    
     if (isRunning && timeLeft > 0) {
       interval = setInterval(() => {
-        setTimeLeft(timeLeft - 1);
+        setTimeLeft(prev => prev - 1);
       }, 1000);
     } else if (isRunning && timeLeft === 0) {
-      // Timer completed
       handleTimerComplete();
       clearInterval(interval);
     } else {
       clearInterval(interval);
     }
-    
     return () => clearInterval(interval);
   }, [isRunning, timeLeft]);
   
-  const handleTimerComplete = () => {
-    // Play notification sound or vibration here
-    
-    if (currentMode === 'work') {
-      // Completed a work session
-      const newSessionsCompleted = pomodoro.sessions_completed + 1;
-      setPomodoro({...pomodoro, sessions_completed: newSessionsCompleted});
-      
-      if (newSessionsCompleted % 4 === 0) {
-        // Long break after 4 sessions
-        setCurrentMode('longBreak');
-        setTimeLeft(pomodoro.long_brake_minutes * 60);
-        setTotalSeconds(pomodoro.long_brake_minutes * 60);
-        Alert.alert('Long Break', 'Time for a longer break! Great job completing 4 sessions!');
-      } else {
-        // Short break
-        setCurrentMode('shortBreak');
-        setTimeLeft(pomodoro.short_brake_minutes * 60);
-        setTotalSeconds(pomodoro.short_brake_minutes * 60);
-        Alert.alert('Short Break', 'Take a short break!');
-      }
-    } else {
-      // Break completed, back to work
-      setCurrentMode('work');
-      setTimeLeft(pomodoro.duration_time * 60);
-      setTotalSeconds(pomodoro.duration_time * 60);
-      Alert.alert('Work Session', 'Break completed. Let\'s get back to work!');
+  // Получение истории сессий с сервера через apiService
+  const fetchPomodoroHistory = async () => {
+    try {
+      setIsLoading(true);
+      const response = await apiService.get(POMODORO_ENDPOINT);
+      setSessionHistory(response.data || []); // Ensure it's an array
+      setIsLoading(false);
+    } catch (err) {
+      setError('Failed to load pomodoro history');
+      console.error('Error fetching pomodoro history:', err.response?.data || err);
+      setSessionHistory([]); // Reset to empty array on error
+      setIsLoading(false);
     }
   };
   
-  const startTimer = () => {
-    setIsRunning(true);
+  // Создание новой сессии помодоро через apiService
+  const createPomodoroSession = async () => {
+    try {
+      const payload = {
+        start_timer: new Date().toISOString(),
+        duration_minutes: pomodoro.duration_minutes,
+        short_break_minutes: pomodoro.short_break_minutes,
+        long_break_minutes: pomodoro.long_break_minutes,
+        is_completed: false,
+      };
+      
+      const response = await apiService.post(POMODORO_START_ENDPOINT, payload);
+      setPomodoroId(response.data.id);
+      Alert.alert('Success', 'New pomodoro session started');
+      return response.data;
+    } catch (err) {
+      Alert.alert('Error', 'Failed to start pomodoro session');
+      console.error('Error creating pomodoro session:', err.response?.data || err);
+      throw err;
+    }
   };
   
+  // Обновление сессии через apiService
+  const updatePomodoroSession = async (id, data) => {
+    try {
+      const response = await apiService.patch(`${POMODORO_ENDPOINT}${id}/update/`, data);
+      return response.data;
+    } catch (err) {
+      console.error('Error updating pomodoro session:', err.response?.data || err);
+      throw err;
+    }
+  };
+  
+  // Удаление сессии через apiService
+  const deletePomodoroSession = async (id) => {
+    try {
+      await apiService.delete(`${POMODORO_ENDPOINT}${id}/delete/`);
+      fetchPomodoroHistory();
+    } catch (err) {
+      Alert.alert('Error', 'Failed to delete pomodoro session');
+      console.error('Error deleting pomodoro session:', err.response?.data || err);
+    }
+  };
+  
+  // Логика завершения таймера
+  const handleTimerComplete = async () => {
+    if (currentMode === 'work') {
+      // После рабочего интервала переходим на короткий перерыв
+      setCurrentMode('shortBreak');
+      setTimeLeft(pomodoro.short_break_minutes * 60);
+      setTotalSeconds(pomodoro.short_break_minutes * 60);
+      Alert.alert('Short Break', 'Time for a short break!');
+    } else {
+      // После перерыва возвращаемся к работе и отмечаем сессию как завершённую
+      setCurrentMode('work');
+      setTimeLeft(pomodoro.duration_minutes * 60);
+      setTotalSeconds(pomodoro.duration_minutes * 60);
+      Alert.alert('Work Session', 'Break over. Let\'s get back to work!');
+      if (pomodoroId) {
+        try {
+          await updatePomodoroSession(pomodoroId, { is_completed: true });
+        } catch (err) {
+          console.error('Failed to update session completion:', err.response?.data || err);
+        }
+      }
+    }
+  };
+  
+  // Запуск таймера
+  const startTimer = async () => {
+    try {
+      if (!pomodoroId) {
+        const newSession = await createPomodoroSession();
+        setPomodoroId(newSession.id);
+      }
+      setIsRunning(true);
+    } catch (err) {
+      console.error('Failed to start timer:', err.response?.data || err);
+    }
+  };
+  
+  // Пауза таймера
   const pauseTimer = () => {
     setIsRunning(false);
+    if (pomodoroId) {
+      updatePomodoroSession(pomodoroId, {}).catch(err => console.error('Failed to update paused state:', err.response?.data || err));
+    }
   };
   
+  // Сброс таймера
   const resetTimer = () => {
     setIsRunning(false);
     if (currentMode === 'work') {
-      setTimeLeft(pomodoro.duration_time * 60);
-      setTotalSeconds(pomodoro.duration_time * 60);
+      setTimeLeft(pomodoro.duration_minutes * 60);
+      setTotalSeconds(pomodoro.duration_minutes * 60);
     } else if (currentMode === 'shortBreak') {
-      setTimeLeft(pomodoro.short_brake_minutes * 60);
-      setTotalSeconds(pomodoro.short_brake_minutes * 60);
+      setTimeLeft(pomodoro.short_break_minutes * 60);
+      setTotalSeconds(pomodoro.short_break_minutes * 60);
     } else {
-      setTimeLeft(pomodoro.long_brake_minutes * 60);
-      setTotalSeconds(pomodoro.long_brake_minutes * 60);
+      setTimeLeft(pomodoro.long_break_minutes * 60);
+      setTotalSeconds(pomodoro.long_break_minutes * 60);
     }
   };
   
+  // Форматирование времени
   const formatTime = (seconds) => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
   
+  // Форматирование даты
+  const formatDate = (dateString) => {
+    if (!dateString) return '';
+    const date = new Date(dateString);
+    return date.toISOString().split('T')[0];
+  };
+  
+  // Обновление рабочего времени
   const updateDuration = (value) => {
-    const newPomodoro = {...pomodoro, duration_time: value};
+    const newPomodoro = { ...pomodoro, duration_minutes: value };
     setPomodoro(newPomodoro);
     if (currentMode === 'work' && !isRunning) {
       setTimeLeft(value * 60);
@@ -115,8 +211,9 @@ export default function PomodoroScreen({ navigation }) {
     }
   };
   
+  // Обновление короткого перерыва
   const updateShortBreak = (value) => {
-    const newPomodoro = {...pomodoro, short_brake_minutes: value};
+    const newPomodoro = { ...pomodoro, short_break_minutes: value };
     setPomodoro(newPomodoro);
     if (currentMode === 'shortBreak' && !isRunning) {
       setTimeLeft(value * 60);
@@ -124,8 +221,9 @@ export default function PomodoroScreen({ navigation }) {
     }
   };
   
+  // Обновление длинного перерыва
   const updateLongBreak = (value) => {
-    const newPomodoro = {...pomodoro, long_brake_minutes: value};
+    const newPomodoro = { ...pomodoro, long_break_minutes: value };
     setPomodoro(newPomodoro);
     if (currentMode === 'longBreak' && !isRunning) {
       setTimeLeft(value * 60);
@@ -133,27 +231,58 @@ export default function PomodoroScreen({ navigation }) {
     }
   };
   
+  // Удаление текущей сессии
   const deleteSession = () => {
+    if (!pomodoroId) {
+      setIsRunning(false);
+      setPomodoro({ ...DEFAULT_POMODORO });
+      setTimeLeft(DEFAULT_POMODORO.duration_minutes * 60);
+      setTotalSeconds(DEFAULT_POMODORO.duration_minutes * 60);
+      setCurrentMode('work');
+      return;
+    }
+    
     Alert.alert(
       'Delete Session',
       'Are you sure you want to delete this Pomodoro session?',
       [
-        {
-          text: 'Cancel',
-          style: 'cancel',
-        },
-        {
-          text: 'Delete',
-          onPress: () => {
-            setIsRunning(false);
-            setPomodoro({...DEFAULT_POMODORO});
-            setTimeLeft(DEFAULT_POMODORO.duration_time * 60);
-            setTotalSeconds(DEFAULT_POMODORO.duration_time * 60);
-            setCurrentMode('work');
-            Alert.alert('Success', 'Pomodoro session deleted successfully');
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Delete', onPress: async () => {
+            try {
+              await deletePomodoroSession(pomodoroId);
+              setIsRunning(false);
+              setPomodoro({ ...DEFAULT_POMODORO });
+              setTimeLeft(DEFAULT_POMODORO.duration_minutes * 60);
+              setTotalSeconds(DEFAULT_POMODORO.duration_minutes * 60);
+              setCurrentMode('work');
+              setPomodoroId(null);
+              Alert.alert('Success', 'Pomodoro session deleted successfully');
+              fetchPomodoroHistory();
+            } catch (err) {
+              console.error('Failed to delete session:', err.response?.data || err);
+            }
           },
-          style: 'destructive',
-        },
+          style: 'destructive' },
+      ]
+    );
+  };
+  
+  // Удаление элемента из истории
+  const deleteHistoryItem = (id) => {
+    Alert.alert(
+      'Delete Session',
+      'Are you sure you want to delete this session from history?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Delete', onPress: async () => {
+            try {
+              await deletePomodoroSession(id);
+              Alert.alert('Success', 'History item deleted successfully');
+            } catch (err) {
+              console.error('Failed to delete history item:', err.response?.data || err);
+            }
+          },
+          style: 'destructive' },
       ]
     );
   };
@@ -162,7 +291,7 @@ export default function PomodoroScreen({ navigation }) {
     <View style={styles.container}>
       <StatusBar barStyle="light-content" />
       <LinearGradient colors={['#121539', '#080b20']} style={styles.background}>
-        {/* Particle effects background */}
+        {/* Фоновая анимация частиц */}
         <View style={styles.particlesContainer}>
           {[...Array(20)].map((_, i) => (
             <View 
@@ -181,25 +310,19 @@ export default function PomodoroScreen({ navigation }) {
           ))}
         </View>
         
-        {/* Header */}
+        {/* Шапка */}
         <View style={styles.header}>
-          <TouchableOpacity 
-            style={styles.backButton}
-            onPress={() => navigation.goBack()}
-          >
+          <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
             <Ionicons name="arrow-back" size={24} color="#4dabf7" />
           </TouchableOpacity>
-          
           <Text style={styles.headerTitle}>POMODORO TIMER</Text>
-          
           <TouchableOpacity style={styles.settingsButton}>
             <Ionicons name="settings-outline" size={24} color="#4dabf7" />
           </TouchableOpacity>
         </View>
         
-        {/* Main Content */}
+        {/* Основное содержимое */}
         <ScrollView style={styles.mainContent}>
-          {/* Timer Display */}
           <View style={styles.timerSection}>
             <View style={styles.modeSelector}>
               <TouchableOpacity 
@@ -207,8 +330,8 @@ export default function PomodoroScreen({ navigation }) {
                 onPress={() => {
                   if (!isRunning) {
                     setCurrentMode('work');
-                    setTimeLeft(pomodoro.duration_time * 60);
-                    setTotalSeconds(pomodoro.duration_time * 60);
+                    setTimeLeft(pomodoro.duration_minutes * 60);
+                    setTotalSeconds(pomodoro.duration_minutes * 60);
                   }
                 }}
               >
@@ -222,8 +345,8 @@ export default function PomodoroScreen({ navigation }) {
                 onPress={() => {
                   if (!isRunning) {
                     setCurrentMode('shortBreak');
-                    setTimeLeft(pomodoro.short_brake_minutes * 60);
-                    setTotalSeconds(pomodoro.short_brake_minutes * 60);
+                    setTimeLeft(pomodoro.short_break_minutes * 60);
+                    setTotalSeconds(pomodoro.short_break_minutes * 60);
                   }
                 }}
               >
@@ -237,8 +360,8 @@ export default function PomodoroScreen({ navigation }) {
                 onPress={() => {
                   if (!isRunning) {
                     setCurrentMode('longBreak');
-                    setTimeLeft(pomodoro.long_brake_minutes * 60);
-                    setTotalSeconds(pomodoro.long_brake_minutes * 60);
+                    setTimeLeft(pomodoro.long_break_minutes * 60);
+                    setTotalSeconds(pomodoro.long_break_minutes * 60);
                   }
                 }}
               >
@@ -252,26 +375,17 @@ export default function PomodoroScreen({ navigation }) {
               <View style={styles.timerInner}>
                 <Text style={styles.timerText}>{formatTime(timeLeft)}</Text>
                 <Text style={styles.sessionText}>
-                  Session {pomodoro.sessions_completed + 1}/{pomodoro.total_sessions}
+                  {currentMode === 'work' ? 'Work Session' : 'Break Session'}
                 </Text>
-                
                 <View style={styles.progressBarContainer}>
-                  <View 
-                    style={[
-                      styles.progressBar, 
-                      { width: `${(timeLeft / totalSeconds) * 100}%` }
-                    ]} 
-                  />
+                  <View style={[styles.progressBar, { width: `${(timeLeft / totalSeconds) * 100}%` }]} />
                 </View>
               </View>
             </View>
             
             <View style={styles.controlsContainer}>
               {!isRunning ? (
-                <TouchableOpacity 
-                  style={styles.controlButton}
-                  onPress={startTimer}
-                >
+                <TouchableOpacity style={styles.controlButton} onPress={startTimer}>
                   <LinearGradient
                     colors={['#4dabf7', '#3250b4']}
                     style={styles.buttonGradient}
@@ -283,10 +397,7 @@ export default function PomodoroScreen({ navigation }) {
                   <View style={styles.buttonGlow} />
                 </TouchableOpacity>
               ) : (
-                <TouchableOpacity 
-                  style={styles.controlButton}
-                  onPress={pauseTimer}
-                >
+                <TouchableOpacity style={styles.controlButton} onPress={pauseTimer}>
                   <LinearGradient
                     colors={['#ff9500', '#ff2d55']}
                     style={styles.buttonGradient}
@@ -299,10 +410,7 @@ export default function PomodoroScreen({ navigation }) {
                 </TouchableOpacity>
               )}
               
-              <TouchableOpacity 
-                style={styles.controlButton}
-                onPress={resetTimer}
-              >
+              <TouchableOpacity style={styles.controlButton} onPress={resetTimer}>
                 <LinearGradient
                   colors={['#8e8e93', '#636366']}
                   style={styles.buttonGradient}
@@ -314,10 +422,7 @@ export default function PomodoroScreen({ navigation }) {
                 <View style={[styles.buttonGlow, {borderColor: '#8e8e93'}]} />
               </TouchableOpacity>
               
-              <TouchableOpacity 
-                style={styles.controlButton}
-                onPress={deleteSession}
-              >
+              <TouchableOpacity style={styles.controlButton} onPress={deleteSession}>
                 <LinearGradient
                   colors={['#ff3b30', '#c70011']}
                   style={styles.buttonGradient}
@@ -331,21 +436,21 @@ export default function PomodoroScreen({ navigation }) {
             </View>
           </View>
           
-          {/* Timer Settings */}
+          {/* Настройки таймера */}
           <View style={styles.settingsSection}>
             <Text style={styles.sectionTitle}>TIMER SETTINGS</Text>
             
             <View style={styles.settingItem}>
               <View style={styles.settingHeader}>
                 <Text style={styles.settingName}>Work Duration</Text>
-                <Text style={styles.settingValue}>{pomodoro.duration_time} min</Text>
+                <Text style={styles.settingValue}>{pomodoro.duration_minutes} min</Text>
               </View>
               <Slider
                 style={styles.slider}
                 minimumValue={5}
                 maximumValue={60}
                 step={5}
-                value={pomodoro.duration_time}
+                value={pomodoro.duration_minutes}
                 onValueChange={updateDuration}
                 minimumTrackTintColor="#4dabf7"
                 maximumTrackTintColor="rgba(255, 255, 255, 0.2)"
@@ -357,14 +462,14 @@ export default function PomodoroScreen({ navigation }) {
             <View style={styles.settingItem}>
               <View style={styles.settingHeader}>
                 <Text style={styles.settingName}>Short Break</Text>
-                <Text style={styles.settingValue}>{pomodoro.short_brake_minutes} min</Text>
+                <Text style={styles.settingValue}>{pomodoro.short_break_minutes} min</Text>
               </View>
               <Slider
                 style={styles.slider}
                 minimumValue={1}
                 maximumValue={15}
                 step={1}
-                value={pomodoro.short_brake_minutes}
+                value={pomodoro.short_break_minutes}
                 onValueChange={updateShortBreak}
                 minimumTrackTintColor="#4dabf7"
                 maximumTrackTintColor="rgba(255, 255, 255, 0.2)"
@@ -376,14 +481,14 @@ export default function PomodoroScreen({ navigation }) {
             <View style={styles.settingItem}>
               <View style={styles.settingHeader}>
                 <Text style={styles.settingName}>Long Break</Text>
-                <Text style={styles.settingValue}>{pomodoro.long_brake_minutes} min</Text>
+                <Text style={styles.settingValue}>{pomodoro.long_break_minutes} min</Text>
               </View>
               <Slider
                 style={styles.slider}
                 minimumValue={5}
                 maximumValue={30}
                 step={5}
-                value={pomodoro.long_brake_minutes}
+                value={pomodoro.long_break_minutes}
                 onValueChange={updateLongBreak}
                 minimumTrackTintColor="#4dabf7"
                 maximumTrackTintColor="rgba(255, 255, 255, 0.2)"
@@ -393,42 +498,42 @@ export default function PomodoroScreen({ navigation }) {
             </View>
           </View>
           
-          {/* Session History */}
+          {/* История сессий */}
           <View style={styles.historySection}>
             <Text style={styles.sectionTitle}>SESSION HISTORY</Text>
-            
-            {sessionHistory.map((session, index) => (
-              <View key={index} style={styles.historyItem}>
-                <View style={styles.historyLeft}>
-                  <View style={[
-                    styles.historyStatus, 
-                    { backgroundColor: session.completed ? '#34c759' : '#ff9500' }
-                  ]}>
-                    <MaterialIcons 
-                      name={session.completed ? "check" : "timer"} 
-                      size={16} 
-                      color="#ffffff" 
-                    />
+            {isLoading ? (
+              <ActivityIndicator size="large" color="#4dabf7" style={styles.loader} />
+            ) : error ? (
+              <Text style={styles.errorText}>{error}</Text>
+            ) : (sessionHistory || []).length === 0 ? (
+              <Text style={styles.emptyText}>No pomodoro sessions yet</Text>
+            ) : (
+              (sessionHistory || []).map((session) => (
+                <View key={session.id} style={styles.historyItem}>
+                  <View style={styles.historyLeft}>
+                    <View style={[styles.historyStatus, { backgroundColor: session.is_completed ? '#34c759' : '#ff9500' }]}>
+                      <MaterialIcons name={session.is_completed ? "check" : "timer"} size={16} color="#ffffff" />
+                    </View>
+                    <View style={styles.historyInfo}>
+                      <Text style={styles.historyTask}>Pomodoro Session</Text>
+                      <Text style={styles.historyDate}>{formatDate(session.created_at)}</Text>
+                    </View>
                   </View>
-                  <View style={styles.historyInfo}>
-                    <Text style={styles.historyTask}>{session.task}</Text>
-                    <Text style={styles.historyDate}>{session.date}</Text>
+                  <View style={styles.historyRight}>
+                    <Text style={styles.historyDuration}>{session.duration_minutes} min</Text>
+                    <TouchableOpacity onPress={() => deleteHistoryItem(session.id)} style={styles.deleteHistoryButton}>
+                      <Ionicons name="trash-outline" size={16} color="#ff3b30" />
+                    </TouchableOpacity>
                   </View>
                 </View>
-                <View style={styles.historyRight}>
-                  <Text style={styles.historyDuration}>{session.duration} min</Text>
-                </View>
-              </View>
-            ))}
+              ))
+            )}
           </View>
         </ScrollView>
         
-        {/* Bottom Navigation */}
+        {/* Нижняя навигация */}
         <View style={styles.bottomNav}>
-          <LinearGradient
-            colors={['rgba(16, 20, 45, 0.9)', 'rgba(16, 20, 45, 0.75)']}
-            style={styles.navBackground}
-          >
+          <LinearGradient colors={['rgba(16, 20, 45, 0.9)', 'rgba(16, 20, 45, 0.75)']} style={styles.navBackground}>
             <TouchableOpacity style={styles.navItem} onPress={() => navigation.navigate('Home')}>
               <MaterialCommunityIcons name="sword-cross" size={24} color="#4dabf7" />
               <Text style={styles.navText}>Quests</Text>
@@ -459,6 +564,7 @@ export default function PomodoroScreen({ navigation }) {
     </View>
   );
 }
+
 
 const styles = StyleSheet.create({
   container: {
@@ -640,12 +746,12 @@ const styles = StyleSheet.create({
   settingHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    alignItems: 'center',
     marginBottom: 5,
   },
   settingName: {
-    color: '#ffffff',
+    color: '#c8d6e5',
     fontSize: 14,
-    fontWeight: '600',
   },
   settingValue: {
     color: '#4dabf7',
@@ -658,30 +764,31 @@ const styles = StyleSheet.create({
   },
   historySection: {
     marginBottom: 30,
+    backgroundColor: 'rgba(16, 20, 45, 0.75)',
+    borderRadius: 8,
+    padding: 15,
+    borderWidth: 1,
+    borderColor: '#3250b4',
   },
   historyItem: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: 'rgba(16, 20, 45, 0.75)',
-    borderRadius: 8,
-    padding: 15,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: '#3250b4',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(77, 171, 247, 0.2)',
   },
   historyLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    flex: 1,
   },
   historyStatus: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 15,
+    marginRight: 10,
   },
   historyInfo: {
     flex: 1,
@@ -689,38 +796,64 @@ const styles = StyleSheet.create({
   historyTask: {
     color: '#ffffff',
     fontSize: 14,
-    fontWeight: '600',
-    marginBottom: 4,
+    fontWeight: '500',
   },
   historyDate: {
     color: '#c8d6e5',
     fontSize: 12,
+    marginTop: 2,
   },
   historyRight: {
-    alignItems: 'flex-end',
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   historyDuration: {
     color: '#4dabf7',
     fontSize: 14,
-    fontWeight: 'bold',
+    marginRight: 10,
+  },
+  deleteHistoryButton: {
+    padding: 5,
+  },
+  emptyText: {
+    color: '#c8d6e5',
+    fontSize: 14,
+    textAlign: 'center',
+    padding: 20,
+  },
+  errorText: {
+    color: '#ff3b30',
+    fontSize: 14,
+    textAlign: 'center',
+    padding: 20,
+  },
+  loader: {
+    padding: 20,
   },
   bottomNav: {
-    width: '100%',
-    paddingBottom: 20,
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 70,
   },
   navBackground: {
     flexDirection: 'row',
     justifyContent: 'space-around',
-    paddingVertical: 12,
+    alignItems: 'center',
+    height: '100%',
+    paddingBottom: 10,
     borderTopWidth: 1,
     borderTopColor: 'rgba(77, 171, 247, 0.3)',
   },
   navItem: {
     alignItems: 'center',
+    justifyContent: 'center',
+    padding: 5,
   },
   navText: {
-    color: '#c8d6e5',
-    fontSize: 10,
-    marginTop: 5,
-  },
+    color: '#4dabf7',
+    fontSize: 12,
+    marginTop: 3,
+  }
 });

@@ -11,6 +11,7 @@ import CaloriesScreen from './screens/CaloriesScreen';
 import EducationalScreen from './screens/EducationalScreen';
 import GroupsScreen from './screens/GroupScreen';
 import CreateTaskScreen from './screens/CreateTaskScreen';
+import EditTaskScreen from './screens/EditTaskScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -66,6 +67,11 @@ export default function App() {
         <Stack.Screen 
           name="CreateTask" 
           component={CreateTaskScreen} 
+          options={{ headerShown: false }} 
+        />
+        <Stack.Screen 
+          name="EditTask" 
+          component={EditTaskScreen} 
           options={{ headerShown: false }} 
         />
       </Stack.Navigator>
