@@ -103,7 +103,7 @@ export default function HomeScreen({ navigation, route }) {
     try {
       // Пробуем использовать put, затем patch при необходимости
       try {
-        await apiService.post(`/tasks/complete/${quest.id}/`, {});
+        await apiService.put(`/tasks/complete/${quest.id}/`, {});
         // Заметьте: здесь использую post вместо put, потому что в вашем apiService нет метода put
       } catch (putError) {
         // Если PUT не работает, пробуем PATCH

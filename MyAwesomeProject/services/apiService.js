@@ -6,45 +6,41 @@ const BASE_URL = 'https://drf-project-6vzx.onrender.com'; // Замените н
 // Функция для выполнения запросов с авторизацией
 export const apiRequest = async (endpoint, method = 'GET', data = null) => {
   try {
-    // Получаем токен
     const token = await getToken();
-    
-    // Формируем заголовки
+
     const headers = {
       'Content-Type': 'application/json',
     };
-    
-    // Добавляем токен авторизации, если он есть
+
     if (token) {
       headers['Authorization'] = `Token ${token}`;
     }
-    
-    // Формируем параметры запроса
+
     const requestOptions = {
       method,
       headers,
     };
-    
-    // Если есть данные, добавляем их в тело запроса
+
     if (data) {
       requestOptions.body = JSON.stringify(data);
     }
-    
-    // Выполняем запрос
+
     const response = await fetch(`${BASE_URL}${endpoint}`, requestOptions);
-    
-    // Проверяем статус ответа
+
     if (!response.ok) {
       throw new Error(`API Error: ${response.status}`);
     }
-    
-    // Возвращаем данные
-    return await response.json();
+
+    // Читаем ответ как текст
+    const responseText = await response.text();
+    // Если есть содержимое, пытаемся его распарсить, иначе возвращаем null
+    return responseText ? JSON.parse(responseText) : null;
   } catch (error) {
     console.error('API Request Error:', error);
     throw error;
   }
 };
+
 
 // Объект с методами для работы с API
 const apiService = {
@@ -67,6 +63,8 @@ const apiService = {
   patch: (endpoint, data) => apiRequest(endpoint, 'PATCH', data),
   // DELETE-запрос
   delete: (endpoint) => apiRequest(endpoint, 'DELETE'),
+
+  put: (endpoint, data) => apiRequest(endpoint, 'PUT', data),
 };
 
 export default apiService;

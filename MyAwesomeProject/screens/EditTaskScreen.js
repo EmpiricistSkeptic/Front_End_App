@@ -13,10 +13,9 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import axios from 'axios';
+import apiService from '../services/apiService';
 
 const { width } = Dimensions.get('window');
-const API_URL = 'https://drf-project-6vzx.onrender.com';
 
 export default function EditTaskScreen({ navigation, route }) {
   const { questId } = route.params;
@@ -26,21 +25,28 @@ export default function EditTaskScreen({ navigation, route }) {
   const [difficulty, setDifficulty] = useState('B');
   const [deadline, setDeadline] = useState('');
   const [exp, setExp] = useState('');
-  const [token, setToken] = useState(null);
   const [loading, setLoading] = useState(true);
 
+  // Remove onGoBack callback if present in route params
+  useEffect(() => {
+    if (route?.params?.onGoBack) {
+      const { onGoBack, ...rest } = route.params;
+      navigation.setParams(rest);
+    }
+  }, []);
+
+  // Check authentication and fetch task details
   useEffect(() => {
     const getTokenAndFetchTask = async () => {
       try {
-        const userToken = await AsyncStorage.getItem('userToken');
-        setToken(userToken);
-        if (!userToken) {
+        const token = await AsyncStorage.getItem('userToken');
+        if (!token) {
           navigation.navigate('Login');
           return;
         }
         
         // Fetch task details
-        fetchTaskDetails(userToken);
+        fetchTaskDetails();
       } catch (e) {
         console.error('Failed to get token', e);
         setLoading(false);
@@ -50,27 +56,50 @@ export default function EditTaskScreen({ navigation, route }) {
     getTokenAndFetchTask();
   }, [questId]);
   
-  const fetchTaskDetails = async (userToken) => {
+  const fetchTaskDetails = async () => {
     try {
-      const response = await axios.get(`${API_URL}/tasks/${questId}/`, {
-        headers: {
-          'Authorization': `Token ${userToken}`
-        }
-      });
+      console.log('Fetching task with ID:', questId);
       
-      const task = response.data;
+      // Проверяем наличие ID задачи
+      if (!questId) {
+        console.error('Task ID is missing');
+        Alert.alert('Error', 'Task ID is missing. Please try again.');
+        setLoading(false);
+        return;
+      }
       
-      // Set form fields with task data
-      setTitle(task.title);
-      setDescription(task.description);
-      setDifficulty(task.difficulty);
-      setDeadline(task.deadline);
-      setExp(task.exp.toString());
+      const token = await AsyncStorage.getItem('userToken');
+      console.log('Using token for fetch:', token ? 'Token exists' : 'No token');
+      
+      const response = await apiService.get(`/tasks/${questId}/`);
+      
+      // Подробное логирование ответа
+      console.log('Task details response:', JSON.stringify(response));
+      
+      // Проверяем, что response существует (без .data)
+      if (response) {
+        const task = response; // Используем response напрямую
+        console.log('Task data received:', task);
+        
+        // Set form fields with task data
+        setTitle(task.title || '');
+        setDescription(task.description || '');
+        setDifficulty(task.difficulty || 'B');
+        setDeadline(task.deadline || '');
+        setExp((task.exp || 0).toString());
+      } else {
+        console.error('Response exists but empty:', response);
+        throw new Error('No data received from API');
+      }
       
       setLoading(false);
     } catch (error) {
       console.error('Error fetching task details', error);
-      Alert.alert('Error', 'Failed to load task details. Please try again.');
+      console.error('Error details:', error.response ? JSON.stringify(error.response) : 'No response data');
+      
+
+      
+      Alert.alert('Error', `Failed to load task details: ${error.message}`);
       setLoading(false);
     }
   };
@@ -92,49 +121,54 @@ export default function EditTaskScreen({ navigation, route }) {
     setLoading(true);
 
     try {
-      const response = await axios.put(`${API_URL}/tasks/${questId}/update/`, {
+      const updateData = {
         title,
         description,
         difficulty,
         deadline,
         exp: expNumber,
-      }, {
-        headers: {
-          'Authorization': `Token ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
+      };
+      
+      console.log('Updating task with data:', updateData);
+      
+      // Добавляем проверку для метода PUT
+      // Поскольку в apiService может отсутствовать метод put
+      if (typeof apiService.put === 'function') {
+        await apiService.put(`/tasks/${questId}/update/`, updateData);
+      } else {
+        // Альтернативно используем apiRequest напрямую с методом PUT
+        console.log('apiService.put not available, using PATCH instead');
+        await apiService.patch(`/tasks/${questId}/update/`, updateData);
+      }
 
       Alert.alert('Success', 'Quest updated successfully!');
       // Navigate back with update flag
       navigation.navigate('Home', { taskUpdated: true });
     } catch (error) {
-      console.error('Error updating quest', error.response || error);
+      console.error('Error updating quest', error);
+      console.error('Error response:', error.response ? JSON.stringify(error.response) : 'No response data');
       
       // Try PATCH if PUT fails with 405 (Method Not Allowed)
       if (error.response && error.response.status === 405) {
         try {
-          await axios.patch(`${API_URL}/tasks/${questId}/update/`, {
+          console.log('PUT failed with 405, trying PATCH instead');
+          await apiService.patch(`/tasks/${questId}/update/`, {
             title,
             description,
             difficulty,
             deadline,
             exp: expNumber,
-          }, {
-            headers: {
-              'Authorization': `Token ${token}`,
-              'Content-Type': 'application/json'
-            }
           });
           
           Alert.alert('Success', 'Quest updated successfully!');
           navigation.navigate('Home', { taskUpdated: true });
         } catch (patchError) {
           console.error('Error updating quest with PATCH', patchError);
-          Alert.alert('Error', 'Failed to update quest. Please try again.');
+          console.error('PATCH error response:', patchError.response ? JSON.stringify(patchError.response) : 'No response data');
+          Alert.alert('Error', `Failed to update quest with PATCH: ${patchError.message}`);
         }
       } else {
-        Alert.alert('Error', 'Failed to update quest. Please try again.');
+        Alert.alert('Error', `Failed to update quest: ${error.message}`);
       }
     } finally {
       setLoading(false);
