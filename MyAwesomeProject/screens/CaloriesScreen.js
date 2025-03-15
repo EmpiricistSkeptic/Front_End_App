@@ -711,84 +711,109 @@ export default function CaloriesScreen({ navigation }) {
           <View style={styles.modalOverlay}>
             <TouchableOpacity style={styles.modalBackground} onPress={closeAddMeal} />
             <View style={styles.addMealModal}>
-              <View style={styles.modalHeader}>
-                <Text style={styles.modalTitle}>Add New Meal</Text>
-                <TouchableOpacity style={styles.closeButton} onPress={closeAddMeal}>
-                  <Ionicons name="close" size={20} color="#ffffff" />
-                </TouchableOpacity>
-              </View>
-              
-              <View style={styles.modalContent}>
-                <View style={styles.searchBarContainer}>
-                  <View style={styles.searchBar}>
-                    <Ionicons name="search" size={18} color="#c8d6e5" style={styles.searchIcon} />
-                    <TextInput
-                      style={styles.searchInput}
-                      placeholder="Search food..."
-                      placeholderTextColor="#8d9db5"
-                      value={searchQuery}
-                      onChangeText={setSearchQuery}
-                    />
-                  </View>
-                  
-                  <View style={styles.weightInputContainer}>
-                    <TextInput
-                      style={styles.weightInput}
-                      placeholder="100"
-                      placeholderTextColor="#8d9db5"
-                      keyboardType="numeric"
-                      value={weightInput}
-                      onChangeText={setWeightInput}
-                    />
-                    <Text style={styles.weightUnit}>g</Text>
-                  </View>
-                  
-                  <TouchableOpacity 
-                    style={styles.searchButton}
-                    onPress={searchFood}
-                  >
-                    <Text style={styles.searchButtonText}>Search</Text>
+              <LinearGradient
+                colors={['#182052', '#121539']}
+                style={styles.modalGradient}
+              >
+                <View style={styles.modalHeader}>
+                  <Text style={styles.modalTitle}>Add New Meal</Text>
+                  <TouchableOpacity style={styles.closeButton} onPress={closeAddMeal}>
+                    <Ionicons name="close" size={20} color="#ffffff" />
                   </TouchableOpacity>
                 </View>
                 
-                <View style={styles.searchResults}>
-                  {searching ? (
-                    <ActivityIndicator size="large" color="#4dabf7" style={styles.loader} />
-                  ) : (
-                    searchResults.length > 0 ? (
-                      <ScrollView style={styles.resultsList}>
-                        {searchResults.map(item => (
-                          <TouchableOpacity 
-                            key={item.id} 
-                            style={styles.resultItem}
-                            onPress={() => handleAddMeal(item)}
-                          >
-                            <View style={styles.resultLeft}>
-                              <Text style={styles.resultTitle}>{item.product_name}</Text>
-                              <Text style={styles.resultDetails}>{item.weight}g</Text>
-                            </View>
-                            <View style={styles.resultRight}>
-                              <Text style={styles.resultCalories}>{Math.round(item.calories)} kcal</Text>
-                              <View style={styles.macroRow}>
-                                <Text style={styles.macroText}>P: {Math.round(item.proteins)}g</Text>
-                                <Text style={styles.macroText}>F: {Math.round(item.fats)}g</Text>
-                                <Text style={styles.macroText}>C: {Math.round(item.carbs)}g</Text>
-                              </View>
-                            </View>
-                          </TouchableOpacity>
-                        ))}
-                      </ScrollView>
-                    ) : searchQuery.length > 0 ? (
-                      <Text style={styles.noResults}>No results found</Text>
-                    ) : (
-                      <View style={styles.searchPrompt}>
-                        <Ionicons name="nutrition" size={48} color="#3250b4" style={styles.promptIcon} />
-                        <Text style={styles.promptText}>Search for food to add to your diary</Text>
+                <View style={styles.modalContent}>
+                  <View style={styles.searchBarContainer}>
+                    <View style={styles.searchBar}>
+                      <Ionicons name="search" size={18} color="#4dabf7" style={styles.searchIcon} />
+                      <TextInput
+                        style={styles.searchInput}
+                        placeholder="Search food..."
+                        placeholderTextColor="#8d9db5"
+                        value={searchQuery}
+                        onChangeText={setSearchQuery}
+                      />
+                    </View>
+                    
+                    <View style={styles.inputRow}>
+                      <View style={styles.weightInputContainer}>
+                        <TextInput
+                          style={styles.weightInput}
+                          placeholder="100"
+                          placeholderTextColor="#8d9db5"
+                          keyboardType="numeric"
+                          value={weightInput}
+                          onChangeText={setWeightInput}
+                        />
+                        <Text style={styles.weightUnit}>g</Text>
                       </View>
-                    )
-                  )}
+                      
+                      <TouchableOpacity 
+                        style={styles.searchButton}
+                        onPress={searchFood}
+                      >
+                        <LinearGradient
+                          colors={['#3250b4', '#4dabf7']}
+                          start={{x: 0, y: 0}}
+                          end={{x: 1, y: 0}}
+                          style={styles.buttonGradient}
+                        >
+                          <Text style={styles.searchButtonText}>Search</Text>
+                        </LinearGradient>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                  
+                  <View style={styles.searchResults}>
+                    {searching ? (
+                      <ActivityIndicator size="large" color="#4dabf7" style={styles.loader} />
+                    ) : (
+                      searchResults.length > 0 ? (
+                        <ScrollView style={styles.resultsList}>
+                          {searchResults.map(item => (
+                            <TouchableOpacity 
+                              key={item.id} 
+                              style={styles.resultItem}
+                              onPress={() => handleAddMeal(item)}
+                            >
+                              <View style={styles.resultLeft}>
+                                <Text style={styles.resultTitle}>{item.product_name}</Text>
+                                <Text style={styles.resultDetails}>{item.weight}g</Text>
+                              </View>
+                              <View style={styles.resultRight}>
+                                <Text style={styles.resultCalories}>{Math.round(item.calories)} kcal</Text>
+                                <View style={styles.macroRow}>
+                                  <View style={styles.macroPill}>
+                                    <Text style={styles.macroText}>P: {Math.round(item.proteins)}g</Text>
+                                  </View>
+                                  <View style={styles.macroPill}>
+                                    <Text style={styles.macroText}>F: {Math.round(item.fats)}g</Text>
+                                  </View>
+                                  <View style={styles.macroPill}>
+                                    <Text style={styles.macroText}>C: {Math.round(item.carbs)}g</Text>
+                                  </View>
+                                </View>
+                              </View>
+                            </TouchableOpacity>
+                          ))}
+                        </ScrollView>
+                      ) : searchQuery.length > 0 ? (
+                        <View style={styles.emptyStateContainer}>
+                          <Ionicons name="search-outline" size={48} color="#4dabf7" style={styles.promptIcon} />
+                          <Text style={styles.noResults}>No results found</Text>
+                          <Text style={styles.noResultsSubtext}>Try different keywords or food name</Text>
+                        </View>
+                      ) : (
+                        <View style={styles.searchPrompt}>
+                          <Ionicons name="nutrition" size={48} color="#4dabf7" style={styles.promptIcon} />
+                          <Text style={styles.promptText}>Search for food to add to your diary</Text>
+                          <Text style={styles.promptSubtext}>Enter food name and portion weight</Text>
+                        </View>
+                      )
+                    )}
+                  </View>
                 </View>
-              </View>
+              </LinearGradient>
             </View>
           </View>
         )}
@@ -798,26 +823,87 @@ export default function CaloriesScreen({ navigation }) {
           <View style={styles.modalOverlay}>
             <TouchableOpacity style={styles.modalBackground} onPress={closeMealDetails} />
             <View style={styles.mealDetailsModal}>
-              <View style={styles.modalHeader}>
-                <Text style={styles.modalTitle}>Meal Details</Text>
-                <TouchableOpacity style={styles.closeButton} onPress={closeMealDetails}>
-                  <Ionicons name="close" size={20} color="#ffffff" />
-                </TouchableOpacity>
-              </View>
-              <View style={styles.modalContent}>
-                <Text style={styles.mealDetailTitle}>{selectedMeal.product_name}</Text>
-                <Text style={styles.mealDetailInfo}>Weight: {selectedMeal.weight}g</Text>
-                <Text style={styles.mealDetailInfo}>Calories: {Math.round(selectedMeal.calories)} kcal</Text>
-                <Text style={styles.mealDetailInfo}>Proteins: {Math.round(selectedMeal.proteins)}g</Text>
-                <Text style={styles.mealDetailInfo}>Fats: {Math.round(selectedMeal.fats)}g</Text>
-                <Text style={styles.mealDetailInfo}>Carbs: {Math.round(selectedMeal.carbs)}g</Text>
-                <TouchableOpacity 
-                  style={styles.deleteButton}
-                  onPress={() => handleDeleteMeal(selectedMeal.id)}
-                >
-                  <Text style={styles.deleteButtonText}>Delete Meal</Text>
-                </TouchableOpacity>
-              </View>
+              <LinearGradient
+                colors={['#182052', '#121539']}
+                style={styles.modalGradient}
+              >
+                <View style={styles.modalHeader}>
+                  <Text style={styles.modalTitle}>Meal Details</Text>
+                  <TouchableOpacity style={styles.closeButton} onPress={closeMealDetails}>
+                    <Ionicons name="close" size={20} color="#ffffff" />
+                  </TouchableOpacity>
+                </View>
+                
+                <View style={styles.modalContent}>
+                  <Text style={styles.mealDetailTitle}>{selectedMeal.product_name}</Text>
+                  
+                  <View style={styles.nutritionDetailsCard}>
+                    <View style={styles.nutritionRow}>
+                      <View style={styles.nutritionDetail}>
+                        <View style={styles.nutritionIcon}>
+                          <Ionicons name="flame" size={16} color="#ff9500" />
+                        </View>
+                        <View>
+                          <Text style={styles.nutritionValue}>{Math.round(selectedMeal.calories)}</Text>
+                          <Text style={styles.nutritionLabel}>Calories</Text>
+                        </View>
+                      </View>
+                      
+                      <View style={styles.nutritionDetail}>
+                        <View style={styles.nutritionIcon}>
+                          <Ionicons name="barbell" size={16} color="#4dabf7" />
+                        </View>
+                        <View>
+                          <Text style={styles.nutritionValue}>{Math.round(selectedMeal.proteins)}g</Text>
+                          <Text style={styles.nutritionLabel}>Protein</Text>
+                        </View>
+                      </View>
+                    </View>
+                    
+                    <View style={styles.nutritionRow}>
+                      <View style={styles.nutritionDetail}>
+                        <View style={styles.nutritionIcon}>
+                          <Ionicons name="water" size={16} color="#ff7675" />
+                        </View>
+                        <View>
+                          <Text style={styles.nutritionValue}>{Math.round(selectedMeal.fats)}g</Text>
+                          <Text style={styles.nutritionLabel}>Fat</Text>
+                        </View>
+                      </View>
+                      
+                      <View style={styles.nutritionDetail}>
+                        <View style={styles.nutritionIcon}>
+                          <Ionicons name="nutrition" size={16} color="#55efc4" />
+                        </View>
+                        <View>
+                          <Text style={styles.nutritionValue}>{Math.round(selectedMeal.carbs)}g</Text>
+                          <Text style={styles.nutritionLabel}>Carbs</Text>
+                        </View>
+                      </View>
+                    </View>
+                  </View>
+                  
+                  <View style={styles.mealDetailInfo}>
+                    <Text style={styles.infoLabel}>Serving Size</Text>
+                    <Text style={styles.infoValue}>{selectedMeal.weight}g</Text>
+                  </View>
+                  
+                  <TouchableOpacity 
+                    style={styles.deleteButton}
+                    onPress={() => handleDeleteMeal(selectedMeal.id)}
+                  >
+                    <LinearGradient
+                      colors={['#ff6b6b', '#d63031']}
+                      start={{x: 0, y: 0}}
+                      end={{x: 1, y: 0}}
+                      style={styles.buttonGradient}
+                    >
+                      <Ionicons name="trash-outline" size={16} color="#ffffff" style={styles.buttonIcon} />
+                      <Text style={styles.deleteButtonText}>Delete Meal</Text>
+                    </LinearGradient>
+                  </TouchableOpacity>
+                </View>
+              </LinearGradient>
             </View>
           </View>
         )}
@@ -1218,73 +1304,148 @@ const styles = StyleSheet.create({
     width: width * 0.9,
     maxHeight: height * 0.7,
     backgroundColor: '#121539',
-    borderRadius: 15,
+    borderRadius: 20,
     borderWidth: 1,
     borderColor: 'rgba(77, 171, 247, 0.5)',
+    overflow: 'hidden',
+    shadowColor: "#4dabf7",
+    shadowOffset: {
+      width: 0,
+      height: 0,
+    },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 10,
   },
   mealDetailsModal: {
     width: width * 0.9,
     backgroundColor: '#121539',
-    borderRadius: 15,
+    borderRadius: 20,
     borderWidth: 1,
     borderColor: 'rgba(77, 171, 247, 0.5)',
+    overflow: 'hidden',
+    shadowColor: "#4dabf7",
+    shadowOffset: {
+      width: 0,
+      height: 0,
+    },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 10,
+  },
+  modalGradient: {
+    width: '100%',
+    height: '100%',
   },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 15,
+    padding: 18,
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(77, 171, 247, 0.3)',
   },
   modalTitle: {
     color: '#ffffff',
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: 'bold',
+    letterSpacing: 0.5,
   },
   closeButton: {
-    width: 30,
-    height: 30,
+    width: 34,
+    height: 34,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    borderRadius: 15,
+    backgroundColor: 'rgba(77, 171, 247, 0.2)',
+    borderRadius: 17,
   },
   modalContent: {
-    padding: 15,
+    padding: 18,
+  },
+  searchBarContainer: {
+    marginBottom: 15,
   },
   searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: 'rgba(16, 20, 45, 0.7)',
-    borderRadius: 10,
-    paddingHorizontal: 10,
+    borderRadius: 12,
+    paddingHorizontal: 12,
     borderWidth: 1,
     borderColor: 'rgba(77, 171, 247, 0.3)',
-    marginBottom: 15,
+    height: 48,
+    marginBottom: 10,
   },
   searchIcon: {
     marginRight: 10,
   },
   searchInput: {
     flex: 1,
-    height: 42,
+    height: 48,
     color: '#ffffff',
+    fontSize: 15,
+  },
+  inputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  weightInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(16, 20, 45, 0.7)',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(77, 171, 247, 0.3)',
+    height: 48,
+    width: '48%',
+  },
+  weightInput: {
+    flex: 1,
+    height: 48,
+    color: '#ffffff',
+    fontSize: 15,
+    textAlign: 'center',
+  },
+  weightUnit: {
+    color: '#8d9db5',
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  searchButton: {
+    width: '48%',
+    height: 48,
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  buttonGradient: {
+    width: '100%',
+    height: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+    flexDirection: 'row',
+  },
+  searchButtonText: {
+    color: '#ffffff',
+    fontSize: 15,
+    fontWeight: 'bold',
+    letterSpacing: 0.5,
   },
   searchResults: {
     flex: 1,
-    minHeight: 200,
+    minHeight: 250,
   },
   resultsList: {
-    maxHeight: 300,
+    maxHeight: 320,
   },
   resultItem: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     backgroundColor: 'rgba(16, 20, 45, 0.7)',
-    borderRadius: 10,
-    padding: 12,
+    borderRadius: 14,
+    padding: 14,
     marginBottom: 10,
     borderWidth: 1,
     borderColor: 'rgba(77, 171, 247, 0.3)',
@@ -1294,110 +1455,165 @@ const styles = StyleSheet.create({
   },
   resultTitle: {
     color: '#ffffff',
-    fontSize: 14,
+    fontSize: 16,
     fontWeight: '600',
-    marginBottom: 2,
+    marginBottom: 4,
   },
   resultDetails: {
     color: '#8d9db5',
-    fontSize: 12,
+    fontSize: 13,
   },
   resultRight: {
     alignItems: 'flex-end',
   },
   resultCalories: {
     color: '#ff9500',
-    fontSize: 14,
+    fontSize: 16,
     fontWeight: 'bold',
-    marginBottom: 2,
+    marginBottom: 4,
+  },
+  macroRow: {
+    flexDirection: 'row',
+  },
+  macroPill: {
+    backgroundColor: 'rgba(77, 171, 247, 0.15)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 8,
+    marginLeft: 6,
+  },
+  macroText: {
+    color: '#4dabf7',
+    fontSize: 12,
+    fontWeight: '600',
   },
   loader: {
-    marginTop: 30,
+    marginTop: 40,
+  },
+  emptyStateContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 40,
   },
   noResults: {
+    color: '#ffffff',
+    fontSize: 16,
+    fontWeight: '600',
+    textAlign: 'center',
+    marginTop: 10,
+  },
+  noResultsSubtext: {
     color: '#8d9db5',
     fontSize: 14,
     textAlign: 'center',
-    marginTop: 30,
+    marginTop: 5,
   },
   searchPrompt: {
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 30,
+    marginTop: 40,
   },
   promptIcon: {
     marginBottom: 15,
-    opacity: 0.7,
+    opacity: 0.9,
   },
   promptText: {
+    color: '#ffffff',
+    fontSize: 16,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  promptSubtext: {
     color: '#8d9db5',
     fontSize: 14,
     textAlign: 'center',
+    marginTop: 5,
   },
-  mealDetailRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 15,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(77, 171, 247, 0.1)',
-    paddingBottom: 10,
-  },
-  mealDetailLabel: {
-    color: '#8d9db5',
-    fontSize: 14,
-  },
-  mealDetailValue: {
+  mealDetailTitle: {
     color: '#ffffff',
-    fontSize: 14,
-    fontWeight: '600',
+    fontSize: 22,
+    fontWeight: 'bold',
+    marginBottom: 14,
+    letterSpacing: 0.5,
+    textAlign: 'center',
   },
-  nutritionDetails: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-    marginBottom: 20,
-  },
-  nutritionDetailItem: {
-    width: '48%',
+  nutritionDetailsCard: {
     backgroundColor: 'rgba(16, 20, 45, 0.7)',
-    borderRadius: 10,
-    padding: 12,
-    marginBottom: 10,
-    alignItems: 'center',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 16,
     borderWidth: 1,
-    borderColor: 'rgba(77, 171, 247, 0.2)',
+    borderColor: 'rgba(77, 171, 247, 0.3)',
   },
-  nutritionDetailValue: {
+  nutritionRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+  },
+  nutritionRow: {
+    marginBottom: 0,
+  },
+  nutritionDetail: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    width: '45%',
+  },
+  nutritionIcon: {
+    width: 34,
+    height: 34,
+    backgroundColor: 'rgba(77, 171, 247, 0.15)',
+    borderRadius: 17,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 10,
+  },
+  nutritionValue: {
     color: '#ffffff',
     fontSize: 18,
     fontWeight: 'bold',
-    marginTop: 5,
-    marginBottom: 2,
   },
-  nutritionDetailLabel: {
+  nutritionLabel: {
     color: '#8d9db5',
-    fontSize: 10,
+    fontSize: 12,
+    fontWeight: '600',
+    letterSpacing: 0.5,
+    marginTop: 2,
+  },
+  mealDetailInfo: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: 'rgba(16, 20, 45, 0.7)',
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(77, 171, 247, 0.3)',
+  },
+  infoLabel: {
+    color: '#8d9db5',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  infoValue: {
+    color: '#ffffff',
+    fontSize: 16,
     fontWeight: 'bold',
-    letterSpacing: 1,
   },
   deleteButton: {
     width: '100%',
-    height: 44,
-    borderRadius: 10,
+    height: 50,
+    borderRadius: 14,
     overflow: 'hidden',
-    marginTop: 10,
+    marginTop: 5,
   },
-  buttonGradient: {
-    width: '100%',
-    height: '100%',
-    justifyContent: 'center',
-    alignItems: 'center',
+  buttonIcon: {
+    marginRight: 8,
   },
-  buttonText: {
+  deleteButtonText: {
     color: '#ffffff',
-    fontSize: 14,
+    fontSize: 16,
     fontWeight: 'bold',
-    letterSpacing: 1,
+    letterSpacing: 0.5,
   }
 });
