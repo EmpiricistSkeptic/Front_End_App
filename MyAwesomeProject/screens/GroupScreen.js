@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   View, 
   Text, 
@@ -11,53 +11,100 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons, MaterialCommunityIcons, FontAwesome5, MaterialIcons } from '@expo/vector-icons';
+// Импорт apiService для работы с авторизационным токеном и запросами
+import apiService from '../services/apiService'; // Проверьте корректность пути
 
 const { width, height } = Dimensions.get('window');
-
-// Пример данных для групп
-const GROUPS_DATA = [
-  {
-    id: 1,
-    name: 'React Developers',
-    description: 'A group for React enthusiasts to share ideas and collaborate on projects.',
-    created_by: 'Alice',
-    members: ['Alice', 'Bob', 'Charlie'],
-    created_at: '2025-02-20',
-    messages: [
-      { id: 1, sender: 'Alice', text: 'Welcome to our group!', timestamp: '2025-02-21 10:00' },
-      { id: 2, sender: 'Bob', text: 'Hi everyone!', timestamp: '2025-02-21 10:05' },
-    ],
-  },
-  {
-    id: 2,
-    name: 'Design Thinkers',
-    description: 'Discuss design, innovation, and creative processes.',
-    created_by: 'David',
-    members: ['David'],
-    created_at: '2025-02-22',
-    messages: [],
-  },
-  {
-    id: 3,
-    name: 'Tech News',
-    description: 'Stay updated with the latest in technology.',
-    created_by: 'Eve',
-    members: ['Eve', 'Frank'],
-    created_at: '2025-02-23',
-    messages: [
-      { id: 1, sender: 'Eve', text: 'Breaking news: New tech released!', timestamp: '2025-02-24 09:00' },
-    ],
-  },
-];
 
 export default function GroupsScreen({ navigation }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState('All'); // 'All' или 'Joined'
-  const [groups, setGroups] = useState(GROUPS_DATA);
+  const [groups, setGroups] = useState([]);
   const [selectedGroup, setSelectedGroup] = useState(null);
   const [newMessage, setNewMessage] = useState('');
+  
+  // Состояния для создания новой группы
+  const [createGroupModalVisible, setCreateGroupModalVisible] = useState(false);
+  const [newGroupName, setNewGroupName] = useState('');
+  const [newGroupDescription, setNewGroupDescription] = useState('');
 
-  const currentUser = 'You'; // Имя текущего пользователя
+  const currentUser = 'You';
+
+  // Загружаем группы при монтировании компонента
+  useEffect(() => {
+    fetchGroups();
+  }, []);
+
+  const fetchGroups = async () => {
+    try {
+      // Используем относительный URL '/groups/'
+      const response = await apiService.get('/groups/');
+      setGroups(response);
+    } catch (error) {
+      console.error('Ошибка получения групп:', error);
+    }
+  };
+
+  // При выборе группы загружаем сообщения для этой группы
+  const openGroupDetails = async (group) => {
+    try {
+      // Используем относительный URL для сообщений группы
+      const response = await apiService.get(`/groups/${group.id}/messages/`);
+      setSelectedGroup({ ...group, messages: response });
+    } catch (error) {
+      console.error('Ошибка получения сообщений группы:', error);
+    }
+  };
+
+  // Присоединение или выход из группы
+  const handleJoinLeaveGroup = async (group) => {
+    try {
+      if (group.members.includes(currentUser)) {
+        await apiService.post(`/groups/${group.id}/leave/`);
+      } else {
+        await apiService.post(`/groups/${group.id}/join/`);
+      }
+      // Обновляем список групп и детали выбранной группы
+      await fetchGroups();
+      if (selectedGroup && selectedGroup.id === group.id) {
+        openGroupDetails(group);
+      }
+    } catch (error) {
+      console.error('Ошибка при присоединении/выходе из группы:', error);
+    }
+  };
+
+  // Отправка сообщения в группе
+  const handleSendMessage = async () => {
+    if (newMessage.trim() === '') return;
+    try {
+      const response = await apiService.post(`/groups/${selectedGroup.id}/messages/send/`, { content: newMessage });
+      // Предполагается, что эндпоинт возвращает объект отправленного сообщения
+      setSelectedGroup(prev => ({ ...prev, messages: [...prev.messages, response] }));
+      setNewMessage('');
+    } catch (error) {
+      console.error('Ошибка отправки сообщения:', error);
+    }
+  };
+
+  // Создание новой группы через модальное окно
+  const handleSubmitCreateGroup = async () => {
+    if (!newGroupName.trim() || !newGroupDescription.trim()) return;
+    try {
+      const response = await apiService.post('/groups/create/', {
+        name: newGroupName,
+        description: newGroupDescription,
+      });
+      // Предполагается, что ответ возвращает созданную группу
+      setGroups(prev => [response, ...prev]);
+      // Закрываем модальное окно и очищаем поля
+      setCreateGroupModalVisible(false);
+      setNewGroupName('');
+      setNewGroupDescription('');
+    } catch (error) {
+      console.error('Ошибка создания группы:', error);
+    }
+  };
 
   // Фильтрация групп по поисковому запросу и выбранной вкладке
   const filteredGroups = groups.filter(group => {
@@ -69,53 +116,6 @@ export default function GroupsScreen({ navigation }) {
     }
     return true;
   });
-
-  // Функция для присоединения/покидания группы
-  const handleJoinLeaveGroup = (group) => {
-    const isMember = group.members.includes(currentUser);
-    const updatedGroup = {
-      ...group,
-      members: isMember 
-        ? group.members.filter(member => member !== currentUser)
-        : [...group.members, currentUser],
-    };
-    setGroups(prevGroups => prevGroups.map(g => g.id === group.id ? updatedGroup : g));
-    if (selectedGroup && selectedGroup.id === group.id) {
-      setSelectedGroup(updatedGroup);
-    }
-  };
-
-  // Отправка сообщения в группе
-  const handleSendMessage = () => {
-    if (newMessage.trim() === '') return;
-    const message = {
-      id: Date.now(),
-      sender: currentUser,
-      text: newMessage,
-      timestamp: new Date().toLocaleString(),
-    };
-    const updatedGroup = {
-      ...selectedGroup,
-      messages: [...(selectedGroup.messages || []), message],
-    };
-    setGroups(prevGroups => prevGroups.map(g => g.id === updatedGroup.id ? updatedGroup : g));
-    setSelectedGroup(updatedGroup);
-    setNewMessage('');
-  };
-
-  // Создание новой группы
-  const handleCreateGroup = () => {
-    const newGroup = {
-      id: groups.length + 1,
-      name: `New Group ${groups.length + 1}`,
-      description: 'Description of the new group.',
-      created_by: currentUser,
-      members: [currentUser],
-      created_at: new Date().toLocaleDateString(),
-      messages: [],
-    };
-    setGroups([newGroup, ...groups]);
-  };
 
   const closeGroupDetails = () => {
     setSelectedGroup(null);
@@ -147,16 +147,11 @@ export default function GroupsScreen({ navigation }) {
         {/* Хедер */}
         <View style={styles.header}>
           <Text style={styles.headerTitle}>Groups</Text>
-          <View style={{ flexDirection: 'row' }}>
-            <TouchableOpacity style={{ marginRight: 15 }} onPress={handleCreateGroup}>
-              <Ionicons name="add-circle" size={24} color="#4dabf7" />
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.profileButton} onPress={() => navigation.navigate('Profile')}>
-              <View style={styles.profileImage}>
-                <Text style={styles.profileInitial}>E</Text>
-              </View>
-            </TouchableOpacity>
-          </View>
+          <TouchableOpacity style={styles.profileButton} onPress={() => navigation.navigate('Profile')}>
+            <View style={styles.profileImage}>
+              <Text style={styles.profileInitial}>E</Text>
+            </View>
+          </TouchableOpacity>
         </View>
 
         {/* Поисковая строка */}
@@ -193,7 +188,7 @@ export default function GroupsScreen({ navigation }) {
               <TouchableOpacity
                 key={group.id}
                 style={styles.contentItem}
-                onPress={() => setSelectedGroup(group)}
+                onPress={() => openGroupDetails(group)}
               >
                 <View style={styles.contentInfo}>
                   <Text style={styles.contentTitle}>{group.name}</Text>
@@ -239,6 +234,11 @@ export default function GroupsScreen({ navigation }) {
           </LinearGradient>
         </View>
 
+        {/* Плавающая кнопка для создания группы */}
+        <TouchableOpacity style={styles.fabButton} onPress={() => setCreateGroupModalVisible(true)}>
+          <Ionicons name="add" size={28} color="#ffffff" />
+        </TouchableOpacity>
+
         {/* Модальное окно деталей группы */}
         {selectedGroup && (
           <View style={styles.modalOverlay}>
@@ -269,7 +269,7 @@ export default function GroupsScreen({ navigation }) {
                   <Text style={styles.modalInfoLabel}>Members:</Text>
                   <Text style={styles.modalInfoValue}>{selectedGroup.members.join(', ')}</Text>
                 </View>
-                {/* Кнопка для присоединения/покидания группы */}
+                {/* Кнопка для присоединения/выхода из группы */}
                 <TouchableOpacity 
                   style={{ marginVertical: 10, alignSelf: 'flex-end', width: '40%' }} 
                   onPress={() => handleJoinLeaveGroup(selectedGroup)}
@@ -289,10 +289,10 @@ export default function GroupsScreen({ navigation }) {
                 {/* Секция сообщений */}
                 <View style={{ maxHeight: 200, marginTop: 15 }}>
                   <ScrollView>
-                    {selectedGroup.messages.map(msg => (
+                    {selectedGroup.messages && selectedGroup.messages.map(msg => (
                       <View key={msg.id} style={{ marginBottom: 10 }}>
                         <Text style={{ color: '#4dabf7', fontWeight: 'bold' }}>{msg.sender}</Text>
-                        <Text style={{ color: '#ffffff' }}>{msg.text}</Text>
+                        <Text style={{ color: '#ffffff' }}>{msg.content}</Text>
                         <Text style={{ color: '#c8d6e5', fontSize: 10 }}>{msg.timestamp}</Text>
                       </View>
                     ))}
@@ -311,6 +311,48 @@ export default function GroupsScreen({ navigation }) {
                     <Ionicons name="send" size={24} color="#4dabf7" />
                   </TouchableOpacity>
                 </View>
+              </View>
+            </View>
+          </View>
+        )}
+
+        {/* Модальное окно создания группы */}
+        {createGroupModalVisible && (
+          <View style={styles.modalOverlay}>
+            <TouchableOpacity style={styles.modalBackground} onPress={() => setCreateGroupModalVisible(false)} />
+            <View style={styles.createGroupModal}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>Create Group</Text>
+                <TouchableOpacity style={styles.closeButton} onPress={() => setCreateGroupModalVisible(false)}>
+                  <Ionicons name="close" size={20} color="#ffffff" />
+                </TouchableOpacity>
+              </View>
+              <View style={styles.modalContent}>
+                <TextInput 
+                  style={styles.inputField}
+                  placeholder="Group Name"
+                  placeholderTextColor="#c8d6e5"
+                  value={newGroupName}
+                  onChangeText={setNewGroupName}
+                />
+                <TextInput 
+                  style={[styles.inputField, { height: 80 }]}
+                  placeholder="Group Description"
+                  placeholderTextColor="#c8d6e5"
+                  multiline
+                  value={newGroupDescription}
+                  onChangeText={setNewGroupDescription}
+                />
+                <TouchableOpacity onPress={handleSubmitCreateGroup}>
+                  <LinearGradient
+                    colors={['#4dabf7', '#3250b4']}
+                    style={styles.buttonGradient}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                  >
+                    <Text style={styles.buttonText}>Create Group</Text>
+                  </LinearGradient>
+                </TouchableOpacity>
               </View>
             </View>
           </View>
@@ -501,6 +543,14 @@ const styles = StyleSheet.create({
     borderColor: '#4dabf7',
     overflow: 'hidden',
   },
+  createGroupModal: {
+    width: width * 0.85,
+    backgroundColor: 'rgba(16, 20, 45, 0.95)',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#4dabf7',
+    overflow: 'hidden',
+  },
   modalHeader: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -550,6 +600,15 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 20,
   },
+  inputField: {
+    backgroundColor: 'rgba(16, 20, 45, 0.75)',
+    color: '#ffffff',
+    borderRadius: 6,
+    padding: 10,
+    marginBottom: 15,
+    borderWidth: 1,
+    borderColor: '#3250b4',
+  },
   buttonGradient: {
     paddingVertical: 10,
     paddingHorizontal: 15,
@@ -563,4 +622,22 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
     textAlign: 'center',
   },
+  fabButton: {
+    position: 'absolute',
+    bottom: 90,
+    right: 20,
+    backgroundColor: '#4dabf7',
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 5,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 3.84,
+  },
 });
+
+

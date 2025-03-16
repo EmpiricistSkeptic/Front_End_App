@@ -1,66 +1,56 @@
-import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Dimensions, StatusBar, ScrollView, TextInput } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, Dimensions, StatusBar, ScrollView, TextInput, Alert } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons, MaterialCommunityIcons, FontAwesome5, MaterialIcons, AntDesign, Feather } from '@expo/vector-icons';
+import apiService from '../services/apiService'; // Импорт URL и токена из apiService
 
 const { width, height } = Dimensions.get('window');
 
-// Sample user data
-const USER = {
-  username: 'Heroic123',
-  bio: 'Level up your life! Fitness enthusiast, coding wizard, and language learner. Working on becoming the best version of myself.',
-  level: 23,
-  points: 1250,
-  totalPoints: 2000,
-  achievements: [
-    {
-      id: 1,
-      title: 'Early Riser',
-      description: 'Completed 10 quests before 9 AM',
-      icon: 'sunrise',
-      unlocked: true,
-    },
-    {
-      id: 2,
-      title: 'Code Master',
-      description: 'Completed 20 programming study sessions',
-      icon: 'code',
-      unlocked: true,
-    },
-    {
-      id: 3,
-      title: 'Fitness Warrior',
-      description: 'Logged 30 workout sessions',
-      icon: 'dumbbell',
-      unlocked: false,
-    },
-    {
-      id: 4,
-      title: 'Polyglot',
-      description: 'Practiced 5 different languages',
-      icon: 'language',
-      unlocked: false,
-    },
-    {
-      id: 5,
-      title: 'Nutrition Expert',
-      description: 'Tracked healthy meals for 14 consecutive days',
-      icon: 'food-apple',
-      unlocked: true,
-    },
-  ],
-  stats: [
-    { name: 'Strength', value: 75 },
-    { name: 'Intelligence', value: 85 },
-    { name: 'Creativity', value: 60 },
-    { name: 'Discipline', value: 90 },
-    { name: 'Vitality', value: 70 },
-  ]
-};
-
 export default function ProfileScreen({ navigation }) {
-  const [activeTab, setActiveTab] = useState('stats');
-  
+  const [profile, setProfile] = useState(null);
+  const [isEditing, setIsEditing] = useState(false);
+  const [username, setUsername] = useState('');
+  const [bio, setBio] = useState('');
+  const [activeTab, setActiveTab] = useState('achievements');
+
+  useEffect(() => {
+    fetchProfile();
+  }, []);
+
+  const fetchProfile = async () => {
+    try {
+      const data = await apiService.get('/profile/');
+      setProfile(data);
+      setUsername(data.username);
+      setBio(data.bio);
+    } catch (error) {
+      console.error('Ошибка запроса профиля:', error);
+      Alert.alert('Ошибка', 'Не удалось загрузить профиль');
+    }
+  };
+
+  const updateProfile = async () => {
+    try {
+      const updatedData = await apiService.put('/profile/', { username, bio });
+      setProfile({...profile, username: username, bio: bio});
+      setIsEditing(false);
+      Alert.alert('Успех', 'Профиль обновлен!');
+    } catch (error) {
+      console.error('Ошибка обновления профиля:', error);
+      Alert.alert('Ошибка', 'Не удалось обновить профиль');
+    }
+  };
+
+  const logout = async () => {
+    try {
+      await apiService.post('/logout/');
+      navigation.navigate('Login');
+    } catch (error) {
+      console.error('Ошибка логаута:', error);
+      Alert.alert('Ошибка', 'Не удалось выйти из аккаунта');
+    }
+  };
+
   const getAchievementIcon = (icon) => {
     switch(icon) {
       case 'sunrise': return <Feather name="sunrise" size={24} color="#ffffff" />;
@@ -71,12 +61,21 @@ export default function ProfileScreen({ navigation }) {
       default: return <AntDesign name="trophy" size={24} color="#ffffff" />;
     }
   };
-  
+
+  // Пока данные профиля не загружены, показываем сообщение
+  if (!profile) {
+    return (
+      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+        <Text style={{ color: '#ffffff' }}>Загрузка профиля...</Text>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" />
       <LinearGradient colors={['#121539', '#080b20']} style={styles.background}>
-        {/* Particle effects background */}
+        {/* Фон с частицами */}
         <View style={styles.particlesContainer}>
           {[...Array(20)].map((_, i) => (
             <View 
@@ -95,7 +94,7 @@ export default function ProfileScreen({ navigation }) {
           ))}
         </View>
         
-        {/* Header */}
+        {/* Хедер */}
         <View style={styles.header}>
           <TouchableOpacity 
             style={styles.backButton}
@@ -106,54 +105,71 @@ export default function ProfileScreen({ navigation }) {
           
           <Text style={styles.headerTitle}>PROFILE</Text>
           
-          <TouchableOpacity style={styles.settingsButton}>
-            <Ionicons name="settings-outline" size={24} color="#4dabf7" />
-          </TouchableOpacity>
+          <View style={{ flexDirection: 'row' }}>
+            <TouchableOpacity style={styles.settingsButton} onPress={() => setIsEditing(!isEditing)}>
+              <Ionicons name="settings-outline" size={24} color="#4dabf7" />
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.settingsButton} onPress={logout}>
+              <Ionicons name="log-out-outline" size={24} color="#4dabf7" />
+            </TouchableOpacity>
+          </View>
         </View>
         
-        {/* Main Content */}
+        {/* Основное содержимое */}
         <ScrollView style={styles.mainContent}>
-          {/* Profile Header */}
+          {/* Заголовок профиля */}
           <View style={styles.profileHeader}>
             <View style={styles.avatarContainer}>
               <View style={styles.avatar}>
-                <Text style={styles.avatarText}>{USER.username.charAt(0)}</Text>
+                <Text style={styles.avatarText}>{profile.username.charAt(0)}</Text>
               </View>
               <View style={styles.levelBadge}>
-                <Text style={styles.levelBadgeText}>{USER.level}</Text>
+                <Text style={styles.levelBadgeText}>{profile.level}</Text>
               </View>
             </View>
             
             <View style={styles.profileInfo}>
-              <Text style={styles.username}>{USER.username}</Text>
-              <View style={styles.expBarContainer}>
-                <View style={[styles.expBar, { width: `${(USER.points/USER.totalPoints) * 100}%` }]} />
-                <Text style={styles.expText}>{USER.points} / {USER.totalPoints} EXP</Text>
-              </View>
-              <Text style={styles.bio}>{USER.bio}</Text>
-              
-              <TouchableOpacity style={styles.editProfileButton}>
-                <Text style={styles.editProfileText}>EDIT PROFILE</Text>
-              </TouchableOpacity>
+              {isEditing ? (
+                <>
+                  <TextInput 
+                    style={[styles.username, { borderBottomWidth: 1, borderColor: '#4dabf7' }]} 
+                    value={username} 
+                    onChangeText={setUsername} 
+                  />
+                  <TextInput 
+                    style={[styles.bio, { borderBottomWidth: 1, borderColor: '#4dabf7' }]} 
+                    value={bio} 
+                    onChangeText={setBio} 
+                    multiline 
+                  />
+                  <TouchableOpacity style={styles.editProfileButton} onPress={updateProfile}>
+                    <Text style={styles.editProfileText}>СОХРАНИТЬ</Text>
+                  </TouchableOpacity>
+                </>
+              ) : (
+                <>
+                  <Text style={styles.username}>{profile.username}</Text>
+                  <View style={styles.expBarContainer}>
+                    <View style={[styles.expBar, { width: `${(profile.points / profile.totalPoints) * 100}%` }]} />
+                    <Text style={styles.expText}>{profile.points} / {profile.totalPoints} EXP</Text>
+                  </View>
+                  <Text style={styles.bio}>{profile.bio}</Text>
+                  <TouchableOpacity style={styles.editProfileButton} onPress={() => setIsEditing(true)}>
+                    <Text style={styles.editProfileText}>EDIT PROFILE</Text>
+                  </TouchableOpacity>
+                </>
+              )}
             </View>
           </View>
           
-          {/* Tabs */}
+          {/* Вкладки (с переключением) */}
           <View style={styles.tabContainer}>
-            <TouchableOpacity 
-              style={[styles.tabButton, activeTab === 'stats' && styles.activeTab]}
-              onPress={() => setActiveTab('stats')}
-            >
-              <Text style={[styles.tabText, activeTab === 'stats' && styles.activeTabText]}>STATS</Text>
-            </TouchableOpacity>
-            
             <TouchableOpacity 
               style={[styles.tabButton, activeTab === 'achievements' && styles.activeTab]}
               onPress={() => setActiveTab('achievements')}
             >
               <Text style={[styles.tabText, activeTab === 'achievements' && styles.activeTabText]}>ACHIEVEMENTS</Text>
             </TouchableOpacity>
-            
             <TouchableOpacity 
               style={[styles.tabButton, activeTab === 'history' && styles.activeTab]}
               onPress={() => setActiveTab('history')}
@@ -162,37 +178,11 @@ export default function ProfileScreen({ navigation }) {
             </TouchableOpacity>
           </View>
           
-          {/* Tab Content */}
-          {activeTab === 'stats' && (
-            <View style={styles.tabContent}>
-              <Text style={styles.sectionTitle}>CHARACTER STATS</Text>
-              
-              {USER.stats.map((stat, index) => (
-                <View key={index} style={styles.statItem}>
-                  <View style={styles.statHeader}>
-                    <Text style={styles.statName}>{stat.name}</Text>
-                    <Text style={styles.statValue}>{stat.value}/100</Text>
-                  </View>
-                  <View style={styles.statBarContainer}>
-                    <View style={[styles.statBar, { width: `${stat.value}%` }]} />
-                  </View>
-                </View>
-              ))}
-              
-              <View style={styles.totalPointsContainer}>
-                <Text style={styles.totalPointsLabel}>Total Skill Points:</Text>
-                <Text style={styles.totalPointsValue}>
-                  {USER.stats.reduce((total, stat) => total + stat.value, 0)}
-                </Text>
-              </View>
-            </View>
-          )}
-          
+          {/* Содержимое активной вкладки */}
           {activeTab === 'achievements' && (
             <View style={styles.tabContent}>
               <Text style={styles.sectionTitle}>ACHIEVEMENTS</Text>
-              
-              {USER.achievements.map((achievement) => (
+              {profile.achievements && profile.achievements.map((achievement) => (
                 <View 
                   key={achievement.id} 
                   style={[
@@ -221,10 +211,9 @@ export default function ProfileScreen({ navigation }) {
                   </View>
                 </View>
               ))}
-              
               <View style={styles.achievementSummary}>
                 <Text style={styles.achievementSummaryText}>
-                  Unlocked: {USER.achievements.filter(a => a.unlocked).length}/{USER.achievements.length}
+                  Unlocked: {profile.achievements ? profile.achievements.filter(a => a.unlocked).length : 0}/{profile.achievements ? profile.achievements.length : 0}
                 </Text>
               </View>
             </View>
@@ -233,75 +222,12 @@ export default function ProfileScreen({ navigation }) {
           {activeTab === 'history' && (
             <View style={styles.tabContent}>
               <Text style={styles.sectionTitle}>QUEST HISTORY</Text>
-              
-              <View style={styles.historyItem}>
-                <View style={styles.historyDate}>
-                  <Text style={styles.historyDateText}>TODAY</Text>
-                </View>
-                
-                <View style={styles.historyQuest}>
-                  <View style={[styles.difficultyBadge, {backgroundColor: '#4dabf7'}]}>
-                    <Text style={styles.difficultyText}>B</Text>
-                  </View>
-                  <View style={styles.historyQuestInfo}>
-                    <Text style={styles.historyQuestTitle}>Complete Morning Workout</Text>
-                    <Text style={styles.historyQuestExp}>+150 EXP</Text>
-                  </View>
-                  <View style={styles.historyQuestStatus}>
-                    <AntDesign name="checkcircle" size={20} color="#34c759" />
-                  </View>
-                </View>
-                
-                <View style={styles.historyQuest}>
-                  <View style={[styles.difficultyBadge, {backgroundColor: '#ff9500'}]}>
-                    <Text style={styles.difficultyText}>A</Text>
-                  </View>
-                  <View style={styles.historyQuestInfo}>
-                    <Text style={styles.historyQuestTitle}>Study Programming</Text>
-                    <Text style={styles.historyQuestExp}>+300 EXP</Text>
-                  </View>
-                  <View style={styles.historyQuestStatus}>
-                    <AntDesign name="checkcircle" size={20} color="#34c759" />
-                  </View>
-                </View>
-              </View>
-              
-              <View style={styles.historyItem}>
-                <View style={styles.historyDate}>
-                  <Text style={styles.historyDateText}>YESTERDAY</Text>
-                </View>
-                
-                <View style={styles.historyQuest}>
-                  <View style={[styles.difficultyBadge, {backgroundColor: '#34c759'}]}>
-                    <Text style={styles.difficultyText}>C</Text>
-                  </View>
-                  <View style={styles.historyQuestInfo}>
-                    <Text style={styles.historyQuestTitle}>Meal Prep</Text>
-                    <Text style={styles.historyQuestExp}>+100 EXP</Text>
-                  </View>
-                  <View style={styles.historyQuestStatus}>
-                    <AntDesign name="checkcircle" size={20} color="#34c759" />
-                  </View>
-                </View>
-                
-                <View style={styles.historyQuest}>
-                  <View style={[styles.difficultyBadge, {backgroundColor: '#8e8e93'}]}>
-                    <Text style={styles.difficultyText}>D</Text>
-                  </View>
-                  <View style={styles.historyQuestInfo}>
-                    <Text style={styles.historyQuestTitle}>Meditation Session</Text>
-                    <Text style={styles.historyQuestExp}>+50 EXP</Text>
-                  </View>
-                  <View style={styles.historyQuestStatus}>
-                    <Ionicons name="close-circle" size={20} color="#ff2d55" />
-                  </View>
-                </View>
-              </View>
+              <Text style={{ color: '#c8d6e5' }}>История отсутствует</Text>
             </View>
           )}
         </ScrollView>
         
-        {/* Bottom Navigation */}
+        {/* Нижняя навигация */}
         <View style={styles.bottomNav}>
           <LinearGradient
             colors={['rgba(16, 20, 45, 0.9)', 'rgba(16, 20, 45, 0.75)']}
@@ -376,6 +302,7 @@ const styles = StyleSheet.create({
   },
   settingsButton: {
     padding: 5,
+    marginLeft: 10,
   },
   mainContent: {
     flex: 1,
@@ -441,7 +368,6 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   expBar: {
-    width: '62.5%', // Based on sample exp
     height: '100%',
     backgroundColor: '#4dabf7',
     borderRadius: 5,
@@ -467,6 +393,7 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
     borderWidth: 1,
     borderColor: '#4dabf7',
+    marginTop: 10,
   },
   editProfileText: {
     color: '#4dabf7',
@@ -605,62 +532,6 @@ const styles = StyleSheet.create({
     color: '#c8d6e5',
     fontSize: 14,
   },
-  historyItem: {
-    marginBottom: 20,
-  },
-  historyDate: {
-    marginBottom: 10,
-    paddingBottom: 5,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(77, 171, 247, 0.3)',
-  },
-  historyDateText: {
-    color: '#4dabf7',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  historyQuest: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(16, 20, 45, 0.75)',
-    borderRadius: 8,
-    padding: 12,
-    marginBottom: 10,
-    borderWidth: 1,
-    borderColor: '#3250b4',
-  },
-  difficultyBadge: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.3)',
-  },
-  difficultyText: {
-    color: '#ffffff',
-    fontSize: 12,
-    fontWeight: 'bold',
-  },
-  historyQuestInfo: {
-    flex: 1,
-  },
-  historyQuestTitle: {
-    color: '#ffffff',
-    fontSize: 14,
-    fontWeight: '600',
-    marginBottom: 4,
-  },
-  historyQuestExp: {
-    color: '#4dabf7',
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  historyQuestStatus: {
-    paddingLeft: 10,
-  },
   bottomNav: {
     width: '100%',
     paddingBottom: 20,
@@ -681,3 +552,4 @@ const styles = StyleSheet.create({
     marginTop: 5,
   },
 });
+
