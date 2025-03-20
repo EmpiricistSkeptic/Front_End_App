@@ -1,8 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Dimensions, StatusBar, ScrollView, TextInput, Alert } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Dimensions, StatusBar, ScrollView, TextInput, Alert, Image } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons, MaterialCommunityIcons, FontAwesome5, MaterialIcons, AntDesign, Feather } from '@expo/vector-icons';
-import apiService from '../services/apiService'; // Импорт URL и токена из apiService
+import * as ImagePicker from 'expo-image-picker';
+import apiService from '../services/apiService';
+import { calculateXpThreshold } from '../utils/xpUtils';
+
 
 const { width, height } = Dimensions.get('window');
 
@@ -11,35 +14,137 @@ export default function ProfileScreen({ navigation }) {
   const [isEditing, setIsEditing] = useState(false);
   const [username, setUsername] = useState('');
   const [bio, setBio] = useState('');
+  const [avatar, setAvatar] = useState(null);
   const [activeTab, setActiveTab] = useState('achievements');
+  const [avatarChanged, setAvatarChanged] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
     fetchProfile();
+    // Request permission for image library
+    (async () => {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission required', 'Sorry, we need camera roll permissions to upload avatars');
+      }
+    })();
   }, []);
+  
+
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('focus', () => {
+      fetchProfile();
+    });
+    return unsubscribe;
+  }, [navigation]);
+
+  const BASE_URL = 'https://drf-project-6vzx.onrender.com';
 
   const fetchProfile = async () => {
-    try {
+    try { 
       const data = await apiService.get('/profile/');
       setProfile(data);
       setUsername(data.username);
-      setBio(data.bio);
+      setBio(data.bio)
+      setAvatarChanged(false);
+
+      if (data.avatar_url) {
+        setAvatar(data.avatar_url);
+      } else {
+        setAvatar(null);
+      }
     } catch (error) {
-      console.error('Ошибка запроса профиля:', error);
-      Alert.alert('Ошибка', 'Не удалось загрузить профиль');
+      console.error('Error fetching profile:', error);
+      Alert.alert('Error', 'Failed to load profile');
+    }
+  };
+  
+
+  const pickImage = async () => {
+    try {
+      let mediaTypesOption = ImagePicker.MediaType ? ImagePicker.MediaType.Images : ImagePicker.MediaTypeOptions.Images;
+      let result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: mediaTypesOption,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      });
+  
+      // Проверяем структуру ответа (она может различаться в разных версиях)
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        setAvatar(result.assets[0].uri);
+        setAvatarChanged(true);
+      } else if (!result.cancelled && result.uri) { // для более старых версий
+        setAvatar(result.uri);
+        setAvatarChanged(true);
+      }
+    } catch (error) {
+      console.error('Ошибка выбора изображения:', error);
+      Alert.alert('Ошибка', 'Не удалось выбрать изображение: ' + error.message);
+    }
+  };
+  
+
+  const updateProfile = async () => {
+    setIsLoading(true);
+    try {
+      // Create form data
+      const formData = new FormData();
+      formData.append('username', username);
+      formData.append('bio', bio);
+      
+      // Avatar processing
+      if (avatarChanged && avatar) {
+        // Check if it's a local file URI
+        if (avatar.startsWith('file:') || avatar.startsWith('content:')) {
+          const uriParts = avatar.split('.');
+          const fileType = uriParts[uriParts.length - 1] || 'jpeg'; // Default to jpeg if can't determine
+          
+          console.log('Uploading avatar with type:', fileType);
+          console.log('Avatar URI:', avatar);
+          
+          formData.append('avatar', {
+            uri: avatar,
+            name: `avatar.${fileType}`,
+            type: `image/${fileType}`,
+          });
+        }
+      } else if (avatarChanged && !avatar) {
+        // If user removed the avatar, send clear signal to backend
+        formData.append('avatar_clear', 'true');
+      }
+      
+      console.log('Sending form data:', formData);
+      const updatedData = await apiService.putFormData('/profile/', formData);
+      console.log('Received updated data:', updatedData);
+  
+      setAvatarChanged(false);
+      
+      // Update profile state with the new data
+      setProfile(updatedData); // assuming API returns the complete updated profile
+      setIsEditing(false);
+      
+      // Success message
+      Alert.alert('Success', 'Profile updated successfully!');
+      
+      // Important - refresh profile from server to ensure consistency
+      await fetchProfile();
+    } catch (error) {
+      console.error('Profile update error:', error);
+      
+      // Show appropriate error message based on the error
+      if (error.response && error.response.status === 413) {
+        Alert.alert('Error', 'Avatar image too large. Please choose a smaller image.');
+      } else if (error.response && error.response.data && error.response.data.error) {
+        Alert.alert('Error', error.response.data.error);
+      } else {
+        Alert.alert('Error', 'Failed to update profile. Please try again.');
+      }
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  const updateProfile = async () => {
-    try {
-      const updatedData = await apiService.put('/profile/', { username, bio });
-      setProfile({...profile, username: username, bio: bio});
-      setIsEditing(false);
-      Alert.alert('Успех', 'Профиль обновлен!');
-    } catch (error) {
-      console.error('Ошибка обновления профиля:', error);
-      Alert.alert('Ошибка', 'Не удалось обновить профиль');
-    }
-  };
 
   const logout = async () => {
     try {
@@ -62,6 +167,21 @@ export default function ProfileScreen({ navigation }) {
     }
   };
 
+  const getExpDisplay = () => {
+    let currentLevel = profile.level;
+    let xpThreshold = calculateXpThreshold(currentLevel);
+    let currentPoints = profile.points;
+    
+    // Если набрано больше, чем нужно для текущего уровня – перерасчет
+    while (currentPoints >= xpThreshold) {
+      currentPoints -= xpThreshold;
+      currentLevel += 1;
+      xpThreshold = calculateXpThreshold(currentLevel);
+    }
+    
+    return { points: currentPoints, total: xpThreshold };
+  };
+  
   // Пока данные профиля не загружены, показываем сообщение
   if (!profile) {
     return (
@@ -120,9 +240,23 @@ export default function ProfileScreen({ navigation }) {
           {/* Заголовок профиля */}
           <View style={styles.profileHeader}>
             <View style={styles.avatarContainer}>
-              <View style={styles.avatar}>
-                <Text style={styles.avatarText}>{profile.username.charAt(0)}</Text>
-              </View>
+              <TouchableOpacity 
+                style={styles.avatar}
+                onPress={isEditing ? pickImage : null}
+                activeOpacity={isEditing ? 0.7 : 1}
+              >
+                {avatar ? (
+                  <Image source={{ uri: avatar }} style={styles.avatarImage} />
+                ) : (
+                  <Text style={styles.avatarText}>{profile.username.charAt(0)}</Text>
+                )}
+                
+                {isEditing && (
+                  <View style={styles.editAvatarOverlay}>
+                    <Feather name="camera" size={20} color="#ffffff" />
+                  </View>
+                )}
+              </TouchableOpacity>
               <View style={styles.levelBadge}>
                 <Text style={styles.levelBadgeText}>{profile.level}</Text>
               </View>
@@ -149,10 +283,15 @@ export default function ProfileScreen({ navigation }) {
               ) : (
                 <>
                   <Text style={styles.username}>{profile.username}</Text>
-                  <View style={styles.expBarContainer}>
-                    <View style={[styles.expBar, { width: `${(profile.points / profile.totalPoints) * 100}%` }]} />
-                    <Text style={styles.expText}>{profile.points} / {profile.totalPoints} EXP</Text>
-                  </View>
+                  {(() => {
+                    const { points: displayPoints, total: displayTotal } = getExpDisplay();
+                    return (
+                      <View style={styles.expBarContainer}>
+                        <View style={[styles.expBar, { width: `${(displayPoints / displayTotal) * 100}%` }]} />
+                        <Text style={styles.expText}>{displayPoints} / {displayTotal} EXP</Text>
+                      </View>
+                    );
+                  })()}
                   <Text style={styles.bio}>{profile.bio}</Text>
                   <TouchableOpacity style={styles.editProfileButton} onPress={() => setIsEditing(true)}>
                     <Text style={styles.editProfileText}>EDIT PROFILE</Text>
@@ -326,11 +465,28 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderWidth: 2,
     borderColor: '#4dabf7',
+    overflow: 'hidden',
+  },
+  avatarImage: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
   },
   avatarText: {
     color: '#ffffff',
     fontSize: 32,
     fontWeight: 'bold',
+  },
+  editAvatarOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    borderRadius: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   levelBadge: {
     position: 'absolute',
@@ -434,55 +590,6 @@ const styles = StyleSheet.create({
     marginBottom: 15,
     letterSpacing: 1,
   },
-  statItem: {
-    marginBottom: 15,
-  },
-  statHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 5,
-  },
-  statName: {
-    color: '#ffffff',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  statValue: {
-    color: '#4dabf7',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  statBarContainer: {
-    width: '100%',
-    height: 8,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    borderRadius: 4,
-    overflow: 'hidden',
-  },
-  statBar: {
-    height: '100%',
-    backgroundColor: '#4dabf7',
-    borderRadius: 4,
-  },
-  totalPointsContainer: {
-    marginTop: 10,
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    alignItems: 'center',
-    paddingTop: 10,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(77, 171, 247, 0.3)',
-  },
-  totalPointsLabel: {
-    color: '#c8d6e5',
-    fontSize: 14,
-    marginRight: 10,
-  },
-  totalPointsValue: {
-    color: '#4dabf7',
-    fontSize: 18,
-    fontWeight: 'bold',
-  },
   achievementItem: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -551,5 +658,17 @@ const styles = StyleSheet.create({
     fontSize: 10,
     marginTop: 5,
   },
+  loadingOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 999,
+  },
 });
+
 

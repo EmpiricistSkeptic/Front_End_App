@@ -61,6 +61,48 @@ const apiService = {
   post: (endpoint, data) => apiRequest(endpoint, 'POST', data),
   // PATCH-запрос
   patch: (endpoint, data) => apiRequest(endpoint, 'PATCH', data),
+
+  putFormData: async (endpoint, formData) => {
+    try {
+      const token = await getToken();
+      
+      // Log the formData contents for debugging (in a safe way)
+      console.log('FormData contents:');
+      for (let [key, value] of formData._parts) {
+        if (typeof value === 'object' && value.uri) {
+          console.log(`${key}: [File object with uri: ${value.uri}]`);
+        } else {
+          console.log(`${key}: ${value}`);
+        }
+      }
+      
+      const response = await fetch(`${BASE_URL}${endpoint}`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Token ${token}`
+          // Content-Type is automatically set when using FormData
+        },
+        body: formData
+      });
+      
+      // Log server response status
+      console.log('Server response status:', response.status);
+      
+      if (!response.ok) {
+        // Try to get error details from the response
+        const errorText = await response.text();
+        console.error('Server error response:', errorText);
+        throw new Error(`API Error: ${response.status} - ${errorText}`);
+      }
+      
+      const responseText = await response.text();
+      console.log('Server response:', responseText);
+      return responseText ? JSON.parse(responseText) : null;
+    } catch (error) {
+      console.error('PUT FormData Error:', error);
+      throw error;
+    }
+  },
   // DELETE-запрос
   delete: (endpoint) => apiRequest(endpoint, 'DELETE'),
 

@@ -3,7 +3,7 @@ import { View, Text, TouchableOpacity, StyleSheet, Dimensions, StatusBar, Scroll
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons, MaterialCommunityIcons, FontAwesome5, MaterialIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import apiService from '../services/apiService'; // Правильный импорт - без фигурных скобок
+import apiService from '../services/apiService';
 
 const { width, height } = Dimensions.get('window');
 
@@ -11,6 +11,12 @@ export default function HomeScreen({ navigation, route }) {
   const [quests, setQuests] = useState([]);
   const [selectedQuest, setSelectedQuest] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [profileData, setProfileData] = useState({
+    level: 1,
+    points: 0,
+    totalPoints: 1000,
+    username: ''
+  });
   
   // Получение токена и данных при загрузке компонента
   useEffect(() => {
@@ -19,6 +25,7 @@ export default function HomeScreen({ navigation, route }) {
         const userToken = await AsyncStorage.getItem('userToken');
         if (userToken) {
           fetchQuests();
+          fetchProfileData(); // Загружаем данные профиля
         } else {
           // Перенаправление на экран входа, если токен отсутствует
           navigation.navigate('Login');
@@ -34,8 +41,9 @@ export default function HomeScreen({ navigation, route }) {
   // Добавляем listener для обновления данных при возврате на экран
   useEffect(() => {
     const unsubscribe = navigation.addListener('focus', () => {
-      // Обновляем список задач каждый раз, когда экран становится активным
+      // Обновляем список задач и профиль каждый раз, когда экран становится активным
       fetchQuests();
+      fetchProfileData();
     });
     
     // Очистка listener при размонтировании компонента
@@ -51,16 +59,40 @@ export default function HomeScreen({ navigation, route }) {
       navigation.setParams({taskCreated: undefined, taskUpdated: undefined});
     }
   }, [route.params]);
+
+  // Функция для расчета порога XP, соответствующая бэкенду
+  const calculateXpThreshold = (level) => {
+   return Math.round(1000 * Math.pow(1.5, level - 1));
+  };
+  
+  // Получение данных профиля
+  const fetchProfileData = async () => {
+    try {
+      const response = await apiService.get('/profile/');
+
+      const level = response.level || 1;
+
+      const totalPoints = calculateXpThreshold(level);
+      setProfileData({
+        level: level,
+        points: response.points || 0,
+        totalPoints: totalPoints,
+        username: response.username || '',
+        avatar: response.avatar || null
+      });
+      console.log('Fetched profile data:', response);
+    } catch (error) {
+      console.error('Error fetching profile data', error);
+    }
+  };
   
   // Получение списка задач с сервера через apiService
   const fetchQuests = async () => {
     setLoading(true);
     try {
       const response = await apiService.get('/tasks');
-      console.log('Fetched quests:', response); // Выводим данные в консоль
+      console.log('Fetched quests:', response);
       setQuests(response);
-      // Обратите внимание: здесь мы используем просто response вместо response.data,
-      // т.к. ваш apiService.js уже возвращает распарсенные данные из JSON
     } catch (error) {
       console.error('Error fetching quests', error);
       Alert.alert('Error', 'Failed to load your quests. Please try again.');
@@ -98,19 +130,42 @@ export default function HomeScreen({ navigation, route }) {
     }
   };
   
+  // Обновление профиля с новыми значениями опыта и уровня
+  const updateProfileData = async (newPoints, newLevel) => {
+    try {
+      // Отправляем обновленные данные на сервер
+      await apiService.put('/profile/', {
+        points: newPoints,
+        level: newLevel,
+      });
+
+      const calculatedTotalPoints = calculateXpThreshold(newLevel);
+      
+      // Обновляем локальное состояние
+      setProfileData({
+        ...profileData,
+        points: newPoints,
+        level: newLevel,
+        totalPoints: calculatedTotalPoints
+      });
+    } catch (error) {
+      console.error('Error updating profile data', error);
+      Alert.alert('Error', 'Failed to update profile. Please try again.');
+    }
+  };
+  
   // Отметка задачи как выполненной через apiService
   const handleCompleteTask = async (quest) => {
     try {
-      // Пробуем использовать put, затем patch при необходимости
+      // Пробуем использовать put или patch для завершения задачи
       try {
         await apiService.put(`/tasks/complete/${quest.id}/`, {});
-        // Заметьте: здесь использую post вместо put, потому что в вашем apiService нет метода put
       } catch (putError) {
         // Если PUT не работает, пробуем PATCH
         if (putError.response && putError.response.status === 405) {
           await apiService.patch(`/tasks/complete/${quest.id}/`, {});
         } else {
-          throw putError; // если это не 405 ошибка, выбрасываем ее дальше
+          throw putError;
         }
       }
       
@@ -125,11 +180,27 @@ export default function HomeScreen({ navigation, route }) {
         setSelectedQuest({ ...selectedQuest, completed: true });
       }
       
-      Alert.alert('Success', 'Quest completed!');
+      // Расчет нового опыта и уровня
+      let newPoints = profileData.points + quest.exp;
+      let newLevel = profileData.level;
+      let xpThreshold = calculateXpThreshold(newLevel);
+
+      // Если опыт превышает порог, переносим избыточные очки на следующий уровень
+      while (newPoints >= xpThreshold) {
+        newLevel += 1;
+        newPoints -= xpThreshold;
+        xpThreshold = calculateXpThreshold(newLevel);
+      }
+
+      
+      // Обновляем профиль на сервере
+      await updateProfileData(newPoints, newLevel);
+      
+      Alert.alert('Success', `Quest completed! Gained ${quest.exp} EXP!`);
+      
     } catch (error) {
       console.error('Error completing quest', error);
       
-      // Добавляем больше информации об ошибке
       let errorMessage = 'Failed to complete quest. Please try again.';
       if (error.response) {
         errorMessage += ` Status: ${error.response.status}`;
@@ -139,6 +210,7 @@ export default function HomeScreen({ navigation, route }) {
       
       // Перезагрузим данные, чтобы убедиться, что они актуальны
       fetchQuests();
+      fetchProfileData();
     }
   };
   
@@ -155,6 +227,11 @@ export default function HomeScreen({ navigation, route }) {
   
   const closeQuestDetails = () => {
     setSelectedQuest(null);
+  };
+  
+  // Рассчитываем прогресс опыта в процентах для отображения в шкале
+  const calculateExpPercentage = () => {
+    return (profileData.points / profileData.totalPoints) * 100;
   };
   
   return (
@@ -183,10 +260,10 @@ export default function HomeScreen({ navigation, route }) {
         {/* Header */}
         <View style={styles.header}>
           <View style={styles.headerLeft}>
-            <Text style={styles.levelText}>LVL 23</Text>
+            <Text style={styles.levelText}>LVL {profileData.level}</Text>
             <View style={styles.expBarContainer}>
-              <View style={styles.expBar} />
-              <Text style={styles.expText}>1250 / 2000 EXP</Text>
+              <View style={[styles.expBar, { width: `${calculateExpPercentage()}%` }]} />
+              <Text style={styles.expText}>{profileData.points} / {profileData.totalPoints} EXP</Text>
             </View>
           </View>
           
@@ -195,7 +272,7 @@ export default function HomeScreen({ navigation, route }) {
             onPress={() => navigation.navigate('Profile')}
           >
             <View style={styles.profileImage}>
-              <Text style={styles.profileInitial}>H</Text>
+              <Text style={styles.profileInitial}>{profileData.username ? profileData.username.charAt(0).toUpperCase() : 'U'}</Text>
             </View>
           </TouchableOpacity>
         </View>
@@ -709,3 +786,4 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
 });
+
