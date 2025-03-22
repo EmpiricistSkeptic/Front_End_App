@@ -21,7 +21,7 @@ export default function CreateTaskScreen({ navigation, route }) {
   const [description, setDescription] = useState('');
   const [difficulty, setDifficulty] = useState('B');
   const [deadline, setDeadline] = useState('');
-  const [exp, setExp] = useState('');
+  const [points, setPoints] = useState('');
 
   // Запускаем эффект один раз, чтобы удалить не сериализуемый callback из navigation params
   useEffect(() => {
@@ -48,9 +48,9 @@ export default function CreateTaskScreen({ navigation, route }) {
       return;
     }
 
-    const expNumber = parseInt(exp);
-    if (isNaN(expNumber)) {
-      Alert.alert('Error', 'EXP must be a number');
+    const pointsNumber = parseInt(points);
+    if (isNaN(pointsNumber)) {
+      Alert.alert('Error', 'Points must be a number');
       return;
     }
 
@@ -60,7 +60,7 @@ export default function CreateTaskScreen({ navigation, route }) {
         description,
         difficulty,
         deadline,
-        exp: expNumber,
+        points: pointsNumber,
         completed: false
       });
 
@@ -143,12 +143,12 @@ export default function CreateTaskScreen({ navigation, route }) {
             placeholderTextColor="#88889C"
           />
 
-          <Text style={styles.label}>EXP Reward</Text>
+          <Text style={styles.label}>Points Reward</Text>
           <TextInput
             style={styles.input}
-            value={exp}
-            onChangeText={setExp}
-            placeholder="Enter EXP reward"
+            value={points}
+            onChangeText={setPoints}
+            placeholder="Enter Points reward"
             placeholderTextColor="#88889C"
             keyboardType="numeric"
           />

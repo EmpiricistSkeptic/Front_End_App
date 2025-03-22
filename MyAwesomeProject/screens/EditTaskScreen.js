@@ -24,7 +24,7 @@ export default function EditTaskScreen({ navigation, route }) {
   const [description, setDescription] = useState('');
   const [difficulty, setDifficulty] = useState('B');
   const [deadline, setDeadline] = useState('');
-  const [exp, setExp] = useState('');
+  const [points, setPoints] = useState('');
   const [loading, setLoading] = useState(true);
 
   // Remove onGoBack callback if present in route params
@@ -86,7 +86,7 @@ export default function EditTaskScreen({ navigation, route }) {
         setDescription(task.description || '');
         setDifficulty(task.difficulty || 'B');
         setDeadline(task.deadline || '');
-        setExp((task.exp || 0).toString());
+        setPoints((task.points || 0).toString());
       } else {
         console.error('Response exists but empty:', response);
         throw new Error('No data received from API');
@@ -112,9 +112,9 @@ export default function EditTaskScreen({ navigation, route }) {
     }
 
     // Check that EXP is a number
-    const expNumber = parseInt(exp);
-    if (isNaN(expNumber)) {
-      Alert.alert('Error', 'EXP must be a number');
+    const pointsNumber = parseInt(points);
+    if (isNaN(pointsNumber)) {
+      Alert.alert('Error', 'Points must be a number');
       return;
     }
     
@@ -126,7 +126,7 @@ export default function EditTaskScreen({ navigation, route }) {
         description,
         difficulty,
         deadline,
-        exp: expNumber,
+        points: pointsNumber,
       };
       
       console.log('Updating task with data:', updateData);
@@ -157,7 +157,7 @@ export default function EditTaskScreen({ navigation, route }) {
             description,
             difficulty,
             deadline,
-            exp: expNumber,
+            points: pointsNumber,
           });
           
           Alert.alert('Success', 'Quest updated successfully!');
@@ -257,12 +257,12 @@ export default function EditTaskScreen({ navigation, route }) {
             placeholderTextColor="#88889C"
           />
 
-          <Text style={styles.label}>EXP Reward</Text>
+          <Text style={styles.label}>Points Reward</Text>
           <TextInput
             style={styles.input}
-            value={exp}
-            onChangeText={setExp}
-            placeholder="Enter EXP reward"
+            value={points}
+            onChangeText={setPoints}
+            placeholder="Enter Points reward"
             placeholderTextColor="#88889C"
             keyboardType="numeric"
           />

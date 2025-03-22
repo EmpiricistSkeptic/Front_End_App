@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Dimensions, StatusBar, ScrollView, Alert } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Dimensions, StatusBar, ScrollView, Alert, Image} from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons, MaterialCommunityIcons, FontAwesome5, MaterialIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -62,7 +62,7 @@ export default function HomeScreen({ navigation, route }) {
 
   // Функция для расчета порога XP, соответствующая бэкенду
   const calculateXpThreshold = (level) => {
-   return Math.round(1000 * Math.pow(1.5, level - 1));
+    return Math.floor(1000 * (1.5 ** (level - 1)));
   };
   
   // Получение данных профиля
@@ -78,7 +78,7 @@ export default function HomeScreen({ navigation, route }) {
         points: response.points || 0,
         totalPoints: totalPoints,
         username: response.username || '',
-        avatar: response.avatar || null
+        avatar: response.avatar_url || null
       });
       console.log('Fetched profile data:', response);
     } catch (error) {
@@ -181,7 +181,7 @@ export default function HomeScreen({ navigation, route }) {
       }
       
       // Расчет нового опыта и уровня
-      let newPoints = profileData.points + quest.exp;
+      let newPoints = profileData.points + quest.points;
       let newLevel = profileData.level;
       let xpThreshold = calculateXpThreshold(newLevel);
 
@@ -271,9 +271,18 @@ export default function HomeScreen({ navigation, route }) {
             style={styles.profileButton}
             onPress={() => navigation.navigate('Profile')}
           >
-            <View style={styles.profileImage}>
-              <Text style={styles.profileInitial}>{profileData.username ? profileData.username.charAt(0).toUpperCase() : 'U'}</Text>
-            </View>
+            {profileData.avatar ? (
+              <Image 
+                source={{ uri: `${profileData.avatar}?t=${Date.now()}` }} 
+                style={styles.profileImage} 
+              />
+            ) : (
+              <View style={styles.profileImage}>
+                <Text style={styles.profileInitial}>
+                  {profileData.username ? profileData.username.charAt(0).toUpperCase() : 'U'}
+                </Text>
+              </View>
+            )}
           </TouchableOpacity>
         </View>
         
@@ -786,4 +795,5 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
 });
+
 

@@ -70,13 +70,20 @@ export default function ProfileScreen({ navigation }) {
         quality: 0.8,
       });
   
+      console.log('Image picker result:', result);
+      
       // Проверяем структуру ответа (она может различаться в разных версиях)
       if (!result.canceled && result.assets && result.assets.length > 0) {
-        setAvatar(result.assets[0].uri);
+        const selectedUri = result.assets[0].uri;
+        console.log('Selected image URI:', selectedUri);
+        setAvatar(selectedUri);
         setAvatarChanged(true);
-      } else if (!result.cancelled && result.uri) { // для более старых версий
+      } else if (!result.canceled && result.uri) { // для более старых версий
+        console.log('Selected image URI (legacy format):', result.uri);
         setAvatar(result.uri);
         setAvatarChanged(true);
+      } else {
+        console.log('No image selected or selection canceled');
       }
     } catch (error) {
       console.error('Ошибка выбора изображения:', error);
@@ -91,48 +98,62 @@ export default function ProfileScreen({ navigation }) {
       // Create form data
       const formData = new FormData();
       formData.append('username', username);
-      formData.append('bio', bio);
+      formData.append('bio', bio || ''); // Убедитесь, что bio не null
       
       // Avatar processing
-      if (avatarChanged && avatar) {
-        // Check if it's a local file URI
-        if (avatar.startsWith('file:') || avatar.startsWith('content:')) {
-          const uriParts = avatar.split('.');
-          const fileType = uriParts[uriParts.length - 1] || 'jpeg'; // Default to jpeg if can't determine
-          
-          console.log('Uploading avatar with type:', fileType);
-          console.log('Avatar URI:', avatar);
+      if (avatarChanged) {
+        if (avatar && (avatar.startsWith('file:') || avatar.startsWith('content:'))) {
+          // Проверка, что avatar не null и это локальный файл
+          let fileType = 'jpeg'; // Default
+          if (avatar.includes('.')) {
+            const uriParts = avatar.split('.');
+            fileType = uriParts[uriParts.length - 1].toLowerCase();
+          }
           
           formData.append('avatar', {
             uri: avatar,
             name: `avatar.${fileType}`,
             type: `image/${fileType}`,
           });
+          
+          console.log(`Uploading avatar as ${fileType} from ${avatar}`);
+        } else if (avatar === null) {
+          // Если аватар был удален, отправляем сигнал очистки на бэкенд
+          formData.append('avatar_clear', 'true');
+          console.log('Clearing avatar');
         }
-      } else if (avatarChanged && !avatar) {
-        // If user removed the avatar, send clear signal to backend
-        formData.append('avatar_clear', 'true');
       }
       
       console.log('Sending form data:', formData);
       const updatedData = await apiService.putFormData('/profile/', formData);
       console.log('Received updated data:', updatedData);
   
-      setAvatarChanged(false);
+      // Обновляем avatar после успешного запроса
+      if (updatedData.avatar_url) {
+        setAvatar(updatedData.avatar_url);
+      } else {
+        setAvatar(null);
+      }
       
-      // Update profile state with the new data
-      setProfile(updatedData); // assuming API returns the complete updated profile
+      setAvatarChanged(false);
+      setProfile(updatedData);
       setIsEditing(false);
       
-      // Success message
       Alert.alert('Success', 'Profile updated successfully!');
       
-      // Important - refresh profile from server to ensure consistency
-      await fetchProfile();
+      // Увеличиваем задержку перед повторной загрузкой профиля
+      setTimeout(() => {
+        fetchProfile();
+      }, 1500);
     } catch (error) {
       console.error('Profile update error:', error);
       
-      // Show appropriate error message based on the error
+      if (error.response) {
+        console.error('Response status:', error.response.status);
+        console.error('Response data:', error.response.data);
+      }
+      
+      // Show appropriate error message
       if (error.response && error.response.status === 413) {
         Alert.alert('Error', 'Avatar image too large. Please choose a smaller image.');
       } else if (error.response && error.response.data && error.response.data.error) {
@@ -245,12 +266,15 @@ export default function ProfileScreen({ navigation }) {
                 onPress={isEditing ? pickImage : null}
                 activeOpacity={isEditing ? 0.7 : 1}
               >
-                {avatar ? (
-                  <Image source={{ uri: avatar }} style={styles.avatarImage} />
-                ) : (
-                  <Text style={styles.avatarText}>{profile.username.charAt(0)}</Text>
-                )}
-                
+              {avatar ? (
+                <Image 
+                  source={{ uri: `${avatar}?t=${Date.now()}` }} 
+                  style={styles.avatarImage} 
+                />
+              ) : (
+                <Text style={styles.avatarText}>{profile.username.charAt(0)}</Text>
+              )}
+
                 {isEditing && (
                   <View style={styles.editAvatarOverlay}>
                     <Feather name="camera" size={20} color="#ffffff" />
