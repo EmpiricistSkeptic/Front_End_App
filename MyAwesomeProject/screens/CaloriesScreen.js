@@ -16,6 +16,13 @@ export default function CaloriesScreen({ navigation }) {
   const [selectedMeal, setSelectedMeal] = useState(null);
   const [selectedPeriod, setSelectedPeriod] = useState('week');
   const [weightInput, setWeightInput] = useState('100'); // Default weight 100g
+  // Новые состояния для модального окна установки целей
+  const [showGoalsModal, setShowGoalsModal] = useState(false);
+  const [goalCalories, setGoalCalories] = useState('');
+  const [goalProteins, setGoalProteins] = useState('');
+  const [goalFats, setGoalFats] = useState('');
+  const [goalCarbs, setGoalCarbs] = useState('');
+
   
   // State for storing data from the API
   const [nutritionData, setNutritionData] = useState({
@@ -47,6 +54,12 @@ export default function CaloriesScreen({ navigation }) {
     try {
       const data = await apiService.get('/nutrition-summary/');
       setNutritionData(data);
+
+      // Устанавливаем текущие цели из данных API
+      setGoalCalories(data.calories_goal?.toString() || '');
+      setGoalProteins(data.proteins_goal?.toString() || '');
+      setGoalFats(data.fats_goal?.toString() || '');
+      setGoalCarbs(data.carbs_goal?.toString() || '');
       
       // Fetch history data based on selected period
       fetchHistoryData();
@@ -167,6 +180,27 @@ export default function CaloriesScreen({ navigation }) {
       Alert.alert('Error', 'Failed to add meal');
     }
   };
+
+  // Функция обновления целей питания
+  const handleUpdateGoals = async () => {
+    const newGoals = {
+      calories_goal: parseInt(goalCalories, 10) || 0,
+      proteins_goal: parseInt(goalProteins, 10) || 0,
+      fats_goal: parseInt(goalFats, 10) || 0,
+      carbs_goal: parseInt(goalCarbs, 10) || 0,
+    };
+
+    try {
+      await apiService.patch('/update-nutrition-goals/', newGoals);
+      fetchNutritionData();
+      Alert.alert('Success', 'Nutrition goals updated successfully');
+      setShowGoalsModal(false);
+    } catch (err) {
+      console.error('Error updating goals:', err);
+      Alert.alert('Error', 'Failed to update nutrition goals');
+    }
+  };
+
   
   // Update nutrition goals
   const updateNutritionGoals = async (goals) => {
@@ -215,6 +249,73 @@ export default function CaloriesScreen({ navigation }) {
     return Math.round(sum / historyData.length);
   };
 
+  const renderGoalsModal = () => {
+    if (!showGoalsModal) return null;
+  
+    return (
+      <View style={styles.modalOverlay}>
+        <TouchableOpacity
+          style={styles.modalBackground}
+          onPress={() => setShowGoalsModal(false)}
+        />
+        <View style={styles.goalsModal}>
+          <LinearGradient colors={['#182052', '#121539']} style={styles.modalGradient}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Set Nutrition Goals</Text>
+              <TouchableOpacity style={styles.closeButton} onPress={() => setShowGoalsModal(false)}>
+                <Ionicons name="close" size={20} color="#ffffff" />
+              </TouchableOpacity>
+            </View>
+            <View style={styles.modalContent}>
+              <TextInput
+                style={styles.inputField}
+                placeholder="Calories Goal"
+                placeholderTextColor="#8d9db5"
+                keyboardType="numeric"
+                value={goalCalories}
+                onChangeText={setGoalCalories}
+              />
+              <TextInput
+                style={styles.inputField}
+                placeholder="Proteins Goal (g)"
+                placeholderTextColor="#8d9db5"
+                keyboardType="numeric"
+                value={goalProteins}
+                onChangeText={setGoalProteins}
+              />
+              <TextInput
+                style={styles.inputField}
+                placeholder="Fats Goal (g)"
+                placeholderTextColor="#8d9db5"
+                keyboardType="numeric"
+                value={goalFats}
+                onChangeText={setGoalFats}
+              />
+              <TextInput
+                style={styles.inputField}
+                placeholder="Carbs Goal (g)"
+                placeholderTextColor="#8d9db5"
+                keyboardType="numeric"
+                value={goalCarbs}
+                onChangeText={setGoalCarbs}
+              />
+              <TouchableOpacity style={styles.updateGoalsButton} onPress={handleUpdateGoals}>
+                <LinearGradient
+                  colors={['#3250b4', '#4dabf7']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={styles.buttonGradient}
+                >
+                  <Text style={styles.buttonText}>Update Goals</Text>
+                </LinearGradient>
+              </TouchableOpacity>
+            </View>
+          </LinearGradient>
+        </View>
+      </View>
+    );
+  };
+
   // Render meals tab
   const renderMealsTab = () => {
     if (isLoading) {
@@ -245,6 +346,12 @@ export default function CaloriesScreen({ navigation }) {
       <View style={styles.tabContent}>
         <View style={styles.todaySummary}>
           <Text style={styles.todayTitle}>TODAY'S NUTRITION</Text>
+          <TouchableOpacity 
+            style={styles.setGoalsButton}
+            onPress={() => setShowGoalsModal(true)}
+          >
+            <Text style={styles.setGoalsButtonText}>Set Goals</Text>
+          </TouchableOpacity>
           
           <View style={styles.nutritionCards}>
             <View style={styles.nutritionCard}>
@@ -754,8 +861,8 @@ export default function CaloriesScreen({ navigation }) {
                       >
                         <LinearGradient
                           colors={['#3250b4', '#4dabf7']}
-                          start={{x: 0, y: 0}}
-                          end={{x: 1, y: 0}}
+                          start={{ x: 0, y: 0 }}
+                          end={{ x: 1, y: 0 }}
                           style={styles.buttonGradient}
                         >
                           <Text style={styles.searchButtonText}>Search</Text>
@@ -894,8 +1001,8 @@ export default function CaloriesScreen({ navigation }) {
                   >
                     <LinearGradient
                       colors={['#ff6b6b', '#d63031']}
-                      start={{x: 0, y: 0}}
-                      end={{x: 1, y: 0}}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 0 }}
                       style={styles.buttonGradient}
                     >
                       <Ionicons name="trash-outline" size={16} color="#ffffff" style={styles.buttonIcon} />
@@ -907,11 +1014,12 @@ export default function CaloriesScreen({ navigation }) {
             </View>
           </View>
         )}
-        
       </LinearGradient>
+      {renderGoalsModal()}
     </View>
   );
 }
+  
   
 
 const styles = StyleSheet.create({
@@ -1615,5 +1723,47 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
     letterSpacing: 0.5,
-  }
+  },
+  todayHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  setGoalsButton: {
+    backgroundColor: '#3250b4',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+  },
+  setGoalsButtonText: {
+    color: '#ffffff',
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
+  goalsModal: {
+    width: width * 0.9,
+    backgroundColor: '#121539',
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(77, 171, 247, 0.5)',
+    overflow: 'hidden',
+    elevation: 10,
+  },
+  inputField: {
+    backgroundColor: 'rgba(16, 20, 45, 0.7)',
+    borderRadius: 10,
+    padding: 12,
+    color: '#ffffff',
+    fontSize: 16,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(77, 171, 247, 0.3)',
+  },
+  updateGoalsButton: {
+    width: '100%',
+    height: 50,
+    borderRadius: 14,
+    overflow: 'hidden',
+    marginTop: 5,
+  },
 });

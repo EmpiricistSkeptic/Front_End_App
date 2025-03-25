@@ -90,7 +90,7 @@ export default function HomeScreen({ navigation, route }) {
   const fetchQuests = async () => {
     setLoading(true);
     try {
-      const response = await apiService.get('/tasks');
+      const response = await apiService.get('/tasks/');
       console.log('Fetched quests:', response);
       setQuests(response);
     } catch (error) {
@@ -261,9 +261,9 @@ export default function HomeScreen({ navigation, route }) {
         <View style={styles.header}>
           <View style={styles.headerLeft}>
             <Text style={styles.levelText}>LVL {profileData.level}</Text>
-            <View style={styles.expBarContainer}>
-              <View style={[styles.expBar, { width: `${calculateExpPercentage()}%` }]} />
-              <Text style={styles.expText}>{profileData.points} / {profileData.totalPoints} EXP</Text>
+            <View style={styles.pointsBarContainer}>
+              <View style={[styles.pointsBar, { width: `${calculateExpPercentage()}%` }]} />
+              <Text style={styles.pointsText}>{profileData.points} / {profileData.totalPoints} POINTS</Text>
             </View>
           </View>
           
@@ -325,7 +325,7 @@ export default function HomeScreen({ navigation, route }) {
                     </View>
                   </View>
                   <View style={styles.questRight}>
-                    <Text style={styles.expReward}>+{quest.exp} EXP</Text>
+                    <Text style={styles.pointsReward}>+{quest.points} POINTS</Text>
                   </View>
                 </TouchableOpacity>
               ))
@@ -393,8 +393,8 @@ export default function HomeScreen({ navigation, route }) {
                 </View>
                 
                 <View style={styles.modalInfoRow}>
-                  <Text style={styles.modalInfoLabel}>EXP Reward:</Text>
-                  <Text style={styles.modalInfoValue}>{selectedQuest.exp} EXP</Text>
+                  <Text style={styles.modalInfoLabel}>points Reward:</Text>
+                  <Text style={styles.modalInfoValue}>{selectedQuest.points} POINTS</Text>
                 </View>
                 
                 <View style={styles.modalInfoRow}>
@@ -502,20 +502,20 @@ const styles = StyleSheet.create({
     textShadowOffset: { width: 0, height: 0 },
     textShadowRadius: 10,
   },
-  expBarContainer: {
+  pointsBarContainer: {
     width: '100%',
     height: 6,
     backgroundColor: 'rgba(255, 255, 255, 0.1)',
     borderRadius: 3,
     overflow: 'hidden',
   },
-  expBar: {
+  pointsBar: {
     width: '62.5%',
     height: '100%',
     backgroundColor: '#4dabf7',
     borderRadius: 3,
   },
-  expText: {
+  pointsText: {
     position: 'absolute',
     right: 0,
     top: 8,
@@ -631,7 +631,7 @@ const styles = StyleSheet.create({
   questRight: {
     alignItems: 'flex-end',
   },
-  expReward: {
+  pointsReward: {
     color: '#4dabf7',
     fontSize: 14,
     fontWeight: 'bold',

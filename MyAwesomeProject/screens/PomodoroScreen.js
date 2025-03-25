@@ -157,7 +157,10 @@ export default function PomodoroScreen({ navigation }) {
         </View>
 
         {/* Основное содержимое */}
-        <ScrollView style={styles.mainContent}>
+        <ScrollView 
+          style={styles.mainContent}
+          contentContainerStyle={{ paddingBottom: 100 }}
+        >
           <View style={styles.timerSection}>
             {/* Выбор режима */}
             <View style={styles.modeSelector}>
@@ -550,4 +553,3 @@ const styles = StyleSheet.create({
     marginTop: 3,
   },
 });
-

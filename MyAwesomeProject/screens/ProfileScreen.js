@@ -18,6 +18,7 @@ export default function ProfileScreen({ navigation }) {
   const [activeTab, setActiveTab] = useState('achievements');
   const [avatarChanged, setAvatarChanged] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [completedTasks, setCompletedTasks] = useState([]);
 
   useEffect(() => {
     fetchProfile();
@@ -29,11 +30,42 @@ export default function ProfileScreen({ navigation }) {
       }
     })();
   }, []);
+
+  const fetchCompletedTasks = async () => {
+    try {
+      console.log('Fetching completed tasks from endpoint: /tasks/completed/');
+      const completedTasksData = await apiService.get('/tasks/completed/');
+      
+      if (Array.isArray(completedTasksData) && completedTasksData.length === 0) {
+        console.log('No completed tasks returned from API');
+      }
+      
+      console.log('Completed tasks count:', completedTasksData.length);
+      setCompletedTasks(completedTasksData);
+    } catch (error) {
+      console.error('Error fetching completed tasks:', error);
+      if (error.message) console.error('Error message:', error.message);
+    }
+  };
+
   
+  
+
+  // Add this new useEffect after the first one
+  useEffect(() => {
+    // Fetch completed tasks on initial load
+    fetchCompletedTasks();
+  }, []);
+
 
   useEffect(() => {
     const unsubscribe = navigation.addListener('focus', () => {
+      console.log('Screen focused, fetching profile data...');
       fetchProfile();
+      
+      // Always fetch completed tasks when screen comes into focus
+      console.log('Fetching tasks on screen focus...');
+      fetchCompletedTasks();
     });
     return unsubscribe;
   }, [navigation]);
@@ -188,6 +220,18 @@ export default function ProfileScreen({ navigation }) {
     }
   };
 
+  // Добавьте эту функцию, если её ещё нет в ProfileScreen
+  const getDifficultyColor = (difficulty) => {
+    switch(difficulty) {
+      case 'S': return '#ff2d55';
+      case 'A': return '#ff9500';
+      case 'B': return '#4dabf7';
+      case 'C': return '#34c759';
+      case 'D': return '#8e8e93';
+      default: return '#4dabf7';
+    }
+  };
+
   const getExpDisplay = () => {
     let currentLevel = profile.level;
     let xpThreshold = calculateXpThreshold(currentLevel);
@@ -335,7 +379,10 @@ export default function ProfileScreen({ navigation }) {
             </TouchableOpacity>
             <TouchableOpacity 
               style={[styles.tabButton, activeTab === 'history' && styles.activeTab]}
-              onPress={() => setActiveTab('history')}
+              onPress={() => {
+                setActiveTab('history');
+                fetchCompletedTasks(); // Explicitly fetch when tab is selected
+              }}
             >
               <Text style={[styles.tabText, activeTab === 'history' && styles.activeTabText]}>HISTORY</Text>
             </TouchableOpacity>
@@ -385,7 +432,36 @@ export default function ProfileScreen({ navigation }) {
           {activeTab === 'history' && (
             <View style={styles.tabContent}>
               <Text style={styles.sectionTitle}>QUEST HISTORY</Text>
-              <Text style={{ color: '#c8d6e5' }}>История отсутствует</Text>
+              {completedTasks.length === 0 ? (
+                <Text style={{ color: '#c8d6e5' }}>История отсутствует</Text>
+              ) : (
+                completedTasks.map(task => {
+                  // Log each task being rendered
+                  console.log('Rendering history item:', task);
+                    
+                  return (
+                    <View key={task.id || Math.random().toString()} style={styles.historyItem}>
+                      <View 
+                        style={[
+                          styles.difficultyBadge, 
+                          { backgroundColor: getDifficultyColor(task.difficulty || 'C') }
+                        ]}
+                      >
+                        <Text style={styles.difficultyText}>{task.difficulty || '?'}</Text>
+                      </View>
+                      <View style={styles.historyItemContent}>
+                        <View style={styles.historyItemLeft}>
+                          <Text style={styles.historyItemTitle}>{task.title || 'Unnamed task'}</Text>
+                          <Text style={styles.historyItemDate}>
+                            Completed: Recently
+                          </Text>
+                        </View>
+                        <Text style={styles.historyItemPoints}>+{task.points || 0} POINTS</Text>
+                      </View>
+                    </View>
+                  );
+                })
+              )}
             </View>
           )}
         </ScrollView>
@@ -692,6 +768,39 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     zIndex: 999,
+  },
+  historyItem: {
+    backgroundColor: 'rgba(24, 30, 60, 0.6)',
+    borderRadius: 12,
+    marginBottom: 12,
+    padding: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  historyItemContent: {
+    marginLeft: 8,
+    flex: 1,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  historyItemLeft: {
+    flex: 1,
+  },
+  historyItemTitle: {
+    color: '#ffffff',
+    fontWeight: 'bold',
+    fontSize: 16,
+    marginBottom: 4,
+  },
+  historyItemDate: {
+    color: '#c8d6e5',
+    fontSize: 12,
+  },
+  historyItemPoints: {
+    color: '#4dabf7',
+    fontWeight: 'bold',
+    fontSize: 14,
   },
 });
 
