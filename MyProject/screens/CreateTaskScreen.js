@@ -64,11 +64,11 @@ export default function CreateTaskScreen({ navigation, route }) {
         completed: false
       });
 
-      Alert.alert('Success', 'Quest created successfully!');
+      Alert.alert('Success', 'Task created successfully!');
       navigation.goBack();
     } catch (error) {
-      console.error('Error creating quest', error.response || error);
-      Alert.alert('Error', 'Failed to create quest. Please try again.');
+      console.error('Error creating task', error.response || error);
+      Alert.alert('Error', 'Failed to create task. Please try again.');
     }
   };
 
@@ -83,7 +83,7 @@ export default function CreateTaskScreen({ navigation, route }) {
           <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
             <Ionicons name="arrow-back" size={24} color="#ffffff" />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>CREATE NEW QUEST</Text>
+          <Text style={styles.headerTitle}>CREATE NEW TASK</Text>
           <View style={styles.placeholder} />
         </View>
 
@@ -93,7 +93,7 @@ export default function CreateTaskScreen({ navigation, route }) {
             style={styles.input}
             value={title}
             onChangeText={setTitle}
-            placeholder="Enter quest title"
+            placeholder="Enter task title"
             placeholderTextColor="#88889C"
           />
 
@@ -102,7 +102,7 @@ export default function CreateTaskScreen({ navigation, route }) {
             style={[styles.input, styles.textArea]}
             value={description}
             onChangeText={setDescription}
-            placeholder="Enter quest description"
+            placeholder="Enter task description"
             placeholderTextColor="#88889C"
             multiline
             numberOfLines={4}
@@ -163,7 +163,7 @@ export default function CreateTaskScreen({ navigation, route }) {
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
             >
-              <Text style={styles.buttonText}>CREATE QUEST</Text>
+              <Text style={styles.buttonText}>CREATE TASK</Text>
             </LinearGradient>
             <View style={styles.buttonGlow} />
           </TouchableOpacity>

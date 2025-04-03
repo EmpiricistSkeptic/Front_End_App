@@ -12,6 +12,8 @@ import AssistantScreen from './screens/AssistantScreen';
 import GroupsScreen from './screens/GroupScreen';
 import CreateTaskScreen from './screens/CreateTaskScreen';
 import EditTaskScreen from './screens/EditTaskScreen';
+import TaskScreen from './screens/TaskScreen';
+import AIQuestListScreen from './screens/AIQuestListScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -73,6 +75,16 @@ export default function App() {
           name="EditTask" 
           component={EditTaskScreen} 
           options={{ headerShown: false }} 
+        />
+        <Stack.Screen 
+          name="TaskScreen" 
+          component={TaskScreen} 
+          options={{ title: 'Tasks' }}
+        />
+        <Stack.Screen 
+          name="QuestScreen" 
+          component={AIQuestListScreen} 
+          options={{ title: 'Quests' }}
         />
       </Stack.Navigator>
     </NavigationContainer>

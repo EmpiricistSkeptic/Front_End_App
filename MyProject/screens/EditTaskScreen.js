@@ -18,7 +18,7 @@ import apiService from '../services/apiService';
 const { width } = Dimensions.get('window');
 
 export default function EditTaskScreen({ navigation, route }) {
-  const { questId } = route.params;
+  const { taskId } = route.params;
   
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -54,14 +54,14 @@ export default function EditTaskScreen({ navigation, route }) {
     };
     
     getTokenAndFetchTask();
-  }, [questId]);
+  }, [taskId]);
   
   const fetchTaskDetails = async () => {
     try {
-      console.log('Fetching task with ID:', questId);
+      console.log('Fetching task with ID:', taskId);
       
       // Проверяем наличие ID задачи
-      if (!questId) {
+      if (!taskId) {
         console.error('Task ID is missing');
         Alert.alert('Error', 'Task ID is missing. Please try again.');
         setLoading(false);
@@ -71,7 +71,7 @@ export default function EditTaskScreen({ navigation, route }) {
       const token = await AsyncStorage.getItem('userToken');
       console.log('Using token for fetch:', token ? 'Token exists' : 'No token');
       
-      const response = await apiService.get(`/tasks/${questId}/`);
+      const response = await apiService.get(`/tasks/${taskId}/`);
       
       // Подробное логирование ответа
       console.log('Task details response:', JSON.stringify(response));
@@ -134,14 +134,14 @@ export default function EditTaskScreen({ navigation, route }) {
       // Добавляем проверку для метода PUT
       // Поскольку в apiService может отсутствовать метод put
       if (typeof apiService.put === 'function') {
-        await apiService.put(`/tasks/${questId}/update/`, updateData);
+        await apiService.put(`/tasks/${taskId}/update/`, updateData);
       } else {
         // Альтернативно используем apiRequest напрямую с методом PUT
         console.log('apiService.put not available, using PATCH instead');
-        await apiService.patch(`/tasks/${questId}/update/`, updateData);
+        await apiService.patch(`/tasks/${taskId}/update/`, updateData);
       }
 
-      Alert.alert('Success', 'Quest updated successfully!');
+      Alert.alert('Success', 'Task updated successfully!');
       // Navigate back with update flag
       navigation.navigate('Home', { taskUpdated: true });
     } catch (error) {
@@ -152,7 +152,7 @@ export default function EditTaskScreen({ navigation, route }) {
       if (error.response && error.response.status === 405) {
         try {
           console.log('PUT failed with 405, trying PATCH instead');
-          await apiService.patch(`/tasks/${questId}/update/`, {
+          await apiService.patch(`/tasks/${taskId}/update/`, {
             title,
             description,
             difficulty,
@@ -160,7 +160,7 @@ export default function EditTaskScreen({ navigation, route }) {
             points: pointsNumber,
           });
           
-          Alert.alert('Success', 'Quest updated successfully!');
+          Alert.alert('Success', 'Task updated successfully!');
           navigation.navigate('Home', { taskUpdated: true });
         } catch (patchError) {
           console.error('Error updating quest with PATCH', patchError);
@@ -184,7 +184,7 @@ export default function EditTaskScreen({ navigation, route }) {
       <View style={[styles.container, styles.loadingContainer]}>
         <LinearGradient colors={['#121539', '#080b20']} style={styles.background}>
           <ActivityIndicator size="large" color="#4dabf7" />
-          <Text style={styles.loadingText}>Loading quest details...</Text>
+          <Text style={styles.loadingText}>Loading task details...</Text>
         </LinearGradient>
       </View>
     );
@@ -197,7 +197,7 @@ export default function EditTaskScreen({ navigation, route }) {
           <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
             <Ionicons name="arrow-back" size={24} color="#ffffff" />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>EDIT QUEST</Text>
+          <Text style={styles.headerTitle}>EDIT TASK</Text>
           <View style={styles.placeholder} />
         </View>
 
@@ -207,7 +207,7 @@ export default function EditTaskScreen({ navigation, route }) {
             style={styles.input}
             value={title}
             onChangeText={setTitle}
-            placeholder="Enter quest title"
+            placeholder="Enter task title"
             placeholderTextColor="#88889C"
           />
 
@@ -216,7 +216,7 @@ export default function EditTaskScreen({ navigation, route }) {
             style={[styles.input, styles.textArea]}
             value={description}
             onChangeText={setDescription}
-            placeholder="Enter quest description"
+            placeholder="Enter task description"
             placeholderTextColor="#88889C"
             multiline
             numberOfLines={4}
@@ -277,7 +277,7 @@ export default function EditTaskScreen({ navigation, route }) {
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
             >
-              <Text style={styles.buttonText}>UPDATE QUEST</Text>
+              <Text style={styles.buttonText}>UPDATE TASK</Text>
             </LinearGradient>
             <View style={styles.buttonGlow} />
           </TouchableOpacity>
