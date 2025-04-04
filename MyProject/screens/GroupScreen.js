@@ -147,11 +147,6 @@ export default function GroupsScreen({ navigation }) {
         {/* Хедер */}
         <View style={styles.header}>
           <Text style={styles.headerTitle}>Groups</Text>
-          <TouchableOpacity style={styles.profileButton} onPress={() => navigation.navigate('Profile')}>
-            <View style={styles.profileImage}>
-              <Text style={styles.profileInitial}>E</Text>
-            </View>
-          </TouchableOpacity>
         </View>
 
         {/* Поисковая строка */}
@@ -213,7 +208,7 @@ export default function GroupsScreen({ navigation }) {
           >
             <TouchableOpacity style={styles.navItem} onPress={() => navigation.navigate('Home')}>
               <MaterialCommunityIcons name="sword-cross" size={24} color="#4dabf7" />
-              <Text style={styles.navText}>Quests</Text>
+              <Text style={styles.navText}>Tasks</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.navItem} onPress={() => navigation.navigate('Pomodoro')}>
               <MaterialIcons name="timer" size={24} color="#4dabf7" />

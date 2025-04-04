@@ -196,6 +196,9 @@ export default function TasksScreen({ navigation, route }) {
       
       // Обновляем профиль на сервере
       await updateProfileData(newPoints, newLevel);
+      if (route.params?.fetchProfileData) {
+        route.params.fetchProfileData();
+      }
       
       Alert.alert('Success', `Task completed! Gained ${task.points} POINTS!`);
       

@@ -474,7 +474,7 @@ export default function ProfileScreen({ navigation }) {
           >
             <TouchableOpacity style={styles.navItem} onPress={() => navigation.navigate('Home')}>
               <MaterialCommunityIcons name="sword-cross" size={24} color="#4dabf7" />
-              <Text style={styles.navText}>Quests</Text>
+              <Text style={styles.navText}>Tasks</Text>
             </TouchableOpacity>
             
             <TouchableOpacity style={styles.navItem} onPress={() => navigation.navigate('Pomodoro')}>
@@ -555,6 +555,11 @@ const styles = StyleSheet.create({
   avatarContainer: {
     position: 'relative',
     marginRight: 15,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 5,
   },
   avatar: {
     width: 80,
@@ -611,27 +616,38 @@ const styles = StyleSheet.create({
   },
   username: {
     color: '#ffffff',
-    fontSize: 20,
-    fontWeight: 'bold',
-    marginBottom: 5,
+    fontSize: 24,
+    fontWeight: '800',
+    marginBottom: 8,
+    textShadowColor: 'rgba(0, 0, 0, 0.7)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 4,
+  },
+  // Дополнительный стиль для редактирования имени
+  usernameEditing: {
+    borderBottomWidth: 1,
+    borderColor: '#4dabf7',
+    paddingBottom: 4,
   },
   expBarContainer: {
     width: '100%',
-    height: 10,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    borderRadius: 5,
+    height: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    borderRadius: 6,
     overflow: 'hidden',
-    marginBottom: 10,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(77, 171, 247, 0.3)',
   },
   expBar: {
     height: '100%',
     backgroundColor: '#4dabf7',
-    borderRadius: 5,
+    borderRadius: 6,
   },
   expText: {
     position: 'absolute',
-    right: 0,
-    top: 12,
+    right: 4,
+    top: -18,
     color: '#c8d6e5',
     fontSize: 10,
   },
@@ -640,6 +656,12 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 20,
     marginBottom: 10,
+  },
+  // Дополнительный стиль для редактирования описания
+  bioEditing: {
+    borderBottomWidth: 1,
+    borderColor: '#4dabf7',
+    paddingBottom: 4,
   },
   editProfileButton: {
     backgroundColor: 'rgba(77, 171, 247, 0.2)',
@@ -803,5 +825,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
 });
+
+
 
 

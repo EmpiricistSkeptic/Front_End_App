@@ -7,12 +7,14 @@ import {
   StyleSheet,
   ScrollView,
   Alert,
-  Dimensions
+  Dimensions,
+  Platform
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import apiService from '../services/apiService'; // проверьте корректность пути
+import DateTimePicker from '@react-native-community/datetimepicker';
+import apiService from '../services/apiService';
 
 const { width } = Dimensions.get('window');
 
@@ -20,8 +22,16 @@ export default function CreateTaskScreen({ navigation, route }) {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [difficulty, setDifficulty] = useState('B');
-  const [deadline, setDeadline] = useState('');
+  const [deadlineDate, setDeadlineDate] = useState(new Date());
   const [points, setPoints] = useState('');
+  
+  // Состояния для работы с DateTimePicker
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [showTimePicker, setShowTimePicker] = useState(false);
+  const [dateTimePickerMode, setDateTimePickerMode] = useState('date');
+
+  // Форматированная строка дедлайна для отображения
+  const [formattedDeadline, setFormattedDeadline] = useState('');
 
   // Запускаем эффект один раз, чтобы удалить не сериализуемый callback из navigation params
   useEffect(() => {
@@ -29,7 +39,7 @@ export default function CreateTaskScreen({ navigation, route }) {
       const { onGoBack, ...rest } = route.params;
       navigation.setParams(rest);
     }
-  }, []); // пустой массив зависимостей — эффект сработает только при монтировании
+  }, []);
 
   // Проверка наличия токена для авторизации
   useEffect(() => {
@@ -42,8 +52,29 @@ export default function CreateTaskScreen({ navigation, route }) {
     checkToken();
   }, [navigation]);
 
+  // Форматируем дату для отображения при изменении выбранной даты
+  useEffect(() => {
+    const formatDeadline = () => {
+      const dateStr = deadlineDate.toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric'
+      });
+      
+      const timeStr = deadlineDate.toLocaleTimeString('en-US', {
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true
+      });
+      
+      setFormattedDeadline(`${dateStr} at ${timeStr}`);
+    };
+    
+    formatDeadline();
+  }, [deadlineDate]);
+
   const handleCreateTask = async () => {
-    if (!title || !description || !deadline) {
+    if (!title || !description || !formattedDeadline) {
       Alert.alert('Error', 'Please fill in all required fields');
       return;
     }
@@ -55,6 +86,9 @@ export default function CreateTaskScreen({ navigation, route }) {
     }
 
     try {
+      // Формируем дедлайн в формате, который ожидает ваш API
+      const deadline = deadlineDate.toISOString();
+      
       await apiService.post('/tasks/create/', {
         title,
         description,
@@ -74,6 +108,43 @@ export default function CreateTaskScreen({ navigation, route }) {
 
   const handleDifficultySelection = (value) => {
     setDifficulty(value);
+  };
+
+  const showDateTimePicker = (mode) => {
+    setDateTimePickerMode(mode);
+    if (mode === 'date') {
+      setShowDatePicker(true);
+    } else {
+      setShowTimePicker(true);
+    }
+  };
+
+  const handleDateChange = (event, selectedDate) => {
+    const currentDate = selectedDate || deadlineDate;
+    
+    if (Platform.OS === 'android') {
+      setShowDatePicker(false);
+      setShowTimePicker(false);
+    }
+    
+    if (dateTimePickerMode === 'date') {
+      // Сохраняем только дату, сохраняя текущее время
+      const newDate = new Date(currentDate);
+      newDate.setHours(deadlineDate.getHours(), deadlineDate.getMinutes());
+      setDeadlineDate(newDate);
+      
+      // На Android сразу после выбора даты показываем выбор времени
+      if (event.type === 'set' && Platform.OS === 'android') {
+        setTimeout(() => {
+          showDateTimePicker('time');
+        }, 500);
+      }
+    } else {
+      // Сохраняем только время, сохраняя текущую дату
+      const newDate = new Date(deadlineDate);
+      newDate.setHours(currentDate.getHours(), currentDate.getMinutes());
+      setDeadlineDate(newDate);
+    }
   };
 
   return (
@@ -135,13 +206,59 @@ export default function CreateTaskScreen({ navigation, route }) {
           </View>
 
           <Text style={styles.label}>Deadline</Text>
-          <TextInput
-            style={styles.input}
-            value={deadline}
-            onChangeText={setDeadline}
-            placeholder="e.g. 9:00 AM or 2023-12-31"
-            placeholderTextColor="#88889C"
-          />
+          
+          {/* Отображение выбранной даты и времени */}
+          <View style={styles.dateTimeContainer}>
+            <Text style={styles.deadlineDisplayText}>
+              {formattedDeadline || 'No date selected'}
+            </Text>
+            
+            <View style={styles.dateTimeButtonsContainer}>
+              <TouchableOpacity 
+                style={styles.dateTimeButton}
+                onPress={() => showDateTimePicker('date')}
+              >
+                <LinearGradient
+                  colors={['#4dabf7', '#3250b4']}
+                  style={styles.dateTimeButtonGradient}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                >
+                  <Ionicons name="calendar-outline" size={18} color="#ffffff" />
+                  <Text style={styles.dateTimeButtonText}>Select Date</Text>
+                </LinearGradient>
+              </TouchableOpacity>
+              
+              <TouchableOpacity 
+                style={styles.dateTimeButton}
+                onPress={() => showDateTimePicker('time')}
+              >
+                <LinearGradient
+                  colors={['#4dabf7', '#3250b4']}
+                  style={styles.dateTimeButtonGradient}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                >
+                  <Ionicons name="time-outline" size={18} color="#ffffff" />
+                  <Text style={styles.dateTimeButtonText}>Select Time</Text>
+                </LinearGradient>
+              </TouchableOpacity>
+            </View>
+          </View>
+          
+          {/* DateTimePicker для iOS и Android */}
+          {(showDatePicker || showTimePicker) && (
+            <DateTimePicker
+              value={deadlineDate}
+              mode={dateTimePickerMode}
+              is24Hour={false}
+              display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+              onChange={handleDateChange}
+              style={styles.dateTimePicker}
+              minimumDate={new Date()}
+              themeVariant="dark" // для iOS темной темы
+            />
+          )}
 
           <Text style={styles.label}>Points Reward</Text>
           <TextInput
@@ -278,5 +395,46 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.8,
     shadowRadius: 4,
     shadowOffset: { width: 0, height: 0 },
+  },
+  // Новые стили для компонентов выбора даты и времени
+  dateTimeContainer: {
+    backgroundColor: 'rgba(16, 20, 45, 0.75)',
+    borderWidth: 1,
+    borderColor: '#3250b4',
+    borderRadius: 8,
+    padding: 12,
+  },
+  deadlineDisplayText: {
+    color: '#ffffff',
+    fontSize: 14,
+    marginBottom: 10,
+    textAlign: 'center',
+  },
+  dateTimeButtonsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+  },
+  dateTimeButton: {
+    flex: 0.45,
+    height: 40,
+    borderRadius: 6,
+    overflow: 'hidden',
+  },
+  dateTimeButtonGradient: {
+    flex: 1,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  dateTimeButtonText: {
+    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: '600',
+    marginLeft: 6,
+  },
+  dateTimePicker: {
+    marginTop: 10,
+    backgroundColor: Platform.OS === 'ios' ? 'rgba(16, 20, 45, 0.95)' : 'transparent',
+    borderRadius: 8,
   },
 });

@@ -8,11 +8,13 @@ import {
   ScrollView,
   Alert,
   Dimensions,
-  ActivityIndicator
+  ActivityIndicator,
+  Platform
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import apiService from '../services/apiService';
 
 const { width } = Dimensions.get('window');
@@ -23,9 +25,16 @@ export default function EditTaskScreen({ navigation, route }) {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [difficulty, setDifficulty] = useState('B');
-  const [deadline, setDeadline] = useState('');
+  // Вместо строки дедлайна используем дату
+  const [deadlineDate, setDeadlineDate] = useState(new Date());
+  const [formattedDeadline, setFormattedDeadline] = useState('');
   const [points, setPoints] = useState('');
   const [loading, setLoading] = useState(true);
+
+  // Состояния для работы с DateTimePicker
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [showTimePicker, setShowTimePicker] = useState(false);
+  const [dateTimePickerMode, setDateTimePickerMode] = useState('date');
 
   // Remove onGoBack callback if present in route params
   useEffect(() => {
@@ -44,8 +53,6 @@ export default function EditTaskScreen({ navigation, route }) {
           navigation.navigate('Login');
           return;
         }
-        
-        // Fetch task details
         fetchTaskDetails();
       } catch (e) {
         console.error('Failed to get token', e);
@@ -60,7 +67,6 @@ export default function EditTaskScreen({ navigation, route }) {
     try {
       console.log('Fetching task with ID:', taskId);
       
-      // Проверяем наличие ID задачи
       if (!taskId) {
         console.error('Task ID is missing');
         Alert.alert('Error', 'Task ID is missing. Please try again.');
@@ -72,20 +78,19 @@ export default function EditTaskScreen({ navigation, route }) {
       console.log('Using token for fetch:', token ? 'Token exists' : 'No token');
       
       const response = await apiService.get(`/tasks/${taskId}/`);
-      
-      // Подробное логирование ответа
       console.log('Task details response:', JSON.stringify(response));
       
-      // Проверяем, что response существует (без .data)
       if (response) {
-        const task = response; // Используем response напрямую
+        const task = response;
         console.log('Task data received:', task);
         
-        // Set form fields with task data
         setTitle(task.title || '');
         setDescription(task.description || '');
         setDifficulty(task.difficulty || 'B');
-        setDeadline(task.deadline || '');
+        // Если получен дедлайн, преобразуем его в объект Date
+        if (task.deadline) {
+          setDeadlineDate(new Date(task.deadline));
+        }
         setPoints((task.points || 0).toString());
       } else {
         console.error('Response exists but empty:', response);
@@ -95,23 +100,35 @@ export default function EditTaskScreen({ navigation, route }) {
       setLoading(false);
     } catch (error) {
       console.error('Error fetching task details', error);
-      console.error('Error details:', error.response ? JSON.stringify(error.response) : 'No response data');
-      
-
-      
       Alert.alert('Error', `Failed to load task details: ${error.message}`);
       setLoading(false);
     }
   };
 
+  // Форматируем дату дедлайна для отображения
+  useEffect(() => {
+    const formatDeadline = () => {
+      const dateStr = deadlineDate.toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric'
+      });
+      const timeStr = deadlineDate.toLocaleTimeString('en-US', {
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true
+      });
+      setFormattedDeadline(`${dateStr} at ${timeStr}`);
+    };
+    formatDeadline();
+  }, [deadlineDate]);
+
   const handleUpdateTask = async () => {
-    // Validation of required fields
-    if (!title || !description || !deadline) {
+    if (!title || !description || !deadlineDate) {
       Alert.alert('Error', 'Please fill in all required fields');
       return;
     }
 
-    // Check that EXP is a number
     const pointsNumber = parseInt(points);
     if (isNaN(pointsNumber)) {
       Alert.alert('Error', 'Points must be a number');
@@ -125,30 +142,24 @@ export default function EditTaskScreen({ navigation, route }) {
         title,
         description,
         difficulty,
-        deadline,
+        deadline: deadlineDate.toISOString(), // Передача дедлайна в ISO формате
         points: pointsNumber,
       };
       
       console.log('Updating task with data:', updateData);
       
-      // Добавляем проверку для метода PUT
-      // Поскольку в apiService может отсутствовать метод put
       if (typeof apiService.put === 'function') {
         await apiService.put(`/tasks/${taskId}/update/`, updateData);
       } else {
-        // Альтернативно используем apiRequest напрямую с методом PUT
         console.log('apiService.put not available, using PATCH instead');
         await apiService.patch(`/tasks/${taskId}/update/`, updateData);
       }
 
       Alert.alert('Success', 'Task updated successfully!');
-      // Navigate back with update flag
       navigation.navigate('Home', { taskUpdated: true });
     } catch (error) {
-      console.error('Error updating quest', error);
-      console.error('Error response:', error.response ? JSON.stringify(error.response) : 'No response data');
+      console.error('Error updating task', error);
       
-      // Try PATCH if PUT fails with 405 (Method Not Allowed)
       if (error.response && error.response.status === 405) {
         try {
           console.log('PUT failed with 405, trying PATCH instead');
@@ -156,19 +167,18 @@ export default function EditTaskScreen({ navigation, route }) {
             title,
             description,
             difficulty,
-            deadline,
+            deadline: deadlineDate.toISOString(),
             points: pointsNumber,
           });
           
           Alert.alert('Success', 'Task updated successfully!');
           navigation.navigate('Home', { taskUpdated: true });
         } catch (patchError) {
-          console.error('Error updating quest with PATCH', patchError);
-          console.error('PATCH error response:', patchError.response ? JSON.stringify(patchError.response) : 'No response data');
-          Alert.alert('Error', `Failed to update quest with PATCH: ${patchError.message}`);
+          console.error('Error updating task with PATCH', patchError);
+          Alert.alert('Error', `Failed to update task with PATCH: ${patchError.message}`);
         }
       } else {
-        Alert.alert('Error', `Failed to update quest: ${error.message}`);
+        Alert.alert('Error', `Failed to update task: ${error.message}`);
       }
     } finally {
       setLoading(false);
@@ -177,6 +187,44 @@ export default function EditTaskScreen({ navigation, route }) {
 
   const handleDifficultySelection = (value) => {
     setDifficulty(value);
+  };
+
+  // Показываем DateTimePicker для выбора даты или времени
+  const showDateTimePicker = (mode) => {
+    setDateTimePickerMode(mode);
+    if (mode === 'date') {
+      setShowDatePicker(true);
+    } else {
+      setShowTimePicker(true);
+    }
+  };
+
+  // Обработка выбора даты и времени
+  const handleDateChange = (event, selectedDate) => {
+    const currentDate = selectedDate || deadlineDate;
+    
+    if (Platform.OS === 'android') {
+      setShowDatePicker(false);
+      setShowTimePicker(false);
+    }
+    
+    if (dateTimePickerMode === 'date') {
+      // Обновляем дату, сохраняя текущее время
+      const newDate = new Date(currentDate);
+      newDate.setHours(deadlineDate.getHours(), deadlineDate.getMinutes());
+      setDeadlineDate(newDate);
+      
+      if (event.type === 'set' && Platform.OS === 'android') {
+        setTimeout(() => {
+          showDateTimePicker('time');
+        }, 500);
+      }
+    } else {
+      // Обновляем время, сохраняя дату
+      const newDate = new Date(deadlineDate);
+      newDate.setHours(currentDate.getHours(), currentDate.getMinutes());
+      setDeadlineDate(newDate);
+    }
   };
 
   if (loading) {
@@ -249,13 +297,55 @@ export default function EditTaskScreen({ navigation, route }) {
           </View>
 
           <Text style={styles.label}>Deadline</Text>
-          <TextInput
-            style={styles.input}
-            value={deadline}
-            onChangeText={setDeadline}
-            placeholder="e.g. 9:00 AM or 2023-12-31"
-            placeholderTextColor="#88889C"
-          />
+          <View style={styles.dateTimeContainer}>
+            <Text style={styles.deadlineDisplayText}>
+              {formattedDeadline || 'No date selected'}
+            </Text>
+            <View style={styles.dateTimeButtonsContainer}>
+              <TouchableOpacity 
+                style={styles.dateTimeButton}
+                onPress={() => showDateTimePicker('date')}
+              >
+                <LinearGradient
+                  colors={['#4dabf7', '#3250b4']}
+                  style={styles.dateTimeButtonGradient}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                >
+                  <Ionicons name="calendar-outline" size={18} color="#ffffff" />
+                  <Text style={styles.dateTimeButtonText}>Select Date</Text>
+                </LinearGradient>
+              </TouchableOpacity>
+              
+              <TouchableOpacity 
+                style={styles.dateTimeButton}
+                onPress={() => showDateTimePicker('time')}
+              >
+                <LinearGradient
+                  colors={['#4dabf7', '#3250b4']}
+                  style={styles.dateTimeButtonGradient}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                >
+                  <Ionicons name="time-outline" size={18} color="#ffffff" />
+                  <Text style={styles.dateTimeButtonText}>Select Time</Text>
+                </LinearGradient>
+              </TouchableOpacity>
+            </View>
+          </View>
+          
+          {(showDatePicker || showTimePicker) && (
+            <DateTimePicker
+              value={deadlineDate}
+              mode={dateTimePickerMode}
+              is24Hour={false}
+              display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+              onChange={handleDateChange}
+              style={styles.dateTimePicker}
+              minimumDate={new Date()}
+              themeVariant="dark"
+            />
+          )}
 
           <Text style={styles.label}>Points Reward</Text>
           <TextInput
@@ -323,7 +413,7 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
   },
   placeholder: {
-    width: 34, // To balance with the back button
+    width: 34,
   },
   form: {
     flex: 1,
@@ -353,7 +443,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   difficultyOption: {
-    width: (width - 60) / 5, // Evenly distributed across width (accounting for padding)
+    width: (width - 60) / 5,
     height: 40,
     borderRadius: 6,
     justifyContent: 'center',
@@ -368,6 +458,46 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontSize: 16,
     fontWeight: 'bold',
+  },
+  dateTimeContainer: {
+    backgroundColor: 'rgba(16, 20, 45, 0.75)',
+    borderWidth: 1,
+    borderColor: '#3250b4',
+    borderRadius: 8,
+    padding: 12,
+  },
+  deadlineDisplayText: {
+    color: '#ffffff',
+    fontSize: 14,
+    marginBottom: 10,
+    textAlign: 'center',
+  },
+  dateTimeButtonsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+  },
+  dateTimeButton: {
+    flex: 0.45,
+    height: 40,
+    borderRadius: 6,
+    overflow: 'hidden',
+  },
+  dateTimeButtonGradient: {
+    flex: 1,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  dateTimeButtonText: {
+    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: '600',
+    marginLeft: 6,
+  },
+  dateTimePicker: {
+    marginTop: 10,
+    backgroundColor: Platform.OS === 'ios' ? 'rgba(16, 20, 45, 0.95)' : 'transparent',
+    borderRadius: 8,
   },
   updateButton: {
     height: 50,

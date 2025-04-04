@@ -9,7 +9,7 @@ import 'moment/locale/ru';  // Импорт русской локали отде
 // Инициализируем moment на русском языке
 moment.locale('ru');
 
-export default function AIQuestListScreen({ navigation }) {
+export default function AIQuestListScreen({ navigation, route }) {
   const [quests, setQuests] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeFilter, setActiveFilter] = useState('ALL');
@@ -45,6 +45,10 @@ export default function AIQuestListScreen({ navigation }) {
       await apiService.patch(`/quests/complete/${questId}/`);
       Alert.alert('Квест выполнен', 'Вы успешно выполнили этот квест! Награда получена.');
       fetchQuests(); // Обновляем список квестов
+
+      if (route.params?.fetchProfileData) {
+        route.params.fetchProfileData();
+      }
     } catch (error) {
       console.error('Error completing quest', error);
       Alert.alert('Ошибка', 'Не удалось отметить квест как выполненный. Попробуйте еще раз.');

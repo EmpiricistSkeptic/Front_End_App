@@ -315,7 +315,7 @@ export default function PomodoroScreen({ navigation }) {
           <LinearGradient colors={['rgba(16, 20, 45, 0.9)', 'rgba(16, 20, 45, 0.75)']} style={styles.navBackground}>
             <TouchableOpacity style={styles.navItem} onPress={() => navigation.navigate('Home')}>
               <MaterialCommunityIcons name="sword-cross" size={24} color="#4dabf7" />
-              <Text style={styles.navText}>Quests</Text>
+              <Text style={styles.navText}>Tasks</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.navItem} onPress={() => navigation.navigate('Pomodoro')}>
               <MaterialIcons name="timer" size={24} color="#fff" />

@@ -393,7 +393,7 @@ const AssistantScreen = ({ navigation }) => {
           >
             <TouchableOpacity style={styles.navItem} onPress={() => navigation.navigate('Home')}>
               <MaterialCommunityIcons name="sword-cross" size={24} color="#4dabf7" />
-              <Text style={styles.navText}>Quests</Text>
+              <Text style={styles.navText}>Tasks</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.navItem} onPress={() => navigation.navigate('Pomodoro')}>
               <MaterialIcons name="timer" size={24} color="#4dabf7" />
