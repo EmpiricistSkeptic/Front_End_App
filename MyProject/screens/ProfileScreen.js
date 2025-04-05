@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Dimensions, StatusBar, ScrollView, TextInput, Alert, Image } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Dimensions, StatusBar, ScrollView, TextInput, Alert, Image, Platform } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons, MaterialCommunityIcons, FontAwesome5, MaterialIcons, AntDesign, Feather } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import apiService from '../services/apiService';
 import { calculateXpThreshold } from '../utils/xpUtils';
+
 
 
 const { width, height } = Dimensions.get('window');
@@ -232,6 +233,16 @@ export default function ProfileScreen({ navigation }) {
     }
   };
 
+    // Add this helper function
+  function getRankFromLevel(level) {
+    if (level < 10) return 'E';
+    if (level < 20) return 'D';
+    if (level < 30) return 'C';
+    if (level < 40) return 'B';
+    if (level < 50) return 'A';
+    return 'S';
+  }
+
   const getExpDisplay = () => {
     let currentLevel = profile.level;
     let xpThreshold = calculateXpThreshold(currentLevel);
@@ -256,68 +267,72 @@ export default function ProfileScreen({ navigation }) {
     );
   }
 
-  return (
-    <View style={styles.container}>
-      <StatusBar barStyle="light-content" />
-      <LinearGradient colors={['#121539', '#080b20']} style={styles.background}>
-        {/* Фон с частицами */}
-        <View style={styles.particlesContainer}>
-          {[...Array(20)].map((_, i) => (
-            <View 
-              key={i} 
-              style={[
-                styles.particle, 
-                { 
-                  left: Math.random() * width, 
-                  top: Math.random() * height,
-                  width: Math.random() * 4 + 1,
-                  height: Math.random() * 4 + 1,
-                  opacity: Math.random() * 0.5 + 0.3
-                }
-              ]} 
-            />
-          ))}
-        </View>
+  // Return statement with updated styling for ProfileScreen
+return (
+  <View style={styles.container}>
+    <StatusBar barStyle="light-content" />
+    <LinearGradient colors={['#121539', '#080b20']} style={styles.background}>
+      {/* Background particles with improved glow effect */}
+      <View style={styles.particlesContainer}>
+        {[...Array(30)].map((_, i) => (
+          <View 
+            key={i} 
+            style={[
+              styles.particle, 
+              { 
+                left: Math.random() * width, 
+                top: Math.random() * height,
+                width: Math.random() * 6 + 1,
+                height: Math.random() * 6 + 1,
+                opacity: Math.random() * 0.5 + 0.3,
+                borderRadius: 50
+              }
+            ]} 
+          />
+        ))}
+      </View>
+      
+      {/* Header with updated icon and styling */}
+      <View style={styles.header}>
+        <TouchableOpacity 
+          style={styles.backButton}
+          onPress={() => navigation.goBack()}
+        >
+          <Ionicons name="arrow-back" size={24} color="#4dabf7" />
+        </TouchableOpacity>
         
-        {/* Хедер */}
-        <View style={styles.header}>
-          <TouchableOpacity 
-            style={styles.backButton}
-            onPress={() => navigation.goBack()}
-          >
-            <Ionicons name="arrow-back" size={24} color="#4dabf7" />
+        <Text style={styles.headerTitle}>HUNTER PROFILE</Text>
+        
+        <View style={{ flexDirection: 'row' }}>
+          <TouchableOpacity style={styles.settingsButton} onPress={() => setIsEditing(!isEditing)}>
+            <Ionicons name="settings-outline" size={24} color="#4dabf7" />
           </TouchableOpacity>
-          
-          <Text style={styles.headerTitle}>PROFILE</Text>
-          
-          <View style={{ flexDirection: 'row' }}>
-            <TouchableOpacity style={styles.settingsButton} onPress={() => setIsEditing(!isEditing)}>
-              <Ionicons name="settings-outline" size={24} color="#4dabf7" />
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.settingsButton} onPress={logout}>
-              <Ionicons name="log-out-outline" size={24} color="#4dabf7" />
-            </TouchableOpacity>
-          </View>
+          <TouchableOpacity style={styles.settingsButton} onPress={logout}>
+            <Ionicons name="log-out-outline" size={24} color="#4dabf7" />
+          </TouchableOpacity>
         </View>
-        
-        {/* Основное содержимое */}
-        <ScrollView style={styles.mainContent}>
-          {/* Заголовок профиля */}
-          <View style={styles.profileHeader}>
-            <View style={styles.avatarContainer}>
+      </View>
+      
+      {/* Main content */}
+      <ScrollView style={styles.mainContent}>
+        {/* Profile header with improved styling */}
+        <View style={styles.profileHeader}>
+          {/* Avatar container with glowing effects */}
+          <View style={styles.avatarContainer}>
+            <View style={styles.avatarGlow}>
               <TouchableOpacity 
                 style={styles.avatar}
                 onPress={isEditing ? pickImage : null}
                 activeOpacity={isEditing ? 0.7 : 1}
               >
-              {avatar ? (
-                <Image 
-                  source={{ uri: `${avatar}?t=${Date.now()}` }} 
-                  style={styles.avatarImage} 
-                />
-              ) : (
-                <Text style={styles.avatarText}>{profile.username.charAt(0)}</Text>
-              )}
+                {avatar ? (
+                  <Image 
+                    source={{ uri: `${avatar}?t=${Date.now()}` }} 
+                    style={styles.avatarImage} 
+                  />
+                ) : (
+                  <Text style={styles.avatarText}>{profile.username.charAt(0)}</Text>
+                )}
 
                 {isEditing && (
                   <View style={styles.editAvatarOverlay}>
@@ -325,71 +340,111 @@ export default function ProfileScreen({ navigation }) {
                   </View>
                 )}
               </TouchableOpacity>
+            </View>
+            
+            {/* Rank/Level badge with glowing effect */}
+            <View style={styles.levelBadgeContainer}>
               <View style={styles.levelBadge}>
                 <Text style={styles.levelBadgeText}>{profile.level}</Text>
               </View>
             </View>
-            
-            <View style={styles.profileInfo}>
-              {isEditing ? (
-                <>
-                  <TextInput 
-                    style={[styles.username, { borderBottomWidth: 1, borderColor: '#4dabf7' }]} 
-                    value={username} 
-                    onChangeText={setUsername} 
-                  />
-                  <TextInput 
-                    style={[styles.bio, { borderBottomWidth: 1, borderColor: '#4dabf7' }]} 
-                    value={bio} 
-                    onChangeText={setBio} 
-                    multiline 
-                  />
-                  <TouchableOpacity style={styles.editProfileButton} onPress={updateProfile}>
+          </View>
+          
+          {/* Profile info with improved styling */}
+          <View style={styles.profileInfo}>
+            {isEditing ? (
+              <>
+                <TextInput 
+                  style={[styles.username, styles.usernameEditing]} 
+                  value={username} 
+                  onChangeText={setUsername} 
+                />
+                <TextInput 
+                  style={[styles.bio, styles.bioEditing]} 
+                  value={bio} 
+                  onChangeText={setBio} 
+                  multiline 
+                />
+                <TouchableOpacity style={styles.editProfileButton} onPress={updateProfile}>
+                  <LinearGradient
+                    colors={['#4dabf7', '#2b6ed9']}
+                    style={styles.editProfileGradient}
+                  >
                     <Text style={styles.editProfileText}>СОХРАНИТЬ</Text>
-                  </TouchableOpacity>
-                </>
-              ) : (
-                <>
+                  </LinearGradient>
+                </TouchableOpacity>
+              </>
+            ) : (
+              <>
+                {/* Username with rank decoration */}
+                <View style={styles.usernameContainer}>
                   <Text style={styles.username}>{profile.username}</Text>
-                  {(() => {
-                    const { points: displayPoints, total: displayTotal } = getExpDisplay();
-                    return (
-                      <View style={styles.expBarContainer}>
-                        <View style={[styles.expBar, { width: `${(displayPoints / displayTotal) * 100}%` }]} />
-                        <Text style={styles.expText}>{displayPoints} / {displayTotal} EXP</Text>
+                  <View style={styles.rankDecoration}>
+                    <Text style={styles.rankText}>RANK {getRankFromLevel(profile.level)}</Text>
+                  </View>
+                </View>
+                
+                {/* Stylized EXP Bar */}
+                {(() => {
+                  const { points: displayPoints, total: displayTotal } = getExpDisplay();
+                  const percentage = (displayPoints / displayTotal) * 100;
+                  return (
+                    <View style={styles.expSection}>
+                      <View style={styles.expLabels}>
+                        <Text style={styles.expLabel}>COMBAT POWER</Text>
+                        <Text style={styles.expValue}>{displayPoints} / {displayTotal}</Text>
                       </View>
-                    );
-                  })()}
-                  <Text style={styles.bio}>{profile.bio}</Text>
-                  <TouchableOpacity style={styles.editProfileButton} onPress={() => setIsEditing(true)}>
+                      <View style={styles.expBarContainer}>
+                        <View style={[styles.expBar, { width: `${percentage}%` }]} />
+                        <View style={styles.expBarGlow} />
+                        <Text style={styles.expPercentage}>{Math.round(percentage)}%</Text>
+                      </View>
+                    </View>
+                  );
+                })()}
+                
+                {/* Bio with quotation styling */}
+                <View style={styles.bioContainer}>
+                  <Text style={styles.bioTitle}>HUNTER STATUS</Text>
+                  <Text style={styles.bio}>{profile.bio || "This hunter has not set a status yet."}</Text>
+                </View>
+                
+                {/* Edit profile button with gradient */}
+                <TouchableOpacity style={styles.editProfileButton} onPress={() => setIsEditing(true)}>
+                  <LinearGradient
+                    colors={['#4dabf7', '#2b6ed9']}
+                    style={styles.editProfileGradient}
+                  >
                     <Text style={styles.editProfileText}>EDIT PROFILE</Text>
-                  </TouchableOpacity>
-                </>
-              )}
-            </View>
+                  </LinearGradient>
+                </TouchableOpacity>
+              </>
+            )}
           </View>
-          
-          {/* Вкладки (с переключением) */}
-          <View style={styles.tabContainer}>
-            <TouchableOpacity 
-              style={[styles.tabButton, activeTab === 'achievements' && styles.activeTab]}
-              onPress={() => setActiveTab('achievements')}
-            >
-              <Text style={[styles.tabText, activeTab === 'achievements' && styles.activeTabText]}>ACHIEVEMENTS</Text>
-            </TouchableOpacity>
-            <TouchableOpacity 
-              style={[styles.tabButton, activeTab === 'history' && styles.activeTab]}
-              onPress={() => {
-                setActiveTab('history');
-                fetchCompletedTasks(); // Explicitly fetch when tab is selected
-              }}
-            >
-              <Text style={[styles.tabText, activeTab === 'history' && styles.activeTabText]}>HISTORY</Text>
-            </TouchableOpacity>
-          </View>
-          
-          {/* Содержимое активной вкладки */}
-          {activeTab === 'achievements' && (
+        </View>
+        
+        {/* Rest of your code remains the same */}
+        {/* Tabs */}
+        <View style={styles.tabContainer}>
+          <TouchableOpacity 
+            style={[styles.tabButton, activeTab === 'achievements' && styles.activeTab]}
+            onPress={() => setActiveTab('achievements')}
+          >
+            <Text style={[styles.tabText, activeTab === 'achievements' && styles.activeTabText]}>ACHIEVEMENTS</Text>
+          </TouchableOpacity>
+          <TouchableOpacity 
+            style={[styles.tabButton, activeTab === 'history' && styles.activeTab]}
+            onPress={() => {
+              setActiveTab('history');
+              fetchCompletedTasks();
+            }}
+          >
+            <Text style={[styles.tabText, activeTab === 'history' && styles.activeTabText]}>HISTORY</Text>
+          </TouchableOpacity>
+        </View>
+        
+        {/* Содержимое активной вкладки */}
+        {activeTab === 'achievements' && (
             <View style={styles.tabContent}>
               <Text style={styles.sectionTitle}>ACHIEVEMENTS</Text>
               {profile.achievements && profile.achievements.map((achievement) => (
@@ -465,16 +520,16 @@ export default function ProfileScreen({ navigation }) {
             </View>
           )}
         </ScrollView>
-        
-        {/* Нижняя навигация */}
-        <View style={styles.bottomNav}>
+
+      {/* Нижняя навигация */}
+      <View style={styles.bottomNav}>
           <LinearGradient
             colors={['rgba(16, 20, 45, 0.9)', 'rgba(16, 20, 45, 0.75)']}
             style={styles.navBackground}
           >
             <TouchableOpacity style={styles.navItem} onPress={() => navigation.navigate('Home')}>
               <MaterialCommunityIcons name="sword-cross" size={24} color="#4dabf7" />
-              <Text style={styles.navText}>Tasks</Text>
+              <Text style={styles.navText}>Quests</Text>
             </TouchableOpacity>
             
             <TouchableOpacity style={styles.navItem} onPress={() => navigation.navigate('Pomodoro')}>
@@ -492,9 +547,9 @@ export default function ProfileScreen({ navigation }) {
               <Text style={styles.navText}>Guild</Text>
             </TouchableOpacity>
             
-            <TouchableOpacity style={styles.navItem} onPress={() => navigation.navigate('Assistant')}>
-              <Ionicons name="hardware-chip-outline" size={24} color="#4dabf7" /> 
-              <Text style={styles.navText}>AI Assistant</Text>
+            <TouchableOpacity style={styles.navItem} onPress={() => navigation.navigate('Learn')}>
+              <FontAwesome5 name="book" size={24} color="#4dabf7" />
+              <Text style={styles.navText}>Learn</Text>
             </TouchableOpacity>
           </LinearGradient>
         </View>
@@ -502,6 +557,13 @@ export default function ProfileScreen({ navigation }) {
     </View>
   );
 }
+      
+      
+          
+
+// Updated styles with Solo Leveling/anime aesthetic
+// Import required at the top of your file
+// import { Platform } from 'react-native';
 
 const styles = StyleSheet.create({
   container: {
@@ -514,11 +576,17 @@ const styles = StyleSheet.create({
     position: 'absolute',
     width: width,
     height: height,
+    zIndex: 0,
   },
   particle: {
     position: 'absolute',
     backgroundColor: '#4dabf7',
     borderRadius: 50,
+    shadowColor: '#4dabf7',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.8,
+    shadowRadius: 5,
+    elevation: 5,
   },
   header: {
     flexDirection: 'row',
@@ -529,6 +597,7 @@ const styles = StyleSheet.create({
     paddingBottom: 15,
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(77, 171, 247, 0.3)',
+    zIndex: 1,
   },
   backButton: {
     padding: 5,
@@ -537,7 +606,12 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontSize: 18,
     fontWeight: 'bold',
-    letterSpacing: 1,
+    letterSpacing: 2,
+    // Removed Platform dependency
+    fontFamily: 'Roboto',
+    textShadowColor: 'rgba(77, 171, 247, 0.7)',
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 10,
   },
   settingsButton: {
     padding: 5,
@@ -547,25 +621,40 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: 20,
     paddingTop: 20,
+    zIndex: 1,
   },
   profileHeader: {
     flexDirection: 'row',
     marginBottom: 25,
   },
+  // Enhanced avatar with glow effects
   avatarContainer: {
     position: 'relative',
-    marginRight: 15,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
+    marginRight: 20,
+    shadowColor: '#4dabf7',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.5,
+    shadowRadius: 10,
+    elevation: 8,
+  },
+  avatarGlow: {
+    width: 86,
+    height: 86,
+    borderRadius: 43,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(77, 171, 247, 0.2)',
+    shadowColor: '#4dabf7',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.8,
+    shadowRadius: 10,
     elevation: 5,
   },
   avatar: {
     width: 80,
     height: 80,
     borderRadius: 40,
-    backgroundColor: '#3250b4',
+    backgroundColor: '#1c2454',
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 2,
@@ -581,6 +670,9 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontSize: 32,
     fontWeight: 'bold',
+    textShadowColor: '#4dabf7',
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 10,
   },
   editAvatarOverlay: {
     position: 'absolute',
@@ -593,91 +685,188 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  levelBadge: {
+  // Enhanced level badge with better styling
+  levelBadgeContainer: {
     position: 'absolute',
-    bottom: 0,
-    right: 0,
-    width: 26,
-    height: 26,
-    borderRadius: 13,
+    bottom: -5,
+    right: -5,
+    shadowColor: '#ff9500',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.8,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  levelBadge: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     backgroundColor: '#ff9500',
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 2,
-    borderColor: '#121539',
+    borderColor: '#101233',
   },
   levelBadgeText: {
     color: '#ffffff',
-    fontSize: 12,
+    fontSize: 14,
     fontWeight: 'bold',
+    textShadowColor: 'rgba(0, 0, 0, 0.5)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
   },
   profileInfo: {
     flex: 1,
+  },
+  // Username with rank styling
+  usernameContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
   },
   username: {
     color: '#ffffff',
     fontSize: 24,
     fontWeight: '800',
-    marginBottom: 8,
-    textShadowColor: 'rgba(0, 0, 0, 0.7)',
+    marginRight: 10,
+    textShadowColor: 'rgba(77, 171, 247, 0.7)',
     textShadowOffset: { width: 0, height: 2 },
-    textShadowRadius: 4,
+    textShadowRadius: 5,
+    letterSpacing: 1,
   },
-  // Дополнительный стиль для редактирования имени
+  rankDecoration: {
+    backgroundColor: 'rgba(77, 171, 247, 0.2)',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 4,
+    borderLeftWidth: 2,
+    borderLeftColor: '#4dabf7',
+  },
+  rankText: {
+    color: '#4dabf7',
+    fontSize: 12,
+    fontWeight: 'bold',
+    letterSpacing: 1,
+  },
   usernameEditing: {
     borderBottomWidth: 1,
     borderColor: '#4dabf7',
     paddingBottom: 4,
   },
+  // Enhanced experience bar styling
+  expSection: {
+    marginBottom: 15,
+  },
+  expLabels: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 5,
+  },
+  expLabel: {
+    color: '#c8d6e5',
+    fontSize: 12,
+    fontWeight: 'bold',
+    letterSpacing: 1,
+  },
+  expValue: {
+    color: '#4dabf7',
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
   expBarContainer: {
     width: '100%',
-    height: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
-    borderRadius: 6,
+    height: 14,
+    backgroundColor: 'rgba(16, 20, 45, 0.8)',
+    borderRadius: 7,
     overflow: 'hidden',
-    marginBottom: 12,
     borderWidth: 1,
     borderColor: 'rgba(77, 171, 247, 0.3)',
+    position: 'relative',
   },
   expBar: {
     height: '100%',
     backgroundColor: '#4dabf7',
-    borderRadius: 6,
+    borderRadius: 7,
+    shadowColor: '#4dabf7',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 1,
+    shadowRadius: 8,
+    elevation: 5,
   },
-  expText: {
+  expBarGlow: {
     position: 'absolute',
-    right: 4,
-    top: -18,
-    color: '#c8d6e5',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: '50%',
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    borderTopLeftRadius: 7,
+    borderTopRightRadius: 7,
+  },
+  expPercentage: {
+    position: 'absolute',
+    right: 8,
+    top: -1,
+    color: '#ffffff',
     fontSize: 10,
+    fontWeight: 'bold',
+    textShadowColor: 'rgba(0, 0, 0, 0.5)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
+  },
+  // Bio styling
+  bioContainer: {
+    backgroundColor: 'rgba(16, 20, 45, 0.6)',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 15,
+    borderLeftWidth: 3,
+    borderLeftColor: '#4dabf7',
+  },
+  bioTitle: {
+    color: '#4dabf7',
+    fontSize: 12,
+    fontWeight: 'bold',
+    marginBottom: 8,
+    letterSpacing: 1,
   },
   bio: {
     color: '#c8d6e5',
     fontSize: 14,
     lineHeight: 20,
-    marginBottom: 10,
   },
-  // Дополнительный стиль для редактирования описания
   bioEditing: {
     borderBottomWidth: 1,
     borderColor: '#4dabf7',
     paddingBottom: 4,
+    marginBottom: 10,
   },
+  // Enhanced button styling
   editProfileButton: {
-    backgroundColor: 'rgba(77, 171, 247, 0.2)',
     borderRadius: 5,
-    paddingVertical: 5,
-    paddingHorizontal: 10,
+    overflow: 'hidden',
     alignSelf: 'flex-start',
-    borderWidth: 1,
-    borderColor: '#4dabf7',
-    marginTop: 10,
+    marginTop: 5,
+    shadowColor: '#4dabf7',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.5,
+    shadowRadius: 5,
+    elevation: 5,
+  },
+  editProfileGradient: {
+    paddingVertical: 8,
+    paddingHorizontal: 15,
+    borderRadius: 5,
   },
   editProfileText: {
-    color: '#4dabf7',
+    color: '#ffffff',
     fontSize: 12,
     fontWeight: '600',
+    letterSpacing: 1,
+    textShadowColor: 'rgba(0, 0, 0, 0.3)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
   },
+  // Tab styling
   tabContainer: {
     flexDirection: 'row',
     marginBottom: 20,
@@ -693,6 +882,7 @@ const styles = StyleSheet.create({
     color: '#c8d6e5',
     fontSize: 14,
     fontWeight: '600',
+    letterSpacing: 1,
   },
   activeTab: {
     borderBottomWidth: 2,
@@ -700,7 +890,11 @@ const styles = StyleSheet.create({
   },
   activeTabText: {
     color: '#4dabf7',
+    textShadowColor: 'rgba(77, 171, 247, 0.7)',
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 5,
   },
+  // Extra styles from your original code
   tabContent: {
     flex: 1,
     marginBottom: 30,
@@ -825,7 +1019,3 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
 });
-
-
-
-
