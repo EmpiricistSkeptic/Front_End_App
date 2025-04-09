@@ -312,7 +312,7 @@ export default function TasksScreen({ navigation, route }) {
         
       
         
-        {/* Quest Details Modal */}
+        {/* Task Details Modal */}
         {selectedTask && (
           <View style={styles.modalOverlay}>
             <TouchableOpacity style={styles.modalBackground} onPress={closeTaskDetails} />
@@ -741,5 +741,4 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
 });
-
 

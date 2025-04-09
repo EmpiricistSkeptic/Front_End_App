@@ -39,3 +39,13 @@ export const removeToken = async () => {
     console.error('Error removing token', error);
   }
 };
+
+export const checkAuth = async () => {
+  try {
+    const token = await getToken();
+    return !!token; // Возвращает true, если токен существует
+  } catch (error) {
+    console.error('Error checking authentication', error);
+    return false;
+  }
+};

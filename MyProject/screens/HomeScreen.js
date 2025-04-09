@@ -5,9 +5,10 @@ import { Ionicons, MaterialCommunityIcons, MaterialIcons } from '@expo/vector-ic
 import { createMaterialTopTabNavigator } from '@react-navigation/material-top-tabs';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import apiService from '../services/apiService';
+
 import TaskScreen from './TaskScreen';
-// Placeholder for QuestScreen - replace with actual import when available
 import AIQuestListScreen from './AIQuestListScreen';
+import HabitScreen from './HabitScreen';
 
 const Tab = createMaterialTopTabNavigator();
 const { width, height } = Dimensions.get('window');
@@ -72,6 +73,16 @@ export default function HomeScreen({ navigation, route }) {
       console.error('Error fetching profile data', error);
     }
   };
+
+  // Add this helper function
+  function getRankFromLevel(level) {
+    if (level < 10) return 'E';
+    if (level < 20) return 'D';
+    if (level < 30) return 'C';
+    if (level < 40) return 'B';
+    if (level < 50) return 'A';
+    return 'S';
+  }
   
   // Calculate experience progress percentage for display
   const calculateExpPercentage = () => {
@@ -101,32 +112,58 @@ export default function HomeScreen({ navigation, route }) {
           ))}
         </View>
         
-        {/* Header */}
+        {/* Enhanced Header with Solo Leveling theme */}
         <View style={styles.header}>
           <View style={styles.headerLeft}>
-            <Text style={styles.levelText}>LVL {profileData.level}</Text>
-            <View style={styles.pointsBarContainer}>
-              <View style={[styles.pointsBar, { width: `${calculateExpPercentage()}%` }]} />
-              <Text style={styles.pointsText}>{profileData.points} / {profileData.totalPoints} POINTS</Text>
+            {/* Level display with glowing effect */}
+            <View style={styles.levelContainer}>
+              <Text style={styles.levelLabel}>HUNTER RANK</Text>
+              <Text style={styles.levelText}>LVL {profileData.level}</Text>
+              <View style={styles.rankDecoration}>
+                <Text style={styles.rankText}>RANK {getRankFromLevel(profileData.level)}</Text>
+              </View>
+            </View>
+            
+            {/* Enhanced EXP bar with glow effect */}
+            <View style={styles.pointsBarOuterContainer}>
+              <Text style={styles.pointsLabel}>COMBAT POWER</Text>
+              <View style={styles.pointsBarContainer}>
+                <View style={[styles.pointsBar, { width: `${calculateExpPercentage()}%` }]} />
+                <View style={styles.pointsBarGlow} />
+                <Text style={styles.pointsText}>{profileData.points} / {profileData.totalPoints}</Text>
+              </View>
+              <Text style={styles.expPercentage}>{Math.round(calculateExpPercentage())}%</Text>
             </View>
           </View>
           
+          {/* Avatar with glowing effect similar to ProfileScreen */}
           <TouchableOpacity 
             style={styles.profileButton}
             onPress={() => navigation.navigate('Profile')}
           >
-            {profileData.avatar ? (
-              <Image 
-                source={{ uri: `${profileData.avatar}?t=${Date.now()}` }} 
-                style={styles.profileImage} 
-              />
-            ) : (
-              <View style={styles.profileImage}>
-                <Text style={styles.profileInitial}>
-                  {profileData.username ? profileData.username.charAt(0).toUpperCase() : 'U'}
-                </Text>
+            <View style={styles.avatarGlow}>
+              <View style={styles.profileImageContainer}>
+                {profileData.avatar ? (
+                  <Image 
+                    source={{ uri: `${profileData.avatar}?t=${Date.now()}` }} 
+                    style={styles.profileImage} 
+                  />
+                ) : (
+                  <View style={styles.profileImage}>
+                    <Text style={styles.profileInitial}>
+                      {profileData.username ? profileData.username.charAt(0).toUpperCase() : 'U'}
+                    </Text>
+                  </View>
+                )}
               </View>
-            )}
+            </View>
+            
+            {/* Level badge with glow */}
+            <View style={styles.levelBadgeContainer}>
+              <View style={styles.levelBadge}>
+                <Text style={styles.levelBadgeText}>{profileData.level}</Text>
+              </View>
+            </View>
           </TouchableOpacity>
         </View>
         
@@ -162,6 +199,11 @@ export default function HomeScreen({ navigation, route }) {
           <Tab.Screen 
             name="Quests" 
             component={AIQuestListScreen} 
+            initialParams={{ fetchProfileData: fetchProfileData }}
+          />
+          <Tab.Screen 
+            name="Habits" 
+            component={HabitScreen} 
             initialParams={{ fetchProfileData: fetchProfileData }}
           />
         </Tab.Navigator>
@@ -203,7 +245,9 @@ export default function HomeScreen({ navigation, route }) {
   );
 }
 
+// Updated styles with Solo Leveling/anime aesthetic for HomeScreen header
 const styles = StyleSheet.create({
+  // Keep your existing styles...
   container: {
     flex: 1,
   },
@@ -219,7 +263,14 @@ const styles = StyleSheet.create({
     position: 'absolute',
     backgroundColor: '#4dabf7',
     borderRadius: 50,
+    shadowColor: '#4dabf7',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.8,
+    shadowRadius: 5,
+    elevation: 5,
   },
+  
+  // Enhanced header styles
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -232,53 +283,179 @@ const styles = StyleSheet.create({
   },
   headerLeft: {
     flex: 1,
+    marginRight: 15,
+  },
+  
+  // Level display with anime-style decoration
+  levelContainer: {
+    marginBottom: 12,
+  },
+  levelLabel: {
+    color: '#c8d6e5',
+    fontSize: 10,
+    fontWeight: 'bold',
+    letterSpacing: 1,
+    marginBottom: 2,
   },
   levelText: {
     color: '#4dabf7',
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: 'bold',
-    marginBottom: 5,
     textShadowColor: '#4dabf7',
     textShadowOffset: { width: 0, height: 0 },
     textShadowRadius: 10,
   },
+  rankDecoration: {
+    position: 'absolute',
+    right: 0,
+    top: 5,
+    backgroundColor: 'rgba(77, 171, 247, 0.2)',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 4,
+    borderLeftWidth: 2,
+    borderLeftColor: '#4dabf7',
+  },
+  rankText: {
+    color: '#4dabf7',
+    fontSize: 10,
+    fontWeight: 'bold',
+    letterSpacing: 1,
+  },
+  
+  // Enhanced EXP bar with glow effect
+  pointsBarOuterContainer: {
+    position: 'relative',
+    marginBottom: 5,
+  },
+  pointsLabel: {
+    color: '#c8d6e5',
+    fontSize: 10,
+    fontWeight: 'bold',
+    letterSpacing: 1,
+    marginBottom: 4,
+  },
   pointsBarContainer: {
     width: '100%',
-    height: 6,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    borderRadius: 3,
+    height: 10,
+    backgroundColor: 'rgba(16, 20, 45, 0.8)',
+    borderRadius: 5,
     overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(77, 171, 247, 0.3)',
   },
   pointsBar: {
     height: '100%',
     backgroundColor: '#4dabf7',
-    borderRadius: 3,
+    borderRadius: 5,
+    shadowColor: '#4dabf7',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 1,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  pointsBarGlow: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: '50%',
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    borderTopLeftRadius: 5,
+    borderTopRightRadius: 5,
   },
   pointsText: {
     position: 'absolute',
-    right: 0,
-    top: 8,
-    color: '#c8d6e5',
-    fontSize: 10,
+    right: 6,
+    top: -2,
+    color: '#ffffff',
+    fontSize: 8,
+    fontWeight: 'bold',
   },
+  expPercentage: {
+    position: 'absolute',
+    right: 0,
+    top: 14,
+    color: '#4dabf7',
+    fontSize: 10,
+    fontWeight: 'bold',
+  },
+  
+  // Enhanced profile button with glow effects
   profileButton: {
-    marginLeft: 15,
+    position: 'relative',
+  },
+  avatarGlow: {
+    width: 76,
+    height: 76,
+    borderRadius: 38,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(77, 171, 247, 0.2)',
+    shadowColor: '#4dabf7',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.8,
+    shadowRadius: 10,
+    elevation: 5,
+  },
+  profileImageContainer: {
+    width: 70,
+    height: 70,
+    borderRadius: 35,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#4dabf7',
+    overflow: 'hidden',
   },
   profileImage: {
     width: 70,
     height: 70,
     borderRadius: 35,
-    backgroundColor: '#3250b4',
+    backgroundColor: '#1c2454',
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 2,
-    borderColor: '#4dabf7',
   },
   profileInitial: {
     color: '#ffffff',
-    fontSize: 18,
+    fontSize: 24,
     fontWeight: 'bold',
+    textShadowColor: '#4dabf7',
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 10,
   },
+  
+  // Level badge with glow
+  levelBadgeContainer: {
+    position: 'absolute',
+    bottom: -5,
+    right: -5,
+    shadowColor: '#ff9500',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.8,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  levelBadge: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#ff9500',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#101233',
+  },
+  levelBadgeText: {
+    color: '#ffffff',
+    fontSize: 12,
+    fontWeight: 'bold',
+    textShadowColor: 'rgba(0, 0, 0, 0.5)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
+  },
+  
+  // Keep all other styles from your existing code...
   bottomNav: {
     width: '100%',
     paddingBottom: 20,

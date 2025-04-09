@@ -14,13 +14,16 @@ import CreateTaskScreen from './screens/CreateTaskScreen';
 import EditTaskScreen from './screens/EditTaskScreen';
 import TaskScreen from './screens/TaskScreen';
 import AIQuestListScreen from './screens/AIQuestListScreen';
+import HabitScreen from './screens/HabitScreen';
+import LoadingScreen from './screens/LoadingScreen';
+
 
 const Stack = createNativeStackNavigator();
 
 export default function App() {
   return (
     <NavigationContainer>
-      <Stack.Navigator initialRouteName="Main">
+      <Stack.Navigator initialRouteName="Loading">
         <Stack.Screen 
           name="Login" 
           component={LoginScreen} 
@@ -85,6 +88,16 @@ export default function App() {
           name="QuestScreen" 
           component={AIQuestListScreen} 
           options={{ title: 'Quests' }}
+        />
+        <Stack.Screen 
+          name="HabitScreen" 
+          component={HabitScreen} 
+          options={{ title: 'Habits' }}
+        />
+        <Stack.Screen 
+          name="Loading" 
+          component={LoadingScreen} 
+          options={{ headerShown: false }} 
         />
       </Stack.Navigator>
     </NavigationContainer>

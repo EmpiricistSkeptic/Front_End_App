@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, Image, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, Image, ActivityIndicator, Modal} from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import apiService from '../services/apiService';
 import { MaterialIcons, Ionicons } from '@expo/vector-icons';
@@ -13,6 +13,9 @@ export default function AIQuestListScreen({ navigation, route }) {
   const [quests, setQuests] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeFilter, setActiveFilter] = useState('ALL');
+  const [selectedQuest, setSelectedQuest] = useState(null);
+  const [questDetailsVisible, setQuestDetailsVisible] = useState(false);
+  const [loadingDetails, setLoadingDetails] = useState(false);
 
   useEffect(() => {
     fetchQuests();
@@ -40,11 +43,30 @@ export default function AIQuestListScreen({ navigation, route }) {
     }
   };
 
+  const fetchQuestDetails = async (questId) => {
+    setLoadingDetails(true);
+    try {
+      const response = await apiService.get(`/quests/${questId}/`);
+      console.log('Fetched quest details:', response);
+      setSelectedQuest(response);
+      setQuestDetailsVisible(true);
+    } catch (error) {
+      console.error('Error fetching quest details', error);
+      Alert.alert('Ошибка', 'Не удалось загрузить детали квеста. Попробуйте еще раз.');
+    } finally {
+      setLoadingDetails(false);
+    }
+  };
+
   const handleCompleteQuest = async (questId) => {
     try {
       await apiService.patch(`/quests/complete/${questId}/`);
       Alert.alert('Квест выполнен', 'Вы успешно выполнили этот квест! Награда получена.');
       fetchQuests(); // Обновляем список квестов
+
+      if (selectedQuest && selectedQuest.id === questId) {
+        fetchQuestDetails(questId);
+      }
 
       if (route.params?.fetchProfileData) {
         route.params.fetchProfileData();
@@ -69,6 +91,9 @@ export default function AIQuestListScreen({ navigation, route }) {
               await apiService.post(`/quests/fail/${questId}/`);
               Alert.alert('Квест провален', 'Квест отмечен как проваленный.');
               fetchQuests();
+              if (selectedQuest && selectedQuest.id === questId) {
+                fetchQuestDetails(questId);
+              }
             } catch (error) {
               console.error('Error failing quest', error);
               Alert.alert('Ошибка', 'Не удалось отметить квест как проваленный.');
@@ -179,6 +204,173 @@ export default function AIQuestListScreen({ navigation, route }) {
     return moment(completedAt).format('DD MMM YYYY, HH:mm');
   };
 
+  // Компонент для модального окна с деталями квеста
+  const QuestDetailsModal = () => {
+    if (!selectedQuest) return null;
+    
+    return (
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={questDetailsVisible}
+        onRequestClose={() => setQuestDetailsVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContainer}>
+            <LinearGradient
+              colors={['#1f274c', '#151a35']}
+              style={styles.modalContent}
+            >
+              {/* Заголовок модального окна с кнопкой закрытия */}
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>Детали квеста</Text>
+                <TouchableOpacity onPress={() => setQuestDetailsVisible(false)}>
+                  <MaterialIcons name="close" size={24} color="#ffffff" />
+                </TouchableOpacity>
+              </View>
+              
+              {loadingDetails ? (
+                <View style={styles.loadingContainer}>
+                  <ActivityIndicator size="large" color="#4dabf7" />
+                  <Text style={styles.loadingText}>Загрузка...</Text>
+                </View>
+              ) : (
+                <ScrollView style={styles.modalScrollView}>
+                  {/* Тип квеста и статус */}
+                  <View style={styles.detailsTopRow}>
+                    <View style={[styles.typeBadge, { backgroundColor: getQuestTypeColor(selectedQuest.quest_type) }]}>
+                      {renderQuestTypeIcon(selectedQuest.quest_type)}
+                      <Text style={styles.typeText}>{getQuestTypeText(selectedQuest.quest_type)}</Text>
+                    </View>
+                    <View style={[styles.statusBadge, { backgroundColor: getStatusColor(selectedQuest.status) }]}>
+                      <Text style={styles.statusText}>
+                        {selectedQuest.status === 'ACTIVE' ? 'АКТИВЕН' :
+                        selectedQuest.status === 'COMPLETED' ? 'ВЫПОЛНЕН' : 'ПРОВАЛЕН'}
+                      </Text>
+                    </View>
+                  </View>
+                  
+                  {/* Заголовок квеста */}
+                  <Text style={styles.detailsTitle}>{selectedQuest.title}</Text>
+                  
+                  {/* Срок выполнения для срочных квестов */}
+                  {selectedQuest.quest_type === 'URGENT' && selectedQuest.expires_at && (
+                    <View style={styles.detailsInfoRow}>
+                      <MaterialIcons 
+                        name={isExpired(selectedQuest.expires_at) ? "timer-off" : "timer"}
+                        size={18} 
+                        color={isExpired(selectedQuest.expires_at) ? "#f44336" : "#4dabf7"} 
+                      />
+                      <Text style={styles.detailsInfoText}>
+                        Срок выполнения: {moment(selectedQuest.expires_at).format('DD MMM YYYY, HH:mm')}
+                        {isExpired(selectedQuest.expires_at) ? ' (Просрочено)' : ` (${getTimeRemaining(selectedQuest.expires_at)} осталось)`}
+                      </Text>
+                    </View>
+                  )}
+                  
+                  {/* Дата создания квеста */}
+                  <View style={styles.detailsInfoRow}>
+                    <MaterialIcons name="event" size={18} color="#4dabf7" />
+                    <Text style={styles.detailsInfoText}>
+                      Создан: {moment(selectedQuest.created_at).format('DD MMM YYYY, HH:mm')}
+                    </Text>
+                  </View>
+                  
+                  {/* Дата выполнения/провала для завершенных квестов */}
+                  {shouldShowCompletedDate(selectedQuest.status, selectedQuest.completed_at) && (
+                    <View style={styles.detailsInfoRow}>
+                      <MaterialIcons 
+                        name={selectedQuest.status === 'COMPLETED' ? "check-circle" : "cancel"} 
+                        size={18} 
+                        color={selectedQuest.status === 'COMPLETED' ? "#4caf50" : "#f44336"} 
+                      />
+                      <Text style={styles.detailsInfoText}>
+                        {selectedQuest.status === 'COMPLETED' ? 'Выполнен: ' : 'Провален: '}
+                        {formatCompletedDate(selectedQuest.completed_at)}
+                      </Text>
+                    </View>
+                  )}
+                  
+                  {/* Разделитель */}
+                  <View style={styles.divider} />
+                  
+                  {/* Полное описание квеста */}
+                  <Text style={styles.sectionTitle}>Описание</Text>
+                  <Text style={styles.detailsDescription}>{selectedQuest.description}</Text>
+                  
+                  {/* Награды */}
+                  <Text style={styles.sectionTitle}>Награды</Text>
+                  <View style={styles.detailsRewardsContainer}>
+                    {selectedQuest.reward_points > 0 && (
+                      <View style={styles.detailsRewardItem}>
+                        <Ionicons name="star" size={18} color="#ffd700" />
+                        <Text style={styles.detailsRewardText}>{selectedQuest.reward_points} XP</Text>
+                      </View>
+                    )}
+                    {selectedQuest.reward_other && (
+                      <View style={styles.detailsRewardItem}>
+                        <MaterialIcons name="card-giftcard" size={18} color="#4dabf7" />
+                        <Text style={styles.detailsRewardText}>{selectedQuest.reward_other}</Text>
+                      </View>
+                    )}
+                  </View>
+                  
+                  {/* Штрафы (если есть) */}
+                  {selectedQuest.penalty_info && (
+                    <>
+                      <Text style={styles.sectionTitle}>Штрафы при провале</Text>
+                      <View style={styles.detailsPenaltyContainer}>
+                        <MaterialIcons name="warning" size={18} color="#f44336" />
+                        <Text style={styles.detailsPenaltyText}>{selectedQuest.penalty_info}</Text>
+                      </View>
+                    </>
+                  )}
+                  
+                  {/* Кнопки действий для активных квестов */}
+                  {selectedQuest.status === 'ACTIVE' && (
+                    <View style={styles.detailsActionButtonsContainer}>
+                      <TouchableOpacity
+                        style={[styles.detailsActionButton, styles.completeButton]}
+                        onPress={() => {
+                          setQuestDetailsVisible(false);
+                          handleCompleteQuest(selectedQuest.id);
+                        }}
+                      >
+                        <LinearGradient
+                          colors={['#4caf50', '#388e3c']}
+                          style={styles.buttonGradient}
+                        >
+                          <MaterialIcons name="check" size={18} color="#ffffff" />
+                          <Text style={styles.actionButtonText}>ВЫПОЛНИТЬ</Text>
+                        </LinearGradient>
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        style={[styles.detailsActionButton, styles.failButton]}
+                        onPress={() => {
+                          setQuestDetailsVisible(false);
+                          handleFailQuest(selectedQuest.id);
+                        }}
+                      >
+                        <LinearGradient
+                          colors={['#f44336', '#d32f2f']}
+                          style={styles.buttonGradient}
+                        >
+                          <MaterialIcons name="close" size={18} color="#ffffff" />
+                          <Text style={styles.actionButtonText}>ПРОВАЛИТЬ</Text>
+                        </LinearGradient>
+                      </TouchableOpacity>
+                    </View>
+                  )}
+                </ScrollView>
+              )}
+            </LinearGradient>
+          </View>
+        </View>
+      </Modal>
+    );
+  };
+
   return (
     <LinearGradient
       colors={['#0c0e1a', '#1a1d33']}
@@ -226,8 +418,11 @@ export default function AIQuestListScreen({ navigation, route }) {
         ) : (
           getFilteredQuests().map(quest => (
             <View key={quest.id} style={styles.questWrapper}>
-              {/* Используем TouchableOpacity для возможного расширения карточки в будущем */}
-              <TouchableOpacity activeOpacity={0.8} onPress={() => { /* Можно добавить логику раскрытия деталей */ }}>
+              {/* TouchableOpacity теперь открывает детали квеста */}
+              <TouchableOpacity 
+                activeOpacity={0.8} 
+                onPress={() => fetchQuestDetails(quest.id)}
+              >
                 <LinearGradient
                   colors={['#1f274c', '#151a35']} // Немного другие цвета для градиента карточки
                   style={[
@@ -313,6 +508,9 @@ export default function AIQuestListScreen({ navigation, route }) {
                           </Text>
                       </View>
                     )}
+                    <View style={styles.detailsIndicator}>
+                      <MaterialIcons name="chevron-right" size={22} color="#64b5f6" />
+                    </View>
                   </View>
                 </LinearGradient>
               </TouchableOpacity>
@@ -351,6 +549,8 @@ export default function AIQuestListScreen({ navigation, route }) {
           ))
         )}
       </ScrollView>
+
+      <QuestDetailsModal />
     </LinearGradient>
   );
 }
@@ -358,58 +558,57 @@ export default function AIQuestListScreen({ navigation, route }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    paddingTop: 15, // Немного уменьшил верхний отступ
-    // paddingHorizontal убран, т.к. отступы теперь у wrapper'ов
+    paddingTop: 15,
   },
   headerText: {
-    fontFamily: 'System', // Используем системный шрифт, если нет кастомного
-    fontSize: 22, // Чуть меньше
+    fontFamily: 'System',
+    fontSize: 22,
     fontWeight: 'bold',
     color: '#4dabf7',
     textAlign: 'center',
     marginBottom: 15,
-    letterSpacing: 1.5, // Чуть меньше
-    textShadowColor: 'rgba(77, 171, 247, 0.4)', // Менее интенсивная тень
+    letterSpacing: 1.5,
+    textShadowColor: 'rgba(77, 171, 247, 0.4)',
     textShadowOffset: { width: 0, height: 0 },
     textShadowRadius: 8,
   },
   filtersContainer: {
     flexDirection: 'row',
     marginBottom: 15,
-    paddingHorizontal: 15, // Горизонтальный отступ для фильтров
+    paddingHorizontal: 15,
     paddingBottom: 5,
-    maxHeight: 45, // Чуть ниже
+    maxHeight: 45,
   },
   filterButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(25, 35, 60, 0.7)', // Чуть светлее фон
+    backgroundColor: 'rgba(25, 35, 60, 0.7)',
     paddingHorizontal: 12,
-    paddingVertical: 6, // Меньше по вертикали
-    borderRadius: 16, // Более круглые
-    marginRight: 8, // Меньше отступ
+    paddingVertical: 6,
+    borderRadius: 16,
+    marginRight: 8,
     borderWidth: 1,
-    borderColor: 'rgba(77, 171, 247, 0.3)', // Синяя рамка
+    borderColor: 'rgba(77, 171, 247, 0.3)',
   },
   activeFilter: {
-    backgroundColor: 'rgba(77, 171, 247, 0.2)', // Полупрозрачный синий фон
-    borderColor: '#4dabf7', // Яркая синяя рамка
+    backgroundColor: 'rgba(77, 171, 247, 0.2)',
+    borderColor: '#4dabf7',
   },
   filterIcon: {
     marginRight: 4,
   },
   filterText: {
-    color: '#e0e0e0', // Немного светлее текст
+    color: '#e0e0e0',
     fontSize: 12,
-    fontWeight: '600', // Полужирный
+    fontWeight: '600',
   },
   activeFilterText: {
-    color: '#64b5f6', // Более светлый синий для активного текста
+    color: '#64b5f6',
   },
   questsContainer: {
     flex: 1,
   },
-  loadingContainer: { // Стили для загрузки и пустого состояния без изменений
+  loadingContainer: {
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: 50,
@@ -447,38 +646,37 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontFamily: 'System',
   },
-  // --- Стили самой карточки квеста ---
   questWrapper: {
-    marginHorizontal: 15, // Отступы по бокам для каждой карточки
-    marginBottom: 15, // Отступ снизу
-    backgroundColor: '#151a35', // Фон для кнопок, если они есть
-    borderRadius: 10, // Скругление общее
-    shadowColor: '#000', // Тень для объема
+    marginHorizontal: 15,
+    marginBottom: 15,
+    backgroundColor: '#151a35',
+    borderRadius: 10,
+    shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 6,
     elevation: 8,
   },
   questItem: {
-    borderLeftWidth: 4, // Левая граница для типа квеста
-    borderTopLeftRadius: 10, // Скругление углов
+    borderLeftWidth: 4,
+    borderTopLeftRadius: 10,
     borderBottomLeftRadius: 10,
-    borderTopRightRadius: 10, // Скругление правых углов
-    paddingHorizontal: 12, // Уменьшили паддинги
+    borderTopRightRadius: 10,
+    paddingHorizontal: 12,
     paddingTop: 10,
     paddingBottom: 12,
   },
   questTopRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-start', // Выравнивание по верху
+    alignItems: 'flex-start',
     marginBottom: 8,
   },
   questTypeAndStatus: {
     flexDirection: 'row',
     alignItems: 'center',
-    flexShrink: 1, // Позволяет сжиматься, если время/дата длинные
-    marginRight: 8, // Отступ от времени/даты
+    flexShrink: 1,
+    marginRight: 8,
   },
   typeBadge: {
     flexDirection: 'row',
@@ -486,7 +684,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6,
     paddingVertical: 3,
     borderRadius: 4,
-    marginRight: 6, // Отступ от статуса
+    marginRight: 6,
   },
   typeText: {
     color: '#ffffff',
@@ -507,12 +705,12 @@ const styles = StyleSheet.create({
   timeRemainingContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 3, // Меньше паддинг
+    paddingVertical: 3,
   },
-  expiredContainer: {}, // Убрали фон, цвет текста и иконки уже задан
+  expiredContainer: {},
   timeRemainingText: {
-    color: '#a0a0a0', // Менее яркий текст
-    fontSize: 11, // Меньше шрифт
+    color: '#a0a0a0',
+    fontSize: 11,
     fontWeight: '600',
     marginLeft: 4,
   },
@@ -531,82 +729,80 @@ const styles = StyleSheet.create({
   },
   questTitle: {
     color: '#ffffff',
-    fontSize: 16, // Чуть меньше
+    fontSize: 16,
     fontWeight: 'bold',
     fontFamily: 'System',
-    marginBottom: 4, // Меньше отступ
+    marginBottom: 4,
   },
   questDescription: {
-    color: '#c0c0c0', // Светлее текст описания
-    fontSize: 13, // Чуть меньше
+    color: '#c0c0c0',
+    fontSize: 13,
     fontFamily: 'System',
-    marginBottom: 10, // Отступ до наград/штрафов
-    lineHeight: 18, // Межстрочный интервал
+    marginBottom: 10,
+    lineHeight: 18,
   },
   questBottomRow: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-      flexWrap: 'wrap', // Позволяет переносить элементы, если не влезают
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    flexWrap: 'wrap',
   },
   rewardsContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    flexWrap: 'wrap', // Перенос наград
-    flexShrink: 1, // Позволяет сжиматься
-    marginRight: 8, // Отступ от штрафа
+    flexWrap: 'wrap',
+    flexShrink: 1,
+    marginRight: 8,
   },
   rewardItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.1)', // Легкий фон для награды
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
     borderRadius: 4,
     paddingHorizontal: 6,
     paddingVertical: 3,
-    marginRight: 6, // Отступ между наградами
-    marginBottom: 4, // Отступ если переносятся
+    marginRight: 6,
+    marginBottom: 4,
   },
   rewardText: {
     color: '#ffffff',
-    fontSize: 12, // Меньше шрифт
+    fontSize: 12,
     fontWeight: '600',
     marginLeft: 4,
-    maxWidth: 100, // Ограничение ширины для длинных названий бонусов
+    maxWidth: 100,
   },
   penaltyContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(244, 67, 54, 0.15)', // Легкий фон для штрафа
+    backgroundColor: 'rgba(244, 67, 54, 0.15)',
     borderRadius: 4,
     paddingHorizontal: 6,
     paddingVertical: 3,
-    marginBottom: 4, // На случай переноса
+    marginBottom: 4,
   },
   penaltyText: {
-    color: '#f8a0a0', // Светло-красный
+    color: '#f8a0a0',
     fontSize: 12,
     fontWeight: '600',
     marginLeft: 4,
-    maxWidth: 100, // Ограничение ширины
+    maxWidth: 100,
   },
-  // --- Стили кнопок действий ---
+  detailsIndicator: {
+    marginLeft: 'auto',
+    alignSelf: 'center',
+  },
   actionButtonsContainer: {
     flexDirection: 'row',
-    // Кнопки теперь вне основного градиента, имеют свой фон через questWrapper
-    borderBottomLeftRadius: 10, // Скругление углов контейнера кнопок
+    borderBottomLeftRadius: 10,
     borderBottomRightRadius: 10,
-    overflow: 'hidden', // Обрезать градиенты кнопок по радиусу
+    overflow: 'hidden',
   },
   actionButton: {
     flex: 1,
-    height: 40, // Меньше высота кнопок
+    height: 40,
   },
-  completeButton: {
-    // marginRight не нужен, т.к. flex: 1 распределит место
-  },
-  failButton: {
-    // marginLeft не нужен
-  },
+  completeButton: {},
+  failButton: {},
   buttonGradient: {
     flex: 1,
     flexDirection: 'row',
@@ -616,12 +812,151 @@ const styles = StyleSheet.create({
   actionButtonText: {
     color: '#ffffff',
     fontWeight: 'bold',
-    fontSize: 13, // Меньше шрифт
+    fontSize: 13,
     letterSpacing: 0.5,
     marginLeft: 5,
-    textShadowColor: 'rgba(0, 0, 0, 0.4)', // Чуть сильнее тень на кнопках
+    textShadowColor: 'rgba(0, 0, 0, 0.4)',
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 1,
     fontFamily: 'System',
   },
+  
+  // Модальное окно с деталями квеста
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 15,
+  },
+  modalContainer: {
+    width: '95%',
+    maxHeight: '90%',
+    borderRadius: 12,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 5 },
+    shadowOpacity: 0.5,
+    shadowRadius: 10,
+    elevation: 15,
+  },
+  modalContent: {
+    padding: 15,
+    borderRadius: 12,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 15,
+    paddingBottom: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(77, 171, 247, 0.3)',
+  },
+  modalTitle: {
+    color: '#4dabf7',
+    fontSize: 18,
+    fontWeight: 'bold',
+    letterSpacing: 1,
+    fontFamily: 'System',
+  },
+  modalScrollView: {
+    maxHeight: '100%',
+  },
+  detailsTopRow: {
+    flexDirection: 'row',
+    justifyContent: 'flex-start',
+    alignItems: 'center',
+    marginBottom: 12,
+    flexWrap: 'wrap',
+  },
+  detailsTitle: {
+    color: '#ffffff',
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 10,
+    fontFamily: 'System',
+    lineHeight: 24,
+  },
+  detailsInfoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  detailsInfoText: {
+    color: '#d0d0d0',
+    fontSize: 14,
+    marginLeft: 8,
+    fontFamily: 'System',
+  },
+  divider: {
+    height: 1,
+    backgroundColor: 'rgba(77, 171, 247, 0.2)',
+    marginVertical: 15,
+  },
+  sectionTitle: {
+    color: '#64b5f6',
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginBottom: 8,
+    fontFamily: 'System',
+  },
+  detailsDescription: {
+    color: '#d0d0d0',
+    fontSize: 14,
+    lineHeight: 20,
+    marginBottom: 15,
+    fontFamily: 'System',
+  },
+  detailsRewardsContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginBottom: 15,
+  },
+  detailsRewardItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    marginRight: 8,
+    marginBottom: 8,
+  },
+  detailsRewardText: {
+    color: '#ffffff',
+    fontSize: 14,
+    marginLeft: 6,
+    fontFamily: 'System',
+  },
+  detailsPenaltyContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(244, 67, 54, 0.15)',
+    borderRadius: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    marginBottom: 15,
+  },
+  detailsPenaltyText: {
+    color: '#f8a0a0',
+    fontSize: 14,
+    marginLeft: 8,
+    fontFamily: 'System',
+    lineHeight: 20,
+    flex: 1,
+  },
+  detailsActionButtonsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 10,
+    marginBottom: 5,
+  },
+  detailsActionButton: {
+    flex: 1,
+    height: 44,
+    borderRadius: 8,
+    overflow: 'hidden',
+    marginHorizontal: 5,
+  }
 });
