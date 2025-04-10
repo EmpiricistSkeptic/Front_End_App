@@ -48,9 +48,12 @@ export default function EditTaskScreen({ navigation, route }) {
   useEffect(() => {
     const getTokenAndFetchTask = async () => {
       try {
-        const token = await AsyncStorage.getItem('userToken');
+        const token = await AsyncStorage.getItem('jwt_token');
         if (!token) {
-          navigation.navigate('Login');
+          navigation.reset({
+            index: 0,
+            routes: [{ name: 'Login' }],
+          });
           return;
         }
         fetchTaskDetails();

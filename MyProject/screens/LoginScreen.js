@@ -66,7 +66,10 @@ const LoginScreen = ({ navigation }) => {
         }
         
         // Переход на главный экран приложения
-        navigation.navigate('Home');
+        navigation.reset({
+          index: 0, // Указываем, какой экран в новом стеке будет активным (первый)
+          routes: [{ name: 'Home' }], // Массив экранов, которые будут составлять новый стек
+        });
       } else {
         throw new Error('Токен не получен');
       }

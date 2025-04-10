@@ -25,11 +25,14 @@ export default function HomeScreen({ navigation, route }) {
   useEffect(() => {
     const initializeScreen = async () => {
       try {
-        const userToken = await AsyncStorage.getItem('userToken');
+        const userToken = await AsyncStorage.getItem('jwt_token');
         if (userToken) {
           fetchProfileData();
         } else {
-          navigation.navigate('Login');
+          navigation.reset({
+            index: 0,
+            routes: [{ name: 'Login' }],
+          });
         }
       } catch (e) {
         console.error('Failed to get token', e);
@@ -193,7 +196,7 @@ export default function HomeScreen({ navigation, route }) {
         >
           <Tab.Screen 
             name="Tasks" 
-            component={TaskScreen} 
+            component={TaskScreen}
             initialParams={{ fetchProfileData: fetchProfileData }}
           />
           <Tab.Screen 
@@ -204,7 +207,6 @@ export default function HomeScreen({ navigation, route }) {
           <Tab.Screen 
             name="Habits" 
             component={HabitScreen} 
-            initialParams={{ fetchProfileData: fetchProfileData }}
           />
         </Tab.Navigator>
         

@@ -23,16 +23,24 @@ export default function TasksScreen({ navigation, route }) {
   useEffect(() => {
     const initializeScreen = async () => {
       try {
-        const userToken = await AsyncStorage.getItem('userToken');
+        const userToken = await AsyncStorage.getItem('jwt_token');
         if (userToken) {
           fetchTasks();
           fetchProfileData(); // Загружаем данные профиля
         } else {
           // Перенаправление на экран входа, если токен отсутствует
-          navigation.navigate('Login');
+          navigation.reset({
+            index: 0,
+            routes: [{ name: 'Login' }],
+          });
         }
       } catch (e) {
-        console.error('Failed to get token', e);
+        console.error('Failed to get token on TaskScreen mount, resetting to Login.', e);
+      await removeToken(); // На всякий случай удалим потенциально поврежденный токен
+      navigation.reset({ // ПРАВИЛЬНО: Используй reset
+        index: 0,
+        routes: [{ name: 'Login' }],
+      });
       }
     };
     

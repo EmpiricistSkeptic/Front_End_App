@@ -44,9 +44,12 @@ export default function CreateTaskScreen({ navigation, route }) {
   // Проверка наличия токена для авторизации
   useEffect(() => {
     const checkToken = async () => {
-      const token = await AsyncStorage.getItem('userToken');
+      const token = await AsyncStorage.getItem('jwt_token');
       if (!token) {
-        navigation.navigate('Login');
+        navigation.reset({
+          index: 0,
+          routes: [{ name: 'Login' }],
+        });
       }
     };
     checkToken();

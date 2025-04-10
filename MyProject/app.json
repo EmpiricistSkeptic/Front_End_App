@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "Level Up",
+    "name": "MyAwesomeProject",
     "slug": "MyAwesomeProject",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -8,22 +8,30 @@
     "userInterfaceStyle": "light",
     "splash": {
       "image": "./assets/splash-icon.png",
-      "resizeMode": "contain",
+      "resizeMode": "cover",
       "backgroundColor": "#ffffff"
     },
     "ios": {
       "supportsTablet": true,
-      "newArchEnabled": true
+      "newArchEnabled": true,
+      "icon": "./assets/icon.png"
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "newArchEnabled": true
+      "icon": "./assets/icon.png",
+      "newArchEnabled": true,
+      "package": "com.stas_stoun.MyAwesomeProject"
     },
     "web": {
       "favicon": "./assets/favicon.png"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "df5f21e0-a1d9-4c32-9516-eb6f03bb00db"
+      }
     }
   }
 }

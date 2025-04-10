@@ -85,9 +85,12 @@ export default function HabitScreen({ navigation }) {
     const initializeScreen = async () => {
       setLoading(true); // Показываем индикатор при инициализации
       try {
-        const userToken = await AsyncStorage.getItem('userToken');
+        const userToken = await AsyncStorage.getItem('jwt_token');
         if (!userToken) {
-          navigation.navigate('Login'); // Переход на логин, если нет токена
+          navigation.reset({
+            index: 0,
+            routes: [{ name: 'Login' }],
+          }); // Переход на логин, если нет токена
           setLoading(false); // Скрываем индикатор
           return;
         }
