@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "MyAwesomeProject",
-    "slug": "MyAwesomeProject",
+    "name": "Level Up",
+    "slug": "level-up",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -14,7 +14,8 @@
     "ios": {
       "supportsTablet": true,
       "newArchEnabled": true,
-      "icon": "./assets/icon.png"
+      "icon": "./assets/icon.png",
+      "bundleIdentifier": "com.stasstoun.levelup"
     },
     "android": {
       "adaptiveIcon": {
@@ -23,7 +24,7 @@
       },
       "icon": "./assets/icon.png",
       "newArchEnabled": true,
-      "package": "com.stas_stoun.MyAwesomeProject"
+      "package": "com.stasstoun.levelup"
     },
     "web": {
       "favicon": "./assets/favicon.png"
