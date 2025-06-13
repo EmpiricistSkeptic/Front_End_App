@@ -1,17 +1,20 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Dimensions, StatusBar, ScrollView, Alert, Image} from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Dimensions, StatusBar, ScrollView, Alert, Image } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons, MaterialCommunityIcons, FontAwesome5, MaterialIcons } from '@expo/vector-icons';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import apiService from '../services/apiService';
-
 
 const { width, height } = Dimensions.get('window');
 
 export default function TasksScreen({ navigation, route }) {
   const [tasks, setTasks] = useState([]);
   const [selectedTask, setSelectedTask] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [totalCount, setTotalCount] = useState(0);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [hasNextPage, setHasNextPage] = useState(false);
+  const [hasPrevPage, setHasPrevPage] = useState(false);
+  const [loading, setLoading] = useState(false);
+
   const [profileData, setProfileData] = useState({
     level: 1,
     points: 0,
@@ -19,212 +22,174 @@ export default function TasksScreen({ navigation, route }) {
     username: ''
   });
   
-  // Получение токена и данных при загрузке компонента
+  // Инициализация экрана: сразу пытаемся загрузить данные
   useEffect(() => {
     const initializeScreen = async () => {
       try {
-        const userToken = await AsyncStorage.getItem('jwt_token');
-        if (userToken) {
-          fetchTasks();
-          fetchProfileData(); // Загружаем данные профиля
+        await fetchTasks(1);
+        await fetchProfileData();
+      } catch (err) {
+        console.error('Init error:', err);
+        if (err.message.includes('Session expired')) {
+          navigation.reset({ index: 0, routes: [{ name: 'Login' }] });
         } else {
-          // Перенаправление на экран входа, если токен отсутствует
-          navigation.reset({
-            index: 0,
-            routes: [{ name: 'Login' }],
-          });
+          Alert.alert('Error', 'Failed to initialize. Please try again.');
         }
-      } catch (e) {
-        console.error('Failed to get token on TaskScreen mount, resetting to Login.', e);
-      await removeToken(); // На всякий случай удалим потенциально поврежденный токен
-      navigation.reset({ // ПРАВИЛЬНО: Используй reset
-        index: 0,
-        routes: [{ name: 'Login' }],
-      });
       }
     };
-    
     initializeScreen();
   }, []);
   
-  // Добавляем listener для обновления данных при возврате на экран
+  // Обновление при возврате на экран
   useEffect(() => {
     const unsubscribe = navigation.addListener('focus', () => {
-      // Обновляем список задач и профиль каждый раз, когда экран становится активным
-      fetchTasks();
-      fetchProfileData();
+      fetchTasks(currentPage).catch(handleSessionError);
+      fetchProfileData().catch(handleSessionError);
     });
-    
-    // Очистка listener при размонтировании компонента
     return unsubscribe;
-  }, [navigation]);
+  }, [navigation, currentPage]);
   
-  // Отслеживаем параметры маршрута для обновления после создания новой задачи
+  // Обновляем после создания/обновления задачи
   useEffect(() => {
     if (route.params?.taskCreated || route.params?.taskUpdated) {
-      // Если задача была создана или обновлена, перезагружаем список
-      fetchTasks();
-      // Сбрасываем параметр, чтобы избежать повторного обновления
-      navigation.setParams({taskCreated: undefined, taskUpdated: undefined});
+      fetchTasks(currentPage).catch(handleSessionError);
+      navigation.setParams({ taskCreated: undefined, taskUpdated: undefined });
     }
-  }, [route.params]);
+  }, [route.params, currentPage]);
 
-  // Функция для расчета порога XP, соответствующая бэкенду
-  const calculateXpThreshold = (level) => {
-    return Math.floor(1000 * (1.5 ** (level - 1)));
+  const calculateXpThreshold = (level) => Math.floor(1000 * (1.5 ** (level - 1)));
+
+  // Вспомогательная функция для обработки 401
+  const handleSessionError = (err) => {
+    console.error('Session or network error:', err);
+    if (err.message.includes('Session expired')) {
+      navigation.reset({ index: 0, routes: [{ name: 'Login' }] });
+    }
   };
-  
-  // Получение данных профиля
+
   const fetchProfileData = async () => {
-    try {
-      const response = await apiService.get('/profile/');
-
-      const level = response.level || 1;
-
-      const totalPoints = calculateXpThreshold(level);
-      setProfileData({
-        level: level,
-        points: response.points || 0,
-        totalPoints: totalPoints,
-        username: response.username || '',
-        avatar: response.avatar_url || null
-      });
-      console.log('Fetched profile data:', response);
-    } catch (error) {
-      console.error('Error fetching profile data', error);
-    }
+    const response = await apiService.get('profile/{pk}/');
+    const level = response.level || 1;
+    const totalPoints = calculateXpThreshold(level);
+    setProfileData({
+      level,
+      points: response.points || 0,
+      totalPoints,
+      username: response.username || '',
+      avatar: response.avatar_url || null
+    });
   };
   
-  // Получение списка задач с сервера через apiService
-  const fetchTasks = async () => {
+  const fetchTasks = async (page = 1) => {
     setLoading(true);
     try {
-      const response = await apiService.get('/tasks/');
-      console.log('Fetched tasks:', response);
-      setTasks(response);
-    } catch (error) {
-      console.error('Error fetching tasks', error);
-      Alert.alert('Error', 'Failed to load your tasks. Please try again.');
+      const response = await apiService.get(`tasks/?page=${page}`);
+      console.log('tasksResponse =', response);
+
+      // Пагинированный ответ
+      if (response && typeof response === 'object' && response.results) {
+        const tasksData = response.results;
+        setTasks(tasksData);
+
+        // Пагинация
+        setTotalCount(response.count ?? 0);
+        setCurrentPage(page);
+        setHasNextPage(!!response.next);
+        setHasPrevPage(!!response.previous);
+
+      } else {
+        // Непагинированный ответ (на всякий случай)
+        const tasksData = Array.isArray(response) ? response : [];
+        setTasks(tasksData);
+        setCurrentPage(1);
+        setHasNextPage(false);
+        setHasPrevPage(false);
+      }
+    } catch (err) {
+      console.error('Error fetching tasks:', err);
+      Alert.alert('Error', 'Не удалось загрузить задачи.');
     } finally {
       setLoading(false);
     }
   };
+
+  // Пагинация
+  const handleNextPage = () => {
+    if (hasNextPage) {
+      fetchTasks(currentPage + 1);
+    }
+  };
+
+  const handlePrevPage = () => {
+    if (hasPrevPage) {
+      fetchTasks(currentPage - 1);
+    }
+  };
   
-  // Добавление новой задачи
   const handleAddTask = () => {
-    navigation.navigate('CreateTask', { onGoBack: () => fetchTasks() });
+    navigation.navigate('CreateTask', { onGoBack: fetchTasks });
   };
 
-  // Редактирование задачи
   const handleEditTask = (task) => {
-    navigation.navigate('EditTask', { 
-      taskId: task.id,
-      onGoBack: () => fetchTasks() 
-    });
-    closeTaskDetails();
+    navigation.navigate('EditTask', { taskId: task.id, onGoBack: fetchTasks });
+    setSelectedTask(null);
   };
 
-  // Удаление задачи через apiService
   const handleDeleteTask = async (task) => {
     try {
-      await apiService.delete(`/tasks/${task.id}/delete/`);
-      
-      // Обновление списка задач после удаления
+      await apiService.delete(`tasks/${task.id}/`);
       setTasks(tasks.filter(t => t.id !== task.id));
       Alert.alert('Success', 'Task deleted successfully');
-      closeTaskDetails();
-    } catch (error) {
-      console.error('Error deleting task', error);
-      Alert.alert('Error', 'Failed to delete task. Please try again.');
-    }
-  };
-  
-  // Обновление профиля с новыми значениями опыта и уровня
-  const updateProfileData = async (newPoints, newLevel) => {
-    try {
-      // Отправляем обновленные данные на сервер
-      await apiService.put('/profile/', {
-        points: newPoints,
-        level: newLevel,
-      });
-
-      const calculatedTotalPoints = calculateXpThreshold(newLevel);
-      
-      // Обновляем локальное состояние
-      setProfileData({
-        ...profileData,
-        points: newPoints,
-        level: newLevel,
-        totalPoints: calculatedTotalPoints
-      });
-    } catch (error) {
-      console.error('Error updating profile data', error);
-      Alert.alert('Error', 'Failed to update profile. Please try again.');
-    }
-  };
-  
-  // Отметка задачи как выполненной через apiService
-  const handleCompleteTask = async (task) => {
-    try {
-      // Пробуем использовать put или patch для завершения задачи
-      try {
-        await apiService.put(`/tasks/complete/${task.id}/`, {});
-      } catch (putError) {
-        // Если PUT не работает, пробуем PATCH
-        if (putError.response && putError.response.status === 405) {
-          await apiService.patch(`/tasks/complete/${task.id}/`, {});
-        } else {
-          throw putError;
-        }
+      setSelectedTask(null);
+      // Если удалили последнюю задачу на странице, переходим на предыдущую
+      if (tasks.length === 1 && hasPrevPage) {
+        fetchTasks(currentPage - 1);
+      } else {
+        fetchTasks(currentPage);
       }
-      
-      // Обновление статуса задачи в локальном состоянии
-      const updatedTasks = tasks.map(t => 
-        t.id === task.id ? { ...t, completed: true } : t
-      );
-      setTasks(updatedTasks);
-      
-      // Обновление выбранной задачи, если она открыта
-      if (selectedTask && selectedTask.id === task.id) {
-        setSelectedTask({ ...selectedTask, completed: true });
+    } catch (err) {
+      if (err.message.includes('Session expired')) {
+        return handleSessionError(err);
       }
-      
-      // Расчет нового опыта и уровня
-      let newPoints = profileData.points + task.points;
-      let newLevel = profileData.level;
-      let xpThreshold = calculateXpThreshold(newLevel);
-
-      // Если опыт превышает порог, переносим избыточные очки на следующий уровень
-      while (newPoints >= xpThreshold) {
-        newLevel += 1;
-        newPoints -= xpThreshold;
-        xpThreshold = calculateXpThreshold(newLevel);
-      }
-
-      
-      // Обновляем профиль на сервере
-      await updateProfileData(newPoints, newLevel);
-      if (route.params?.fetchProfileData) {
-        route.params.fetchProfileData();
-      }
-      
-      Alert.alert('Success', `Task completed! Gained ${task.points} POINTS!`);
-      
-    } catch (error) {
-      console.error('Error completing task', error);
-      
-      let errorMessage = 'Failed to complete task. Please try again.';
-      if (error.response) {
-        errorMessage += ` Status: ${error.response.status}`;
-      }
-      
+      console.error('Error deleting task', err);
+      const errorMessage = err.message || 'Failed to delete task. Please try again.';
       Alert.alert('Error', errorMessage);
-      
-      // Перезагрузим данные, чтобы убедиться, что они актуальны
-      fetchTasks();
-      fetchProfileData();
     }
   };
+
+  const updateProfileData = async (newPoints, newLevel) => {
+    await apiService.put('profile/{pk}/', { points: newPoints, level: newLevel });
+    const totalPoints = calculateXpThreshold(newLevel);
+    setProfileData(prev => ({ ...prev, points: newPoints, level: newLevel, totalPoints }));
+  };
+  
+  const handleCompleteTask = async (task) => {
+  try {
+    await apiService.put(`tasks/${task.id}/complete/`, {});
+    
+    const updatedTasks = tasks.map(t => t.id === task.id ? { ...t, completed: true } : t);
+    setTasks(updatedTasks);
+    if (selectedTask?.id === task.id) setSelectedTask({ ...selectedTask, completed: true });
+    
+    let newPoints = profileData.points + task.points;
+    let newLevel = profileData.level;
+    let xpThreshold = calculateXpThreshold(newLevel);
+    while (newPoints >= xpThreshold) {
+      newLevel++;
+      newPoints -= xpThreshold;
+      xpThreshold = calculateXpThreshold(newLevel);
+    }
+    await updateProfileData(newPoints, newLevel);
+    
+    Alert.alert('Success', `Task completed! Gained ${task.points} POINTS!`);
+  } catch (err) {
+    if (err.message.includes('Session expired')) return handleSessionError(err);
+    console.error('Error completing task', err);
+    Alert.alert('Error', 'Failed to complete task. Please try again.');
+    fetchTasks(currentPage);
+    fetchProfileData();
+  }
+};
   
   const getDifficultyColor = (difficulty) => {
     switch(difficulty) {
@@ -233,17 +198,46 @@ export default function TasksScreen({ navigation, route }) {
       case 'B': return '#4dabf7';
       case 'C': return '#34c759';
       case 'D': return '#8e8e93';
+      case 'E': return '#636366';
       default: return '#4dabf7';
+    }
+  };
+
+  const getDifficultyName = (difficulty) => {
+    switch(difficulty) {
+      case 'S': return 'Supreme';
+      case 'A': return 'Advanced';
+      case 'B': return 'Beginner';
+      case 'C': return 'Casual';
+      case 'D': return 'Daily';
+      case 'E': return 'Easy';
+      default: return 'Unknown';
     }
   };
   
   const closeTaskDetails = () => {
     setSelectedTask(null);
   };
-  
+
   // Рассчитываем прогресс опыта в процентах для отображения в шкале
   const calculateExpPercentage = () => {
     return (profileData.points / profileData.totalPoints) * 100;
+  };
+
+  // Форматирование даты дедлайна
+  const formatDeadline = (dateString) => {
+    try {
+      const date = new Date(dateString);
+      return date.toLocaleDateString('ru-RU', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    } catch (error) {
+      return dateString;
+    }
   };
   
   return (
@@ -269,15 +263,20 @@ export default function TasksScreen({ navigation, route }) {
           ))}
         </View>
         
-        
-        
         {/* Main Content */}
         <View style={styles.mainContent}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>ACTIVE TASKS</Text>
-            <TouchableOpacity style={styles.addButton} onPress={handleAddTask}>
-              <Ionicons name="add" size={24} color="#ffffff" />
-            </TouchableOpacity>
+            <View style={styles.headerRight}>
+              {totalCount > 0 && (
+                <Text style={styles.totalCountText}>
+                  Total: {totalCount}
+                </Text>
+              )}
+              <TouchableOpacity style={styles.addButton} onPress={handleAddTask}>
+                <Ionicons name="add" size={24} color="#ffffff" />
+              </TouchableOpacity>
+            </View>
           </View>
           
           <ScrollView style={styles.tasksContainer}>
@@ -306,19 +305,66 @@ export default function TasksScreen({ navigation, route }) {
                     </View>
                     <View style={styles.taskInfo}>
                       <Text style={styles.taskTitle}>{task.title}</Text>
-                      <Text style={styles.taskDeadline}>{task.deadline}</Text>
+                      <Text style={styles.taskDeadline}>
+                        {formatDeadline(task.deadline)}
+                      </Text>
+                      {task.category && (
+                        <Text style={styles.taskCategory}>
+                          {task.category.name || task.category}
+                        </Text>
+                      )}
                     </View>
                   </View>
                   <View style={styles.taskRight}>
                     <Text style={styles.pointsReward}>+{task.points} POINTS</Text>
+                    {task.unit_type && task.unit_amount > 0 && (
+                      <Text style={styles.unitInfo}>
+                        {task.unit_amount} {task.unit_type.name || task.unit_type}
+                      </Text>
+                    )}
                   </View>
                 </TouchableOpacity>
               ))
             )}
           </ScrollView>
+
+          {/* Пагинация */}
+          {(hasNextPage || hasPrevPage) && (
+            <View style={styles.paginationContainer}>
+              <TouchableOpacity 
+                style={[styles.paginationButton, !hasPrevPage && styles.paginationButtonDisabled]}
+                onPress={handlePrevPage}
+                disabled={!hasPrevPage}
+              >
+                <Ionicons 
+                  name="chevron-back" 
+                  size={20} 
+                  color={hasPrevPage ? "#4dabf7" : "#636366"} 
+                />
+                <Text style={[styles.paginationText, !hasPrevPage && styles.paginationTextDisabled]}>
+                  Previous
+                </Text>
+              </TouchableOpacity>
+
+              <Text style={styles.pageInfo}>Page {currentPage}</Text>
+
+              <TouchableOpacity 
+                style={[styles.paginationButton, !hasNextPage && styles.paginationButtonDisabled]}
+                onPress={handleNextPage}
+                disabled={!hasNextPage}
+              >
+                <Text style={[styles.paginationText, !hasNextPage && styles.paginationTextDisabled]}>
+                  Next
+                </Text>
+                <Ionicons 
+                  name="chevron-forward" 
+                  size={20} 
+                  color={hasNextPage ? "#4dabf7" : "#636366"} 
+                />
+              </TouchableOpacity>
+            </View>
+          )}
         </View>
-        
-      
         
         {/* Task Details Modal */}
         {selectedTask && (
@@ -334,22 +380,47 @@ export default function TasksScreen({ navigation, route }) {
                 >
                   <Text style={styles.difficultyText}>{selectedTask.difficulty}</Text>
                 </View>
-                <Text style={styles.modalTitle}>{selectedTask.title}</Text>
+                <View style={styles.modalTitleContainer}>
+                  <Text style={styles.modalTitle}>{selectedTask.title}</Text>
+                  <Text style={styles.modalDifficultyName}>
+                    {getDifficultyName(selectedTask.difficulty)}
+                  </Text>
+                </View>
                 <TouchableOpacity style={styles.closeButton} onPress={closeTaskDetails}>
                   <Ionicons name="close" size={20} color="#ffffff" />
                 </TouchableOpacity>
               </View>
               
-              <View style={styles.modalContent}>
+              <ScrollView style={styles.modalContent}>
                 <View style={styles.modalInfoRow}>
                   <Text style={styles.modalInfoLabel}>Deadline:</Text>
-                  <Text style={styles.modalInfoValue}>{selectedTask.deadline}</Text>
+                  <Text style={styles.modalInfoValue}>
+                    {formatDeadline(selectedTask.deadline)}
+                  </Text>
                 </View>
                 
                 <View style={styles.modalInfoRow}>
-                  <Text style={styles.modalInfoLabel}>points Reward:</Text>
+                  <Text style={styles.modalInfoLabel}>Points Reward:</Text>
                   <Text style={styles.modalInfoValue}>{selectedTask.points} POINTS</Text>
                 </View>
+
+                {selectedTask.category && (
+                  <View style={styles.modalInfoRow}>
+                    <Text style={styles.modalInfoLabel}>Category:</Text>
+                    <Text style={styles.modalInfoValue}>
+                      {selectedTask.category.name || selectedTask.category}
+                    </Text>
+                  </View>
+                )}
+
+                {selectedTask.unit_type && (
+                  <View style={styles.modalInfoRow}>
+                    <Text style={styles.modalInfoLabel}>Target Amount:</Text>
+                    <Text style={styles.modalInfoValue}>
+                      {selectedTask.unit_amount} {selectedTask.unit_type.name || selectedTask.unit_type}
+                    </Text>
+                  </View>
+                )}
                 
                 <View style={styles.modalInfoRow}>
                   <Text style={styles.modalInfoLabel}>Status:</Text>
@@ -362,11 +433,22 @@ export default function TasksScreen({ navigation, route }) {
                     {selectedTask.completed ? 'COMPLETED' : 'IN PROGRESS'}
                   </Text>
                 </View>
+
+                {selectedTask.updated && (
+                  <View style={styles.modalInfoRow}>
+                    <Text style={styles.modalInfoLabel}>Last Updated:</Text>
+                    <Text style={styles.modalInfoValue}>
+                      {formatDeadline(selectedTask.updated)}
+                    </Text>
+                  </View>
+                )}
                 
-                <View style={styles.descriptionContainer}>
-                  <Text style={styles.descriptionLabel}>Description:</Text>
-                  <Text style={styles.descriptionText}>{selectedTask.description}</Text>
-                </View>
+                {selectedTask.description && (
+                  <View style={styles.descriptionContainer}>
+                    <Text style={styles.descriptionLabel}>Description:</Text>
+                    <Text style={styles.descriptionText}>{selectedTask.description}</Text>
+                  </View>
+                )}
                 
                 {/* Кнопки для редактирования и удаления задачи */}
                 <View style={styles.editDeleteContainer}>
@@ -398,7 +480,7 @@ export default function TasksScreen({ navigation, route }) {
                     onPress={() => handleCompleteTask(selectedTask)}
                   >
                     <LinearGradient
-                      colors={['#4dabf7', '#3250b4']}
+                      colors={['#34c759', '#28a745']}
                       style={styles.buttonGradient}
                       start={{ x: 0, y: 0 }}
                       end={{ x: 1, y: 1 }}
@@ -408,7 +490,7 @@ export default function TasksScreen({ navigation, route }) {
                     <View style={styles.buttonGlow} />
                   </TouchableOpacity>
                 )}
-              </View>
+              </ScrollView>
             </View>
           </View>
         )}
@@ -434,66 +516,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#4dabf7',
     borderRadius: 50,
   },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingTop: 50,
-    paddingHorizontal: 20,
-    paddingBottom: 15,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(77, 171, 247, 0.3)',
-  },
-  headerLeft: {
-    flex: 1,
-  },
-  levelText: {
-    color: '#4dabf7',
-    fontSize: 20,
-    fontWeight: 'bold',
-    marginBottom: 5,
-    textShadowColor: '#4dabf7',
-    textShadowOffset: { width: 0, height: 0 },
-    textShadowRadius: 10,
-  },
-  pointsBarContainer: {
-    width: '100%',
-    height: 6,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    borderRadius: 3,
-    overflow: 'hidden',
-  },
-  pointsBar: {
-    width: '62.5%',
-    height: '100%',
-    backgroundColor: '#4dabf7',
-    borderRadius: 3,
-  },
-  pointsText: {
-    position: 'absolute',
-    right: 0,
-    top: 8,
-    color: '#c8d6e5',
-    fontSize: 10,
-  },
-  profileButton: {
-    marginLeft: 15,
-  },
-  profileImage: {
-    width: 70,
-    height: 70,
-    borderRadius: 35,
-    backgroundColor: '#3250b4',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: '#4dabf7',
-  },
-  profileInitial: {
-    color: '#ffffff',
-    fontSize: 18,
-    fontWeight: 'bold',
-  },
   mainContent: {
     flex: 1,
     paddingHorizontal: 20,
@@ -503,13 +525,22 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 10,
+    marginBottom: 20,
   },
   sectionTitle: {
     color: '#ffffff',
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: 'bold',
     letterSpacing: 1,
+  },
+  headerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  totalCountText: {
+    color: '#c8d6e5',
+    fontSize: 12,
+    marginRight: 10,
   },
   addButton: {
     width: 40,
@@ -581,6 +612,12 @@ const styles = StyleSheet.create({
   taskDeadline: {
     color: '#c8d6e5',
     fontSize: 12,
+    marginBottom: 2,
+  },
+  taskCategory: {
+    color: '#4dabf7',
+    fontSize: 11,
+    fontStyle: 'italic',
   },
   taskRight: {
     alignItems: 'flex-end',
@@ -589,25 +626,46 @@ const styles = StyleSheet.create({
     color: '#4dabf7',
     fontSize: 14,
     fontWeight: 'bold',
+    marginBottom: 2,
   },
-  bottomNav: {
-    width: '100%',
-    paddingBottom: 20,
-  },
-  navBackground: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    paddingVertical: 12,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(77, 171, 247, 0.3)',
-  },
-  navItem: {
-    alignItems: 'center',
-  },
-  navText: {
+  unitInfo: {
     color: '#c8d6e5',
-    fontSize: 10,
-    marginTop: 5,
+    fontSize: 11,
+  },
+  paginationContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 15,
+    paddingHorizontal: 10,
+  },
+  paginationButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 6,
+    backgroundColor: 'rgba(16, 20, 45, 0.75)',
+    borderWidth: 1,
+    borderColor: '#4dabf7',
+  },
+  paginationButtonDisabled: {
+    borderColor: '#636366',
+    opacity: 0.5,
+  },
+  paginationText: {
+    color: '#4dabf7',
+    fontSize: 14,
+    fontWeight: '600',
+    marginHorizontal: 5,
+  },
+  paginationTextDisabled: {
+    color: '#636366',
+  },
+  pageInfo: {
+    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: '600',
   },
   modalOverlay: {
     position: 'absolute',
@@ -617,6 +675,8 @@ const styles = StyleSheet.create({
     bottom: 0,
     justifyContent: 'center',
     alignItems: 'center',
+    paddingVertical: 40, 
+    paddingHorizontal: 20,
   },
   modalBackground: {
     position: 'absolute',
@@ -627,9 +687,11 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 0, 0, 0.7)',
   },
   taskDetailsModal: {
-    width: width * 0.85,
+    width: '100%',
+    maxWidth: width * 0.9,
+    maxHeight: height * 0.85, 
     backgroundColor: 'rgba(16, 20, 45, 0.95)',
-    borderRadius: 8,
+    borderRadius: 12,
     borderWidth: 1,
     borderColor: '#4dabf7',
     overflow: 'hidden',
@@ -640,65 +702,111 @@ const styles = StyleSheet.create({
     backgroundColor: '#3250b4',
     paddingVertical: 12,
     paddingHorizontal: 15,
+    minHeight: 60,
   },
   modalDifficultyBadge: {
-    width: 24,
+    width: 24, 
     height: 24,
     borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 10,
+    marginRight: 10, 
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.3)',
   },
-  modalTitle: {
+  modalTitleContainer: {
     flex: 1,
+  },
+  modalTitle: {
     color: '#ffffff',
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: 'bold',
+    marginBottom: 2,
+  },
+  modalDifficultyName: {
+    color: '#c8d6e5',
+    fontSize: 11,
+    fontStyle: 'italic',
   },
   closeButton: {
     padding: 5,
   },
   modalContent: {
-    padding: 20,
+    padding: 15,
+    maxHeight: height * 0.6,
   },
   modalInfoRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 15,
+    marginBottom: 12, 
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(77, 171, 247, 0.2)',
-    paddingBottom: 8,
+    paddingBottom: 6, 
   },
   modalInfoLabel: {
     color: '#c8d6e5',
-    fontSize: 14,
+    fontSize: 13,
+    flex: 1,
   },
   modalInfoValue: {
     color: '#ffffff',
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '600',
+    flex: 2,
+    textAlign: 'right',
   },
   descriptionContainer: {
-    marginBottom: 20,
+    marginBottom: 15,
+    marginTop: 8,
   },
   descriptionLabel: {
     color: '#c8d6e5',
-    fontSize: 14,
-    marginBottom: 8,
+    fontSize: 13,
+    marginBottom: 6,
+    fontWeight: '600',
   },
   descriptionText: {
     color: '#ffffff',
-    fontSize: 14,
-    lineHeight: 20,
+    fontSize: 13,
+    lineHeight: 18,
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    padding: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(77, 171, 247, 0.2)',
+    maxHeight: 80,
+  },
+  editDeleteContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 12,
+    marginBottom: 12,
+  },
+  editButton: {
+    flex: 1,
+    marginRight: 8,
+  },
+  deleteButton: {
+    flex: 1,
+  },
+  editDeleteGradient: {
+    paddingVertical: 10,
+    borderRadius: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  editDeleteText: {
+    color: '#ffffff',
+    fontSize: 13,
+    fontWeight: 'bold',
   },
   actionButton: {
-    height: 50,
-    borderRadius: 6,
+    height: 45,
+    borderRadius: 8,
     overflow: 'hidden',
     position: 'relative',
-    marginTop: 10,
+    marginTop: 8,
+    marginBottom: 5,
   },
   buttonGradient: {
     flex: 1,
@@ -707,7 +815,7 @@ const styles = StyleSheet.create({
   },
   buttonText: {
     color: '#ffffff',
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: 'bold',
     letterSpacing: 1,
   },
@@ -717,36 +825,13 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    borderRadius: 6,
+    borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#4dabf7',
-    shadowColor: '#4dabf7',
+    borderColor: '#34c759',
+    shadowColor: '#34c759',
     shadowOpacity: 0.8,
     shadowRadius: 4,
     shadowOffset: { width: 0, height: 0 },
-  },
-  editDeleteContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: 15,
-  },
-  editButton: {
-    flex: 1,
-    marginRight: 10,
-  },
-  deleteButton: {
-    flex: 1,
-  },
-  editDeleteGradient: {
-    paddingVertical: 10,
-    borderRadius: 6,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  editDeleteText: {
-    color: '#ffffff',
-    fontSize: 14,
-    fontWeight: 'bold',
   },
 });
 

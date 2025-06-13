@@ -29,24 +29,26 @@ export default function AIQuestListScreen({ navigation, route }) {
     return unsubscribe;
   }, [navigation]);
 
-  const fetchQuests = async () => {
+    const fetchQuests = async () => {
     setLoading(true);
     try {
-      const response = await apiService.get('/quests/');
-      console.log('Fetched quests:', response);
-      setQuests(response);
+      const responseData = await apiService.get('quests/'); // responseData - это тот самый объект
+      console.log('Fetched quests data object:', responseData);
+      // Убедись, что responseData.results существует и является массивом
+      setQuests(responseData.results || []); // <--- ИСПРАВЛЕНИЕ
     } catch (error) {
       console.error('Error fetching quests', error);
       Alert.alert('Ошибка', 'Не удалось загрузить ваши квесты. Попробуйте еще раз.');
+      setQuests([]); // Важно установить в массив даже при ошибке
     } finally {
       setLoading(false);
     }
   };
 
-  const fetchQuestDetails = async (questId) => {
+  const fetchQuestDetails = async (id) => {
     setLoadingDetails(true);
     try {
-      const response = await apiService.get(`/quests/${questId}/`);
+      const response = await apiService.get(`quests/${id}/`);
       console.log('Fetched quest details:', response);
       setSelectedQuest(response);
       setQuestDetailsVisible(true);
@@ -58,9 +60,9 @@ export default function AIQuestListScreen({ navigation, route }) {
     }
   };
 
-  const handleCompleteQuest = async (questId) => {
+  const handleCompleteQuest = async (id) => {
     try {
-      await apiService.patch(`/quests/complete/${questId}/`);
+      await apiService.patch(`quests/${id}/complete`);
       Alert.alert('Квест выполнен', 'Вы успешно выполнили этот квест! Награда получена.');
       fetchQuests(); // Обновляем список квестов
 

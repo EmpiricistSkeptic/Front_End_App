@@ -5,7 +5,6 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons, MaterialCommunityIcons, FontAwesome5 } from '@expo/vector-icons';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import apiService from '../services/apiService'; // Убедись, что путь правильный
 import { format, isToday, parseISO } from 'date-fns';
 
@@ -64,46 +63,48 @@ export default function HabitScreen({ navigation }) {
   // --- Логика и Эффекты ---
 
   // Получение списка привычек с сервера
-  const fetchHabits = useCallback(async () => {
-    // Не устанавливаем setLoading(true) здесь, чтобы избежать мерцания при фокусе
-    try {
-      const response = await apiService.get('/habits/');
-      setHabits(Array.isArray(response) ? response : []);
-    } catch (error) {
-      console.error('Error fetching habits:', error.response?.data || error.message);
-      // Обертка текста ошибки в <Text> не нужна, Alert сам это сделает
-      Alert.alert('Loading Error', 'Could not load your habits. Please try again later.');
-      setHabits([]);
-    } finally {
-      // Завершаем начальную загрузку, если она была
-      if (loading) setLoading(false);
-    }
-  }, [loading]); // Зависимость от loading для установки false
-
-  // Начальная загрузка при монтировании компонента
-  useEffect(() => {
-    const initializeScreen = async () => {
-      setLoading(true); // Показываем индикатор при инициализации
-      try {
-        const userToken = await AsyncStorage.getItem('jwt_token');
-        if (!userToken) {
-          navigation.reset({
-            index: 0,
-            routes: [{ name: 'Login' }],
-          }); // Переход на логин, если нет токена
-          setLoading(false); // Скрываем индикатор
-          return;
-        }
-        await fetchHabits(); // Загружаем данные
-      } catch (e) {
-        console.error('Initialization failed:', e);
-        setLoading(false); // Скрываем индикатор при ошибке
-        Alert.alert('Error', 'Failed to initialize the screen.');
+  const fetchHabits = useCallback(async (page = 1) => {
+  // Не устанавливаем setLoading(true) здесь, чтобы избежать мерцания при фокусе
+  try {
+    const response = await apiService.get(`habits/?page=${page}`);
+    console.log('habitsResponse =', response);
+    
+    // Правильная обработка пагинированного ответа
+    if (response && typeof response === 'object') {
+      // Извлекаем результаты из пагинированного ответа
+      const habitsData = response.results || [];
+      
+      // Сохраняем информацию о пагинации, если она нужна в будущем
+      if (response.count !== undefined) {
+        // Здесь можно сохранить общее количество если нужно
+        // setTotalHabitsCount(response.count);
       }
-    };
-    initializeScreen();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [navigation]); // Зависимости: navigation (fetchHabits добавлена ниже)
+      
+      // Устанавливаем привычки из результатов
+      setHabits(habitsData);
+      
+      // Если нужно в будущем, можно отслеживать наличие других страниц
+      // const hasMorePages = response.next !== null;
+    } else {
+      // Если вдруг пришел массив напрямую (непагинированный ответ)
+      const habitsData = Array.isArray(response) ? response : [];
+      setHabits(habitsData);
+    }
+  } catch (error) {
+    console.error('Error fetching habits:', error.response?.data || error.message);
+    Alert.alert('Loading Error', 'Could not load your habits. Please try again later.');
+    setHabits([]);
+  } finally {
+    // Завершаем начальную загрузку, если она была
+    if (loading) setLoading(false);
+  }
+}, [loading]); // Зависимость от loading для установки false
+
+  // Загрузка при монтировании
+  useEffect(() => {
+    setLoading(true);
+    fetchHabits();
+  }, []);
 
   // Обновление данных при фокусе экрана
   useEffect(() => {
@@ -183,12 +184,12 @@ export default function HabitScreen({ navigation }) {
           throw new Error("Cannot update habit without ID.");
         }
         console.log(`Updating habit ${selectedHabit.id}`);
-        response = await apiService.patch(`/habit/${selectedHabit.id}/update/`, payload);
+        await apiService.patch(`habits/${selectedHabit.id}/`, payload);
         Alert.alert('Success', 'Habit updated successfully!');
       } else {
         // Создание новой привычки
         console.log('Creating new habit');
-        response = await apiService.post('/habit/', payload); // Убедись, что эндпоинт `/habit/` правильный для POST
+        await apiService.post('habits/', payload);
         Alert.alert('Success', 'Habit created successfully!');
       }
       handleCloseCreateEditModal(); // Закрываем модалку
@@ -221,7 +222,7 @@ export default function HabitScreen({ navigation }) {
           onPress: async () => {
             try {
               console.log(`Deleting habit ${habitToDelete.id}`);
-              await apiService.patch(`/habit/${habitToDelete.id}/delete/`); // Используем PATCH для деактивации
+              await apiService.delete(`habits/${habitToDelete.id}/`); 
               Alert.alert('Deleted', `Habit "${habitToDelete.title}" deleted.`);
               setHabits(prev => prev.filter(h => h.id !== habitToDelete.id)); // Удаляем из списка локально
               handleCloseDetailsModal(); // Закрываем модалку деталей, если удалили ее
@@ -247,7 +248,7 @@ export default function HabitScreen({ navigation }) {
     try {
       console.log(`Sending track request for habit ${habitToTrack.id}`);
       // Используем URL '/habits/{id}/track/' и метод POST
-      const response = await apiService.post(`/habits/${habitToTrack.id}/track/`, {});
+      const response = await apiService.post(`habits/${habitToTrack.id}/track/`, {});
 
       // Обработка успешного ответа (200 OK)
       if (response && response.streak !== undefined && response.last_tracked) {

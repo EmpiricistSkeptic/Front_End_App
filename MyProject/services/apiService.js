@@ -1,112 +1,114 @@
-import { getToken } from './authService';
+import { getAccessToken, refreshAccessToken, logout } from './authService';
 
 // Базовый URL вашего API
-const BASE_URL = 'https://drf-project-6vzx.onrender.com'; // Замените на ваш URL
+const BASE_URL = 'https://drf-project-6vzx.onrender.com';
+// Общий префикс для всех API-эндпоинтов
+const API_PREFIX = '/api';
 
-// Функция для выполнения запросов с авторизацией
-export const apiRequest = async (endpoint, method = 'GET', data = null) => {
-  try {
-    const token = await getToken();
-
-    const headers = {
-      'Content-Type': 'application/json',
-    };
-
-    if (token) {
-      headers['Authorization'] = `Token ${token}`;
-    }
-
-    const requestOptions = {
-      method,
-      headers,
-    };
-
-    if (data) {
-      requestOptions.body = JSON.stringify(data);
-    }
-
-    const response = await fetch(`${BASE_URL}${endpoint}`, requestOptions);
-
-    if (!response.ok) {
-      throw new Error(`API Error: ${response.status}`);
-    }
-
-    // Читаем ответ как текст
-    const responseText = await response.text();
-    // Если есть содержимое, пытаемся его распарсить, иначе возвращаем null
-    return responseText ? JSON.parse(responseText) : null;
-  } catch (error) {
-    console.error('API Request Error:', error);
-    throw error;
-  }
+// Вспомогательная функция для построения полного URL
+const buildUrl = (endpoint) => {
+  const path = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+  return `${BASE_URL}${API_PREFIX}${path}`;
 };
 
+/**
+ * Выполняет fetch и при 401 пытается обновить токен и повторить запрос
+ */
+const rawRequest = async (url, options) => {
+  let response = await fetch(url, options);
 
-// Объект с методами для работы с API
+  if (response.status === 401) {
+    try {
+      // Попытка обновить токен
+      await refreshAccessToken();
+      const newToken = await getAccessToken();
+      if (!newToken) {
+        throw new Error('No new access token');
+      }
+      // Повторный запрос с новым токеном
+      options.headers['Authorization'] = `Bearer ${newToken}`;
+      response = await fetch(url, options);
+    } catch (err) {
+      // Если не удалось обновить — выходим из сессии
+      logout();
+      throw new Error('Session expired, please log in again');
+    }
+  }
+
+  return response;
+};
+
+/**
+ * Универсальный метод для запросов к API с JSON и авторизацией
+ */
+export const apiRequest = async (endpoint, method = 'GET', data = null) => {
+  const token = await getAccessToken();
+  const headers = { 'Content-Type': 'application/json' };
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+
+  const options = { method, headers };
+  if (data) options.body = JSON.stringify(data);
+
+  const fullUrl = buildUrl(endpoint);
+  console.log(`API Request: ${method} ${fullUrl}`); // Отладочный вывод
+  console.log('Headers:', headers); // Отладочный вывод
+
+
+  const response = await rawRequest(buildUrl(endpoint), options);
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`API Error ${response.status}: ${text}`);
+  }
+
+  const text = await response.text();
+  return text ? JSON.parse(text) : null;
+};
+
 const apiService = {
-  // Метод для проверки авторизации (например, по наличию валидного токена)
   checkAuthStatus: async () => {
     try {
-      const token = await getToken();
-      // Дополнительную проверку можно добавить, если есть соответствующий API-эндпоинт
+      const token = await getAccessToken();
       return Boolean(token);
-    } catch (error) {
-      console.error('Error in checkAuthStatus:', error);
+    } catch (e) {
+      console.error('Error in checkAuthStatus:', e);
       return false;
     }
   },
-  // GET-запрос
   get: (endpoint) => apiRequest(endpoint, 'GET'),
-  // POST-запрос
   post: (endpoint, data) => apiRequest(endpoint, 'POST', data),
-  // PATCH-запрос
   patch: (endpoint, data) => apiRequest(endpoint, 'PATCH', data),
-
-  putFormData: async (endpoint, formData) => {
-    try {
-      const token = await getToken();
-      
-      // Log the formData contents for debugging (in a safe way)
-      console.log('FormData contents:');
-      for (let [key, value] of formData._parts) {
-        if (typeof value === 'object' && value.uri) {
-          console.log(`${key}: [File object with uri: ${value.uri}]`);
-        } else {
-          console.log(`${key}: ${value}`);
-        }
-      }
-      
-      const response = await fetch(`${BASE_URL}${endpoint}`, {
-        method: 'PUT',
-        headers: {
-          'Authorization': `Token ${token}`
-          // Content-Type is automatically set when using FormData
-        },
-        body: formData
-      });
-      
-      // Log server response status
-      console.log('Server response status:', response.status);
-      
-      if (!response.ok) {
-        // Try to get error details from the response
-        const errorText = await response.text();
-        console.error('Server error response:', errorText);
-        throw new Error(`API Error: ${response.status} - ${errorText}`);
-      }
-      
-      const responseText = await response.text();
-      console.log('Server response:', responseText);
-      return responseText ? JSON.parse(responseText) : null;
-    } catch (error) {
-      console.error('PUT FormData Error:', error);
-      throw error;
-    }
-  },
-  // DELETE-запрос
-  delete: (endpoint) => apiRequest(endpoint, 'DELETE'),
-
   put: (endpoint, data) => apiRequest(endpoint, 'PUT', data),
+  delete: (endpoint) => apiRequest(endpoint, 'DELETE'),
+  putFormData: async (endpoint, formData) => {
+    const token = await getAccessToken();
+    const headers = { 'Authorization': `Bearer ${token}` };
+    const options = { method: 'PUT', headers, body: formData };
+
+    const response = await rawRequest(buildUrl(endpoint), options);
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(`API Error ${response.status}: ${text}`);
+    }
+
+    const text = await response.text();
+    return text ? JSON.parse(text) : null;
+  },
+  patchFormData: async (endpoint, formData) => {
+    const token = await getAccessToken();
+    const headers = { 'Authorization': `Bearer ${token}` };
+    const options = { method: 'PATCH', headers, body: formData };
+
+    const response = await rawRequest(buildUrl(endpoint), options);
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(`API Error ${response.status}: ${text}`);
+    }
+
+    const text = await response.text();
+    return text ? JSON.parse(text) : null;
+  },
 };
 
 export default apiService;
+
+

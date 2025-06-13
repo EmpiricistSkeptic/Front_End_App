@@ -8,11 +8,13 @@ import {
   ScrollView,
   Alert,
   Dimensions,
-  Platform
+  Platform,
+  ActivityIndicator,
+  Modal,
+  FlatList
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import apiService from '../services/apiService';
 
@@ -24,6 +26,19 @@ export default function CreateTaskScreen({ navigation, route }) {
   const [difficulty, setDifficulty] = useState('B');
   const [deadlineDate, setDeadlineDate] = useState(new Date());
   const [points, setPoints] = useState('');
+  const [categories, setCategories] = useState([]);
+  const [selectedCategory, setSelectedCategory] = useState(null);
+  const [selectedCategoryName, setSelectedCategoryName] = useState('Select category');
+  const [unitTypes, setUnitTypes] = useState([]);
+  const [selectedUnitType, setSelectedUnitType] = useState(null);
+  const [selectedUnitTypeName, setSelectedUnitTypeName] = useState('Select unit type');
+  const [unitAmount, setUnitAmount] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [loadingData, setLoadingData] = useState(true);
+  
+  // Состояния для модальных окон выбора
+  const [showCategoryModal, setShowCategoryModal] = useState(false);
+  const [showUnitTypeModal, setShowUnitTypeModal] = useState(false);
   
   // Состояния для работы с DateTimePicker
   const [showDatePicker, setShowDatePicker] = useState(false);
@@ -33,27 +48,18 @@ export default function CreateTaskScreen({ navigation, route }) {
   // Форматированная строка дедлайна для отображения
   const [formattedDeadline, setFormattedDeadline] = useState('');
 
-  // Запускаем эффект один раз, чтобы удалить не сериализуемый callback из navigation params
+  // Загружаем категории и типы единиц измерения при монтировании компонента
+  useEffect(() => {
+    fetchCategoriesAndUnitTypes();
+  }, []);
+
+  // Удаляем не сериализуемый callback из navigation params
   useEffect(() => {
     if (route?.params?.onGoBack) {
       const { onGoBack, ...rest } = route.params;
       navigation.setParams(rest);
     }
   }, []);
-
-  // Проверка наличия токена для авторизации
-  useEffect(() => {
-    const checkToken = async () => {
-      const token = await AsyncStorage.getItem('jwt_token');
-      if (!token) {
-        navigation.reset({
-          index: 0,
-          routes: [{ name: 'Login' }],
-        });
-      }
-    };
-    checkToken();
-  }, [navigation]);
 
   // Форматируем дату для отображения при изменении выбранной даты
   useEffect(() => {
@@ -76,36 +82,102 @@ export default function CreateTaskScreen({ navigation, route }) {
     formatDeadline();
   }, [deadlineDate]);
 
+  const fetchCategoriesAndUnitTypes = async () => {
+  setLoadingData(true);
+
+  // Categories
+  try {
+    const response = await apiService.get('categories/');
+    console.log('categoriesResponse =', response);
+    const categoriesData = Array.isArray(response)
+      ? response
+      : response.results ?? [];
+
+    setCategories(categoriesData);
+    if (categoriesData.length) {
+      setSelectedCategory(categoriesData[0].id);
+      setSelectedCategoryName(categoriesData[0].name);
+    }
+  } catch (err) {
+    console.error('Error fetching categories:', err);
+    Alert.alert('Error', 'Не удалось загрузить категории.');
+    setLoadingData(false);
+    return;
+  }
+
+  // Unit Types
+  try {
+    const response = await apiService.get('unit-types/');
+    console.log('unitTypesResponse =', response);
+    const unitTypesData = Array.isArray(response)
+      ? response
+      : response.results ?? [];
+
+    setUnitTypes(unitTypesData);
+    if (unitTypesData.length) {
+      setSelectedUnitType(unitTypesData[0].id);
+      setSelectedUnitTypeName(
+        `${unitTypesData[0].name} (${unitTypesData[0].symbol})`
+      );
+    }
+  } catch (err) {
+    console.error('Error fetching unit types:', err);
+    Alert.alert('Error', 'Не удалось загрузить типы единиц.');
+  } finally {
+    setLoadingData(false);
+  }
+};
+
+
+
+
   const handleCreateTask = async () => {
-    if (!title || !description || !formattedDeadline) {
-      Alert.alert('Error', 'Please fill in all required fields');
+    if (!title) {
+      Alert.alert('Error', 'Title is required');
+      return;
+    }
+
+    if (!selectedCategory) {
+      Alert.alert('Error', 'Please select a category');
       return;
     }
 
     const pointsNumber = parseInt(points);
-    if (isNaN(pointsNumber)) {
-      Alert.alert('Error', 'Points must be a number');
+    if (isNaN(pointsNumber) || pointsNumber < 0) {
+      Alert.alert('Error', 'Points must be a positive number');
       return;
     }
 
+    const unitAmountNumber = parseInt(unitAmount);
+    if (isNaN(unitAmountNumber) || unitAmountNumber < 0) {
+      Alert.alert('Error', 'Unit amount must be a positive number');
+      return;
+    }
+
+    setLoading(true);
     try {
-      // Формируем дедлайн в формате, который ожидает ваш API
+      // Формируем дедлайн в формате, который ожидает API
       const deadline = deadlineDate.toISOString();
       
-      await apiService.post('/tasks/create/', {
+      await apiService.post('tasks/', {
         title,
-        description,
+        description: description || "",
         difficulty,
         deadline,
         points: pointsNumber,
-        completed: false
+        completed: false,
+        category_id: selectedCategory,
+        unit_type_id: selectedUnitType,
+        unit_amount: unitAmountNumber
       });
 
       Alert.alert('Success', 'Task created successfully!');
       navigation.goBack();
     } catch (error) {
-      console.error('Error creating task', error.response || error);
+      console.error('Error creating task', error.response ? error.response.data : error);
       Alert.alert('Error', 'Failed to create task. Please try again.');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -150,6 +222,17 @@ export default function CreateTaskScreen({ navigation, route }) {
     }
   };
 
+  if (loadingData) {
+    return (
+      <View style={[styles.container, styles.loadingContainer]}>
+        <LinearGradient colors={['#121539', '#080b20']} style={styles.background}>
+          <ActivityIndicator size="large" color="#4dabf7" />
+          <Text style={styles.loadingText}>Loading data...</Text>
+        </LinearGradient>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.container}>
       <LinearGradient colors={['#121539', '#080b20']} style={styles.background}>
@@ -182,6 +265,15 @@ export default function CreateTaskScreen({ navigation, route }) {
             numberOfLines={4}
             textAlignVertical="top"
           />
+
+          <Text style={styles.label}>Category</Text>
+          <TouchableOpacity 
+            style={styles.dropdownButton}
+            onPress={() => setShowCategoryModal(true)}
+          >
+            <Text style={styles.dropdownButtonText}>{selectedCategoryName}</Text>
+            <Ionicons name="chevron-down" size={20} color="#ffffff" />
+          </TouchableOpacity>
 
           <Text style={styles.label}>Difficulty</Text>
           <View style={styles.difficultySelector}>
@@ -263,6 +355,25 @@ export default function CreateTaskScreen({ navigation, route }) {
             />
           )}
 
+          <Text style={styles.label}>Unit Type</Text>
+          <TouchableOpacity 
+            style={styles.dropdownButton}
+            onPress={() => setShowUnitTypeModal(true)}
+          >
+            <Text style={styles.dropdownButtonText}>{selectedUnitTypeName}</Text>
+            <Ionicons name="chevron-down" size={20} color="#ffffff" />
+          </TouchableOpacity>
+
+          <Text style={styles.label}>Unit Amount</Text>
+          <TextInput
+            style={styles.input}
+            value={unitAmount}
+            onChangeText={setUnitAmount}
+            placeholder="Enter unit amount"
+            placeholderTextColor="#88889C"
+            keyboardType="numeric"
+          />
+
           <Text style={styles.label}>Points Reward</Text>
           <TextInput
             style={styles.input}
@@ -276,6 +387,7 @@ export default function CreateTaskScreen({ navigation, route }) {
           <TouchableOpacity 
             style={styles.createButton}
             onPress={handleCreateTask}
+            disabled={loading}
           >
             <LinearGradient
               colors={['#4dabf7', '#3250b4']}
@@ -283,11 +395,103 @@ export default function CreateTaskScreen({ navigation, route }) {
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
             >
-              <Text style={styles.buttonText}>CREATE TASK</Text>
+              {loading ? (
+                <ActivityIndicator color="#ffffff" size="small" />
+              ) : (
+                <Text style={styles.buttonText}>CREATE TASK</Text>
+              )}
             </LinearGradient>
             <View style={styles.buttonGlow} />
           </TouchableOpacity>
         </ScrollView>
+        
+        {/* Modal для выбора категории */}
+        <Modal
+          visible={showCategoryModal}
+          transparent={true}
+          animationType="fade"
+          onRequestClose={() => setShowCategoryModal(false)}
+        >
+          <View style={styles.modalContainer}>
+            <View style={styles.modalContent}>
+              <Text style={styles.modalTitle}>Select Category</Text>
+              <FlatList
+                data={categories}
+                keyExtractor={(item) => item.id.toString()}
+                renderItem={({ item }) => (
+                  <TouchableOpacity
+                    style={styles.modalItem}
+                    onPress={() => {
+                      setSelectedCategory(item.id);
+                      setSelectedCategoryName(item.name);
+                      setShowCategoryModal(false);
+                    }}
+                  >
+                    <Text style={[
+                      styles.modalItemText, 
+                      selectedCategory === item.id && styles.selectedModalItemText
+                    ]}>
+                      {item.name}
+                    </Text>
+                    {selectedCategory === item.id && (
+                      <Ionicons name="checkmark" size={20} color="#4dabf7" />
+                    )}
+                  </TouchableOpacity>
+                )}
+              />
+              <TouchableOpacity
+                style={styles.modalCloseButton}
+                onPress={() => setShowCategoryModal(false)}
+              >
+                <Text style={styles.modalCloseButtonText}>Close</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
+        
+        {/* Modal для выбора типа единицы измерения */}
+        <Modal
+          visible={showUnitTypeModal}
+          transparent={true}
+          animationType="fade"
+          onRequestClose={() => setShowUnitTypeModal(false)}
+        >
+          <View style={styles.modalContainer}>
+            <View style={styles.modalContent}>
+              <Text style={styles.modalTitle}>Select Unit Type</Text>
+              <FlatList
+                data={unitTypes}
+                keyExtractor={(item) => item.id.toString()}
+                renderItem={({ item }) => (
+                  <TouchableOpacity
+                    style={styles.modalItem}
+                    onPress={() => {
+                      setSelectedUnitType(item.id);
+                      setSelectedUnitTypeName(`${item.name} (${item.symbol})`);
+                      setShowUnitTypeModal(false);
+                    }}
+                  >
+                    <Text style={[
+                      styles.modalItemText, 
+                      selectedUnitType === item.id && styles.selectedModalItemText
+                    ]}>
+                      {`${item.name} (${item.symbol})`}
+                    </Text>
+                    {selectedUnitType === item.id && (
+                      <Ionicons name="checkmark" size={20} color="#4dabf7" />
+                    )}
+                  </TouchableOpacity>
+                )}
+              />
+              <TouchableOpacity
+                style={styles.modalCloseButton}
+                onPress={() => setShowUnitTypeModal(false)}
+              >
+                <Text style={styles.modalCloseButtonText}>Close</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
       </LinearGradient>
     </View>
   );
@@ -299,6 +503,15 @@ const styles = StyleSheet.create({
   },
   background: {
     flex: 1,
+  },
+  loadingContainer: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    color: '#ffffff',
+    marginTop: 10,
+    fontSize: 16,
   },
   header: {
     flexDirection: 'row',
@@ -344,6 +557,71 @@ const styles = StyleSheet.create({
   textArea: {
     height: 100,
     paddingTop: 12,
+  },
+  dropdownButton: {
+    backgroundColor: 'rgba(16, 20, 45, 0.75)',
+    borderWidth: 1,
+    borderColor: '#3250b4',
+    borderRadius: 8,
+    padding: 12,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  dropdownButtonText: {
+    color: '#ffffff',
+    fontSize: 14,
+  },
+  modalContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+  },
+  modalContent: {
+    width: width * 0.8,
+    maxHeight: 400,
+    backgroundColor: '#121539',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#3250b4',
+    padding: 20,
+  },
+  modalTitle: {
+    color: '#ffffff',
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 15,
+    textAlign: 'center',
+  },
+  modalItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 15,
+    paddingHorizontal: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(77, 171, 247, 0.3)',
+  },
+  modalItemText: {
+    color: '#ffffff',
+    fontSize: 16,
+  },
+  selectedModalItemText: {
+    color: '#4dabf7',
+    fontWeight: '500',
+  },
+  modalCloseButton: {
+    marginTop: 20,
+    backgroundColor: 'rgba(77, 171, 247, 0.2)',
+    padding: 12,
+    borderRadius: 6,
+    alignItems: 'center',
+  },
+  modalCloseButtonText: {
+    color: '#ffffff',
+    fontSize: 16,
+    fontWeight: '600',
   },
   difficultySelector: {
     flexDirection: 'row',
@@ -399,7 +677,7 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     shadowOffset: { width: 0, height: 0 },
   },
-  // Новые стили для компонентов выбора даты и времени
+  // Стили для компонентов выбора даты и времени
   dateTimeContainer: {
     backgroundColor: 'rgba(16, 20, 45, 0.75)',
     borderWidth: 1,

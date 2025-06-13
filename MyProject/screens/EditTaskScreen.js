@@ -9,11 +9,12 @@ import {
   Alert,
   Dimensions,
   ActivityIndicator,
-  Platform
+  Platform,
+  Modal,
+  FlatList
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import apiService from '../services/apiService';
 
@@ -25,13 +26,26 @@ export default function EditTaskScreen({ navigation, route }) {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [difficulty, setDifficulty] = useState('B');
-  // Вместо строки дедлайна используем дату
   const [deadlineDate, setDeadlineDate] = useState(new Date());
   const [formattedDeadline, setFormattedDeadline] = useState('');
   const [points, setPoints] = useState('');
   const [loading, setLoading] = useState(true);
+  const [loadingData, setLoadingData] = useState(true);
 
-  // Состояния для работы с DateTimePicker
+  // Added fields to match CreateTaskScreen
+  const [categories, setCategories] = useState([]);
+  const [selectedCategory, setSelectedCategory] = useState(null);
+  const [selectedCategoryName, setSelectedCategoryName] = useState('Select category');
+  const [unitTypes, setUnitTypes] = useState([]);
+  const [selectedUnitType, setSelectedUnitType] = useState(null);
+  const [selectedUnitTypeName, setSelectedUnitTypeName] = useState('Select unit type');
+  const [unitAmount, setUnitAmount] = useState('');
+  
+  // Modal states
+  const [showCategoryModal, setShowCategoryModal] = useState(false);
+  const [showUnitTypeModal, setShowUnitTypeModal] = useState(false);
+  
+  // DateTimePicker states
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
   const [dateTimePickerMode, setDateTimePickerMode] = useState('date');
@@ -44,71 +58,11 @@ export default function EditTaskScreen({ navigation, route }) {
     }
   }, []);
 
-  // Check authentication and fetch task details
   useEffect(() => {
-    const getTokenAndFetchTask = async () => {
-      try {
-        const token = await AsyncStorage.getItem('jwt_token');
-        if (!token) {
-          navigation.reset({
-            index: 0,
-            routes: [{ name: 'Login' }],
-          });
-          return;
-        }
-        fetchTaskDetails();
-      } catch (e) {
-        console.error('Failed to get token', e);
-        setLoading(false);
-      }
-    };
-    
-    getTokenAndFetchTask();
-  }, [taskId]);
-  
-  const fetchTaskDetails = async () => {
-    try {
-      console.log('Fetching task with ID:', taskId);
-      
-      if (!taskId) {
-        console.error('Task ID is missing');
-        Alert.alert('Error', 'Task ID is missing. Please try again.');
-        setLoading(false);
-        return;
-      }
-      
-      const token = await AsyncStorage.getItem('userToken');
-      console.log('Using token for fetch:', token ? 'Token exists' : 'No token');
-      
-      const response = await apiService.get(`/tasks/${taskId}/`);
-      console.log('Task details response:', JSON.stringify(response));
-      
-      if (response) {
-        const task = response;
-        console.log('Task data received:', task);
-        
-        setTitle(task.title || '');
-        setDescription(task.description || '');
-        setDifficulty(task.difficulty || 'B');
-        // Если получен дедлайн, преобразуем его в объект Date
-        if (task.deadline) {
-          setDeadlineDate(new Date(task.deadline));
-        }
-        setPoints((task.points || 0).toString());
-      } else {
-        console.error('Response exists but empty:', response);
-        throw new Error('No data received from API');
-      }
-      
-      setLoading(false);
-    } catch (error) {
-      console.error('Error fetching task details', error);
-      Alert.alert('Error', `Failed to load task details: ${error.message}`);
-      setLoading(false);
-    }
-  };
+    fetchCategoriesAndUnitTypes();
+  }, []);
 
-  // Форматируем дату дедлайна для отображения
+  // Format deadline date for display
   useEffect(() => {
     const formatDeadline = () => {
       const dateStr = deadlineDate.toLocaleDateString('en-US', {
@@ -126,15 +80,130 @@ export default function EditTaskScreen({ navigation, route }) {
     formatDeadline();
   }, [deadlineDate]);
 
+  const fetchCategoriesAndUnitTypes = async () => {
+    setLoadingData(true);
+
+    // Fetch Categories
+    try {
+      const response = await apiService.get('categories/');
+      console.log('categoriesResponse =', response);
+      const categoriesData = Array.isArray(response)
+        ? response
+        : response.results ?? [];
+
+      setCategories(categoriesData);
+    } catch (err) {
+      console.error('Error fetching categories:', err);
+      Alert.alert('Error', 'Failed to load categories.');
+      setLoadingData(false);
+      return;
+    }
+
+    // Fetch Unit Types
+    try {
+      const response = await apiService.get('unit-types/');
+      console.log('unitTypesResponse =', response);
+      const unitTypesData = Array.isArray(response)
+        ? response
+        : response.results ?? [];
+
+      setUnitTypes(unitTypesData);
+    } catch (err) {
+      console.error('Error fetching unit types:', err);
+      Alert.alert('Error', 'Failed to load unit types.');
+    } finally {
+      setLoadingData(false);
+      // Now fetch task details after categories and unit types are loaded
+      fetchTaskDetails();
+    }
+  };
+  
+  const fetchTaskDetails = async () => {
+    try {
+      console.log('Fetching task with ID:', taskId);
+      
+      if (!taskId) {
+        console.error('Task ID is missing');
+        Alert.alert('Error', 'Task ID is missing. Please try again.');
+        setLoading(false);
+        return;
+      }
+      
+      const response = await apiService.get(`tasks/${taskId}/`);
+      console.log('Task details response:', JSON.stringify(response));
+      
+      if (response) {
+        const task = response;
+        console.log('Task data received:', task);
+        
+        setTitle(task.title || '');
+        setDescription(task.description || '');
+        setDifficulty(task.difficulty || 'B');
+        
+        // Set deadline date
+        if (task.deadline) {
+          setDeadlineDate(new Date(task.deadline));
+        }
+        
+        setPoints((task.points || 0).toString());
+        
+        // Set category if exists
+        if (task.category_id) {
+          setSelectedCategory(task.category_id);
+          // Find category name by ID
+          const category = categories.find(cat => cat.id === task.category_id);
+          if (category) {
+            setSelectedCategoryName(category.name);
+          }
+        }
+        
+        // Set unit type if exists
+        if (task.unit_type_id) {
+          setSelectedUnitType(task.unit_type_id);
+          // Find unit type name by ID
+          const unitType = unitTypes.find(ut => ut.id === task.unit_type_id);
+          if (unitType) {
+            setSelectedUnitTypeName(`${unitType.name} (${unitType.symbol})`);
+          }
+        }
+        
+        // Set unit amount if exists
+        if (task.unit_amount) {
+          setUnitAmount(task.unit_amount.toString());
+        }
+      } else {
+        console.error('Response exists but empty:', response);
+        throw new Error('No data received from API');
+      }
+      
+      setLoading(false);
+    } catch (error) {
+      console.error('Error fetching task details', error);
+      Alert.alert('Error', `Failed to load task details: ${error.message}`);
+      setLoading(false);
+    }
+  };
+
   const handleUpdateTask = async () => {
-    if (!title || !description || !deadlineDate) {
-      Alert.alert('Error', 'Please fill in all required fields');
+    if (!title) {
+      Alert.alert('Error', 'Title is required');
+      return;
+    }
+
+    if (!selectedCategory) {
+      Alert.alert('Error', 'Please select a category');
       return;
     }
 
     const pointsNumber = parseInt(points);
-    if (isNaN(pointsNumber)) {
-      Alert.alert('Error', 'Points must be a number');
+    if (isNaN(pointsNumber) || pointsNumber < 0) {
+      Alert.alert('Error', 'Points must be a positive number');
+      return;
+    }
+
+    const unitAmountNumber = parseInt(unitAmount);
+    if (isNaN(unitAmountNumber) || unitAmountNumber < 0) {
+      Alert.alert('Error', 'Unit amount must be a positive number');
       return;
     }
     
@@ -143,20 +212,18 @@ export default function EditTaskScreen({ navigation, route }) {
     try {
       const updateData = {
         title,
-        description,
+        description: description || "",
         difficulty,
-        deadline: deadlineDate.toISOString(), // Передача дедлайна в ISO формате
+        deadline: deadlineDate.toISOString(),
         points: pointsNumber,
+        category_id: selectedCategory,
+        unit_type_id: selectedUnitType,
+        unit_amount: unitAmountNumber
       };
       
       console.log('Updating task with data:', updateData);
       
-      if (typeof apiService.put === 'function') {
-        await apiService.put(`/tasks/${taskId}/update/`, updateData);
-      } else {
-        console.log('apiService.put not available, using PATCH instead');
-        await apiService.patch(`/tasks/${taskId}/update/`, updateData);
-      }
+      await apiService.put(`tasks/${taskId}/`, updateData);
 
       Alert.alert('Success', 'Task updated successfully!');
       navigation.navigate('Home', { taskUpdated: true });
@@ -166,12 +233,15 @@ export default function EditTaskScreen({ navigation, route }) {
       if (error.response && error.response.status === 405) {
         try {
           console.log('PUT failed with 405, trying PATCH instead');
-          await apiService.patch(`/tasks/${taskId}/update/`, {
+          await apiService.patch(`tasks/${taskId}/update/`, {
             title,
-            description,
+            description: description || "",
             difficulty,
             deadline: deadlineDate.toISOString(),
             points: pointsNumber,
+            category_id: selectedCategory,
+            unit_type_id: selectedUnitType,
+            unit_amount: unitAmountNumber
           });
           
           Alert.alert('Success', 'Task updated successfully!');
@@ -192,7 +262,7 @@ export default function EditTaskScreen({ navigation, route }) {
     setDifficulty(value);
   };
 
-  // Показываем DateTimePicker для выбора даты или времени
+  // Show DateTimePicker for selecting date or time
   const showDateTimePicker = (mode) => {
     setDateTimePickerMode(mode);
     if (mode === 'date') {
@@ -202,7 +272,7 @@ export default function EditTaskScreen({ navigation, route }) {
     }
   };
 
-  // Обработка выбора даты и времени
+  // Handle date/time changes
   const handleDateChange = (event, selectedDate) => {
     const currentDate = selectedDate || deadlineDate;
     
@@ -212,23 +282,35 @@ export default function EditTaskScreen({ navigation, route }) {
     }
     
     if (dateTimePickerMode === 'date') {
-      // Обновляем дату, сохраняя текущее время
+      // Update date while preserving time
       const newDate = new Date(currentDate);
       newDate.setHours(deadlineDate.getHours(), deadlineDate.getMinutes());
       setDeadlineDate(newDate);
       
+      // On Android, show time picker after date selection
       if (event.type === 'set' && Platform.OS === 'android') {
         setTimeout(() => {
           showDateTimePicker('time');
         }, 500);
       }
     } else {
-      // Обновляем время, сохраняя дату
+      // Update time while preserving date
       const newDate = new Date(deadlineDate);
       newDate.setHours(currentDate.getHours(), currentDate.getMinutes());
       setDeadlineDate(newDate);
     }
   };
+
+  if (loadingData) {
+    return (
+      <View style={[styles.container, styles.loadingContainer]}>
+        <LinearGradient colors={['#121539', '#080b20']} style={styles.background}>
+          <ActivityIndicator size="large" color="#4dabf7" />
+          <Text style={styles.loadingText}>Loading data...</Text>
+        </LinearGradient>
+      </View>
+    );
+  }
 
   if (loading) {
     return (
@@ -273,6 +355,15 @@ export default function EditTaskScreen({ navigation, route }) {
             numberOfLines={4}
             textAlignVertical="top"
           />
+
+          <Text style={styles.label}>Category</Text>
+          <TouchableOpacity 
+            style={styles.dropdownButton}
+            onPress={() => setShowCategoryModal(true)}
+          >
+            <Text style={styles.dropdownButtonText}>{selectedCategoryName}</Text>
+            <Ionicons name="chevron-down" size={20} color="#ffffff" />
+          </TouchableOpacity>
 
           <Text style={styles.label}>Difficulty</Text>
           <View style={styles.difficultySelector}>
@@ -350,6 +441,25 @@ export default function EditTaskScreen({ navigation, route }) {
             />
           )}
 
+          <Text style={styles.label}>Unit Type</Text>
+          <TouchableOpacity 
+            style={styles.dropdownButton}
+            onPress={() => setShowUnitTypeModal(true)}
+          >
+            <Text style={styles.dropdownButtonText}>{selectedUnitTypeName}</Text>
+            <Ionicons name="chevron-down" size={20} color="#ffffff" />
+          </TouchableOpacity>
+
+          <Text style={styles.label}>Unit Amount</Text>
+          <TextInput
+            style={styles.input}
+            value={unitAmount}
+            onChangeText={setUnitAmount}
+            placeholder="Enter unit amount"
+            placeholderTextColor="#88889C"
+            keyboardType="numeric"
+          />
+
           <Text style={styles.label}>Points Reward</Text>
           <TextInput
             style={styles.input}
@@ -363,6 +473,7 @@ export default function EditTaskScreen({ navigation, route }) {
           <TouchableOpacity 
             style={styles.updateButton}
             onPress={handleUpdateTask}
+            disabled={loading}
           >
             <LinearGradient
               colors={['#4dabf7', '#3250b4']}
@@ -370,11 +481,103 @@ export default function EditTaskScreen({ navigation, route }) {
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
             >
-              <Text style={styles.buttonText}>UPDATE TASK</Text>
+              {loading ? (
+                <ActivityIndicator color="#ffffff" size="small" />
+              ) : (
+                <Text style={styles.buttonText}>UPDATE TASK</Text>
+              )}
             </LinearGradient>
             <View style={styles.buttonGlow} />
           </TouchableOpacity>
         </ScrollView>
+
+        {/* Modal for category selection */}
+        <Modal
+          visible={showCategoryModal}
+          transparent={true}
+          animationType="fade"
+          onRequestClose={() => setShowCategoryModal(false)}
+        >
+          <View style={styles.modalContainer}>
+            <View style={styles.modalContent}>
+              <Text style={styles.modalTitle}>Select Category</Text>
+              <FlatList
+                data={categories}
+                keyExtractor={(item) => item.id.toString()}
+                renderItem={({ item }) => (
+                  <TouchableOpacity
+                    style={styles.modalItem}
+                    onPress={() => {
+                      setSelectedCategory(item.id);
+                      setSelectedCategoryName(item.name);
+                      setShowCategoryModal(false);
+                    }}
+                  >
+                    <Text style={[
+                      styles.modalItemText, 
+                      selectedCategory === item.id && styles.selectedModalItemText
+                    ]}>
+                      {item.name}
+                    </Text>
+                    {selectedCategory === item.id && (
+                      <Ionicons name="checkmark" size={20} color="#4dabf7" />
+                    )}
+                  </TouchableOpacity>
+                )}
+              />
+              <TouchableOpacity
+                style={styles.modalCloseButton}
+                onPress={() => setShowCategoryModal(false)}
+              >
+                <Text style={styles.modalCloseButtonText}>Close</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
+        
+        {/* Modal for unit type selection */}
+        <Modal
+          visible={showUnitTypeModal}
+          transparent={true}
+          animationType="fade"
+          onRequestClose={() => setShowUnitTypeModal(false)}
+        >
+          <View style={styles.modalContainer}>
+            <View style={styles.modalContent}>
+              <Text style={styles.modalTitle}>Select Unit Type</Text>
+              <FlatList
+                data={unitTypes}
+                keyExtractor={(item) => item.id.toString()}
+                renderItem={({ item }) => (
+                  <TouchableOpacity
+                    style={styles.modalItem}
+                    onPress={() => {
+                      setSelectedUnitType(item.id);
+                      setSelectedUnitTypeName(`${item.name} (${item.symbol})`);
+                      setShowUnitTypeModal(false);
+                    }}
+                  >
+                    <Text style={[
+                      styles.modalItemText, 
+                      selectedUnitType === item.id && styles.selectedModalItemText
+                    ]}>
+                      {`${item.name} (${item.symbol})`}
+                    </Text>
+                    {selectedUnitType === item.id && (
+                      <Ionicons name="checkmark" size={20} color="#4dabf7" />
+                    )}
+                  </TouchableOpacity>
+                )}
+              />
+              <TouchableOpacity
+                style={styles.modalCloseButton}
+                onPress={() => setShowUnitTypeModal(false)}
+              >
+                <Text style={styles.modalCloseButtonText}>Close</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
       </LinearGradient>
     </View>
   );
@@ -441,6 +644,71 @@ const styles = StyleSheet.create({
     height: 100,
     paddingTop: 12,
   },
+  dropdownButton: {
+    backgroundColor: 'rgba(16, 20, 45, 0.75)',
+    borderWidth: 1,
+    borderColor: '#3250b4',
+    borderRadius: 8,
+    padding: 12,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  dropdownButtonText: {
+    color: '#ffffff',
+    fontSize: 14,
+  },
+  modalContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+  },
+  modalContent: {
+    width: width * 0.8,
+    maxHeight: 400,
+    backgroundColor: '#121539',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#3250b4',
+    padding: 20,
+  },
+  modalTitle: {
+    color: '#ffffff',
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 15,
+    textAlign: 'center',
+  },
+  modalItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 15,
+    paddingHorizontal: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(77, 171, 247, 0.3)',
+  },
+  modalItemText: {
+    color: '#ffffff',
+    fontSize: 16,
+  },
+  selectedModalItemText: {
+    color: '#4dabf7',
+    fontWeight: '500',
+  },
+  modalCloseButton: {
+    marginTop: 20,
+    backgroundColor: 'rgba(77, 171, 247, 0.2)',
+    padding: 12,
+    borderRadius: 6,
+    alignItems: 'center',
+  },
+  modalCloseButtonText: {
+    color: '#ffffff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
   difficultySelector: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -461,6 +729,39 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontSize: 16,
     fontWeight: 'bold',
+  },
+  updateButton: {
+    height: 50,
+    borderRadius: 6,
+    overflow: 'hidden',
+    position: 'relative',
+    marginTop: 30,
+    marginBottom: 30,
+  },
+  buttonGradient: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  buttonText: {
+    color: '#ffffff',
+    fontSize: 16,
+    fontWeight: 'bold',
+    letterSpacing: 1,
+  },
+  buttonGlow: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#4dabf7',
+    shadowColor: '#4dabf7',
+    shadowOpacity: 0.8,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 0 },
   },
   dateTimeContainer: {
     backgroundColor: 'rgba(16, 20, 45, 0.75)',
@@ -501,38 +802,5 @@ const styles = StyleSheet.create({
     marginTop: 10,
     backgroundColor: Platform.OS === 'ios' ? 'rgba(16, 20, 45, 0.95)' : 'transparent',
     borderRadius: 8,
-  },
-  updateButton: {
-    height: 50,
-    borderRadius: 6,
-    overflow: 'hidden',
-    position: 'relative',
-    marginTop: 30,
-    marginBottom: 30,
-  },
-  buttonGradient: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  buttonText: {
-    color: '#ffffff',
-    fontSize: 16,
-    fontWeight: 'bold',
-    letterSpacing: 1,
-  },
-  buttonGlow: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: '#4dabf7',
-    shadowColor: '#4dabf7',
-    shadowOpacity: 0.8,
-    shadowRadius: 4,
-    shadowOffset: { width: 0, height: 0 },
   },
 });

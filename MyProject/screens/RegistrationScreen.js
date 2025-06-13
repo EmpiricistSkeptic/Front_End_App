@@ -1,73 +1,53 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Dimensions, StatusBar, Alert, ActivityIndicator } from 'react-native';
+import {
+  View, Text, TextInput, TouchableOpacity, StyleSheet,
+  Dimensions, StatusBar, Alert, ActivityIndicator
+} from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+// 1. Импортируем нашу функцию регистрации
+import { register } from '../services/authService';
 
 const { width, height } = Dimensions.get('window');
 
 export default function RegistrationScreen({ navigation }) {
-  // Состояния для хранения введенных пользователем данных
   const [username, setUsername] = useState('');
-  const [email, setEmail] = useState('');
+  const [email, setEmail]     = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading]   = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
 
-  // Функция для отправки данных на сервер
   const handleRegistration = async () => {
-    // Сбросить сообщение об ошибке
     setErrorMessage('');
-    
-    // Проверки валидности введенных данных
+
+    // валидация полей
     if (!username || !email || !password || !confirmPassword) {
       setErrorMessage('Пожалуйста, заполните все поля');
       return;
     }
-    
     if (password !== confirmPassword) {
       setErrorMessage('Пароли не совпадают');
       return;
     }
-    
-    // Базовая проверка формата email
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email)) {
       setErrorMessage('Пожалуйста, введите корректный email');
       return;
     }
-    
+
     try {
       setLoading(true);
+      // 2. Вместо fetch вызываем нашу обёртку
+      await register({ username, email, password, password2: confirmPassword });
       
-      // Отправка запроса на регистрацию
-      const response = await fetch('https://drf-project-6vzx.onrender.com/register/', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          username,
-          email,
-          password
-        }),
-      });
-      
-      const data = await response.json();
-      
-      if (!response.ok) {
-        // Обработка ошибок от API
-        throw new Error(data.detail || JSON.stringify(data));
-      }
-      
-      // Регистрация успешна
+      // 3. После успешной регистрации можно сразу перейти на главный экран
       Alert.alert('Успешно', 'Вы успешно зарегистрировались!', [
         { text: 'OK', onPress: () => navigation.navigate('Login') }
       ]);
-      
     } catch (error) {
-      // Отображение ошибки пользователю
-      setErrorMessage(`Ошибка регистрации: ${error.message}`);
-      console.error('Ошибка регистрации:', error);
+      // 4. register выбросит Error с сообщением из API
+      setErrorMessage(error.message || 'Не удалось зарегистрироваться');
+      console.error('Registration error:', error);
     } finally {
       setLoading(false);
     }

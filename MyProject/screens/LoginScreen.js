@@ -1,3 +1,4 @@
+// LoginScreen.js
 import React, { useState } from 'react';
 import {
   View,
@@ -8,82 +9,48 @@ import {
   Dimensions,
   StatusBar,
   ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { saveToken } from '../services/authService'; // Импортируем функцию сохранения токена
+// Импортируем функцию логина из authService
+import { login as authLogin } from '../services/authService';
 
 const { width, height } = Dimensions.get('window');
 
-const LoginScreen = ({ navigation }) => {
-  // Состояния для хранения введенных пользователем данных
+export default function LoginScreen({ navigation }) {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
 
-  // Функция для отправки данных на сервер
   const handleLogin = async () => {
-    // Сбросить сообщение об ошибке
     setErrorMessage('');
-    
-    // Проверки валидности введенных данных
+
     if (!username || !password) {
       setErrorMessage('Пожалуйста, введите имя пользователя и пароль');
       return;
     }
-    
+
     try {
       setLoading(true);
+      // Вызываем обёртку authService.login
+      await authLogin({ username, password });
       
-      // Отправка запроса на аутентификацию
-      const response = await fetch('https://drf-project-6vzx.onrender.com/login/', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          username,
-          password
-        }),
+      // Успешный вход, переходим на Home (обнуляя стек)
+      navigation.reset({
+        index: 0,
+        routes: [{ name: 'Home' }],
       });
-      
-      const data = await response.json();
-      
-      if (!response.ok) {
-        // Обработка ошибок от API
-        throw new Error(data.detail || 'Неверное имя пользователя или пароль');
-      }
-      
-      // Сохранение токена аутентификации с использованием нашего сервиса
-      if (data.token) {
-        // Вместо прямого сохранения в AsyncStorage используем наш сервис
-        await saveToken(data.token);
-        
-        // Если в ответе есть дополнительные данные пользователя, можно также сохранить их
-        // Это можно также перенести в отдельную функцию в authService, если нужно
-        if (data.user) {
-          await AsyncStorage.setItem('userData', JSON.stringify(data.user));
-        }
-        
-        // Переход на главный экран приложения
-        navigation.reset({
-          index: 0, // Указываем, какой экран в новом стеке будет активным (первый)
-          routes: [{ name: 'Home' }], // Массив экранов, которые будут составлять новый стек
-        });
-      } else {
-        throw new Error('Токен не получен');
-      }
-      
     } catch (error) {
-      // Отображение ошибки пользователю
-      setErrorMessage(`Ошибка входа: ${error.message}`);
-      console.error('Ошибка входа:', error);
+      // Ошибка логина, выводим сообщение
+      const msg = error.message || 'Не удалось войти';
+      setErrorMessage(`Ошибка входа: ${msg}`);
+      console.error('Login error:', error);
     } finally {
       setLoading(false);
     }
   };
 
-  // Функция для перехода на экран регистрации
   const goToRegistration = () => {
     navigation.navigate('Registration');
   };
@@ -393,4 +360,3 @@ const styles = StyleSheet.create({
   },
 });
 
-export default LoginScreen;

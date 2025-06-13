@@ -3,7 +3,7 @@ import { View, Text, TouchableOpacity, StyleSheet, Dimensions, StatusBar, Image 
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons, MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
 import { createMaterialTopTabNavigator } from '@react-navigation/material-top-tabs';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+// Убираем прямой доступ к AsyncStorage
 import apiService from '../services/apiService';
 
 import TaskScreen from './TaskScreen';
@@ -13,7 +13,7 @@ import HabitScreen from './HabitScreen';
 const Tab = createMaterialTopTabNavigator();
 const { width, height } = Dimensions.get('window');
 
-export default function HomeScreen({ navigation, route }) {
+export default function HomeScreen({ navigation }) {
   const [profileData, setProfileData] = useState({
     level: 1,
     points: 0,
@@ -21,60 +21,49 @@ export default function HomeScreen({ navigation, route }) {
     username: ''
   });
 
-  // Load token and profile data on component mount
+  // Инициализация экрана: сразу пытаемся получить профиль
   useEffect(() => {
     const initializeScreen = async () => {
       try {
-        const userToken = await AsyncStorage.getItem('jwt_token');
-        if (userToken) {
-          fetchProfileData();
-        } else {
-          navigation.reset({
-            index: 0,
-            routes: [{ name: 'Login' }],
-          });
-        }
-      } catch (e) {
-        console.error('Failed to get token', e);
+        // Пытаемся подгрузить профиль — если токен живой, это сработает
+        await fetchProfileData();
+      } catch (error) {
+        // При неуспехе (401 или отсутствие токена) переходим на Login
+        console.error('Init error:', error);
+        navigation.reset({ index: 0, routes: [{ name: 'Login' }] });
       }
     };
-    
     initializeScreen();
   }, []);
   
-  // Add listener to update data when returning to screen
+  // Обновляем профиль при возвращении на экран
   useEffect(() => {
     const unsubscribe = navigation.addListener('focus', () => {
-      fetchProfileData();
+      fetchProfileData().catch(err => {
+        console.error('Fetch on focus error:', err);
+        if (err.message.includes('Session expired')) {
+          navigation.reset({ index: 0, routes: [{ name: 'Login' }] });
+        }
+      });
     });
-    
     return unsubscribe;
   }, [navigation]);
   
-  // Function to calculate XP threshold, matching backend
-  const calculateXpThreshold = (level) => {
-    return Math.floor(1000 * (1.5 ** (level - 1)));
-  };
+  // Расчет порога опыта
+  const calculateXpThreshold = (level) => Math.floor(1000 * (1.5 ** (level - 1)));
   
-  // Fetch profile data
+  // Получение данных профиля
   const fetchProfileData = async () => {
-    try {
-      const response = await apiService.get('/profile/');
-
-      const level = response.level || 1;
-      const totalPoints = calculateXpThreshold(level);
-      
-      setProfileData({
-        level: level,
-        points: response.points || 0,
-        totalPoints: totalPoints,
-        username: response.username || '',
-        avatar: response.avatar_url || null
-      });
-      console.log('Fetched profile data:', response);
-    } catch (error) {
-      console.error('Error fetching profile data', error);
-    }
+    const response = await apiService.get('profile/{pk}'); // без leading slash
+    const level = response.level || 1;
+    const totalPoints = calculateXpThreshold(level);
+    setProfileData({
+      level,
+      points: response.points || 0,
+      totalPoints,
+      username: response.username || '',
+      avatar: response.avatar_url || null
+    });
   };
 
   // Add this helper function

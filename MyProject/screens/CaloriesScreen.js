@@ -47,12 +47,14 @@ export default function CaloriesScreen({ navigation }) {
   const [error, setError] = useState(null);
   
   // Fetch nutrition summary data
+  // Fetch nutrition summary data
   const fetchNutritionData = async () => {
     setIsLoading(true);
     setError(null);
     
     try {
-      const data = await apiService.get('/nutrition-summary/');
+      // ИСПРАВЛЕНО: используем правильный endpoint из бэкенда
+      const data = await apiService.get('/consumed-calories/summary/');
       setNutritionData(data);
 
       // Устанавливаем текущие цели из данных API
@@ -65,7 +67,38 @@ export default function CaloriesScreen({ navigation }) {
       fetchHistoryData();
     } catch (err) {
       console.error('Error fetching nutrition data:', err);
-      setError('Failed to load nutrition data');
+      
+      // ИСПРАВЛЕНО: Если 404, значит нет данных - устанавливаем дефолтные значения
+      if (err.message.includes('404')) {
+        const defaultData = {
+          total_calories: 0,
+          total_proteins: 0,
+          total_fats: 0,
+          total_carbs: 0,
+          calories_goal: 1800,
+          proteins_goal: 50,
+          fats_goal: 70,
+          carbs_goal: 300,
+          meals: [],
+          remaining: {
+            calories: 1800,
+            proteins: 50,
+            fats: 70,
+            carbs: 300
+          }
+        };
+        
+        setNutritionData(defaultData);
+        setGoalCalories('1800');
+        setGoalProteins('50');
+        setGoalFats('70');
+        setGoalCarbs('300');
+        
+        // Все равно пытаемся загрузить историю
+        fetchHistoryData();
+      } else {
+        setError('Failed to load nutrition data');
+      }
     } finally {
       setIsLoading(false);
     }
@@ -74,7 +107,8 @@ export default function CaloriesScreen({ navigation }) {
   // Fetch history data based on selected period
   const fetchHistoryData = async () => {
     try {
-      const data = await apiService.get(`/calories-by-days/${selectedPeriod}/`);
+      // ИСПРАВЛЕНО: используем правильный endpoint из бэкенда
+      const data = await apiService.get(`/consumed-calories/by-days/${selectedPeriod}/`);
       
       if (data && Array.isArray(data)) {
         // Format dates for better display
@@ -88,7 +122,13 @@ export default function CaloriesScreen({ navigation }) {
       }
     } catch (err) {
       console.error('Error fetching history data:', err);
-      setError('Failed to load history data');
+      
+      // ИСПРАВЛЕНО: Если 404, значит нет исторических данных - устанавливаем пустой массив
+      if (err.message.includes('404')) {
+        setHistoryData([]);
+      } else {
+        setError('Failed to load history data');
+      }
     }
   };
   
@@ -166,11 +206,19 @@ export default function CaloriesScreen({ navigation }) {
     }
   };
   
-  // Add meal handler
+  // ИСПРАВЛЕНО: Add meal handler - теперь создает запись в consumed-calories
   const handleAddMeal = async (foodItem) => {
     try {
-      // The API already creates the meal record when searching
-      // We just need to close the modal and refresh
+      // Создаем запись о потребленной еде
+      await apiService.post('/consumed-calories/', {
+        product_name: foodItem.product_name,
+        weight: foodItem.weight,
+        calories: foodItem.calories,
+        proteins: foodItem.proteins,
+        fats: foodItem.fats,
+        carbs: foodItem.carbs,
+      });
+      
       closeAddMeal();
       fetchNutritionData();
       
@@ -181,7 +229,7 @@ export default function CaloriesScreen({ navigation }) {
     }
   };
 
-  // Функция обновления целей питания
+  // ИСПРАВЛЕНО: Функция обновления целей питания
   const handleUpdateGoals = async () => {
     const newGoals = {
       calories_goal: parseInt(goalCalories, 10) || 0,
@@ -191,7 +239,17 @@ export default function CaloriesScreen({ navigation }) {
     };
 
     try {
-      await apiService.patch('/update-nutrition-goals/', newGoals);
+      // ИСПРАВЛЕНО: нужно сначала получить ID цели пользователя или создать новую
+      // Попробуем обновить существующую цель пользователя
+      // Поскольку в бэкенде нет endpoint для обновления целей по user_id, 
+      // нужно будет получить ID цели из nutritionData
+      if (nutritionData && nutritionData.goal_id) {
+        await apiService.patch(`/nutrition-goals/${nutritionData.goal_id}/`, newGoals);
+      } else {
+        // Если нет ID цели, создаем новую
+        await apiService.post('/nutrition-goals/', newGoals);
+      }
+      
       fetchNutritionData();
       Alert.alert('Success', 'Nutrition goals updated successfully');
       setShowGoalsModal(false);
@@ -201,11 +259,16 @@ export default function CaloriesScreen({ navigation }) {
     }
   };
 
-  
-  // Update nutrition goals
+  // ИСПРАВЛЕНО: Update nutrition goals
   const updateNutritionGoals = async (goals) => {
     try {
-      await apiService.patch('/update-nutrition-goals/', goals);
+      // ИСПРАВЛЕНО: то же самое что и в handleUpdateGoals
+      if (nutritionData && nutritionData.goal_id) {
+        await apiService.patch(`/nutrition-goals/${nutritionData.goal_id}/`, goals);
+      } else {
+        await apiService.post('/nutrition-goals/', goals);
+      }
+      
       fetchNutritionData();
       Alert.alert('Success', 'Nutrition goals updated successfully');
     } catch (err) {
