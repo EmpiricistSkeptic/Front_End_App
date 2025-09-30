@@ -2,7 +2,7 @@
 // authService.js
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const BASE_URL = 'https://drf-project-6vzx.onrender.com';
+const BASE_URL = "http://192.168.0.102:8000";
 const ACCESS_KEY = 'jwt_access_token';
 const REFRESH_KEY = 'jwt_refresh_token';
 
@@ -139,8 +139,32 @@ export const refreshAccessToken = async () => {
 
 /** Выход: удаляем токены */
 export const logout = async () => {
-  await clearTokens();
+  try {
+    const refresh = await getRefreshToken();
+    console.log("DEBUG refresh token (before logout):", refresh); // <-- важный лог
+    if (!refresh) throw new Error("No refresh token stored");
+
+    const body = JSON.stringify({ refresh: refresh });
+    console.log("DEBUG logout body:", body); // <-- ещё лог
+
+    const resp = await fetch(`${BASE_URL}/api/logout/`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body,
+    });
+
+    if (!resp.ok) {
+      const text = await resp.text();
+      throw new Error(`API Error ${resp.status}: ${text}`);
+    }
+
+    await clearTokens();
+    console.log("Logout successful");
+  } catch (e) {
+    console.error("Ошибка логаута:", e);
+  }
 };
+
 
 /** Проверка авторизации (наличие access токена) */
 export const isAuthenticated = async () => {

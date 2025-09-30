@@ -1,14 +1,40 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Dimensions, StatusBar, ScrollView, TextInput, Alert, Image, Platform, ActivityIndicator } from 'react-native'; // Добавил ActivityIndicator
-import { LinearGradient } from 'expo-linear-gradient';
-import { Ionicons, MaterialCommunityIcons, FontAwesome5, MaterialIcons, AntDesign, Feather } from '@expo/vector-icons';
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  TextInput,
+  Image,
+  ScrollView,
+  Alert,
+  Dimensions,
+  Platform,
+  ActivityIndicator,
+  StatusBar,
+} from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient'; // Убедись, что 'expo install expo-linear-gradient' был выполнен
+
+// --- ИМПОРТЫ ИКОНОК ---
+import {
+  Ionicons,
+  MaterialCommunityIcons,
+  FontAwesome5,
+  MaterialIcons,
+  AntDesign,
+  Feather,
+} from '@expo/vector-icons';
+
+// --- ДРУГИЕ БИБЛИОТЕКИ ---
 import * as ImagePicker from 'expo-image-picker';
+import Color from 'color'; // Убедись, что 'npm install color' или 'yarn add color' был выполнен
+
+// --- ТВОИ ЛОКАЛЬНЫЕ СЕРВИСЫ И УТИЛИТЫ ---
 import apiService from '../services/apiService';
 import { calculateXpThreshold } from '../utils/xpUtils';
-import Color from 'color'; // <-- Убедись, что эта библиотека установлена (npm install color)
 
 const { width, height } = Dimensions.get('window');
-const BASE_URL_MEDIA = 'https://drf-project-6vzx.onrender.com'; // <-- УКАЖИ, ЕСЛИ ICON URL С БЭКА ОТНОСИТЕЛЬНЫЙ, ИНАЧЕ ЗАКОММЕНТИРУЙ
+const BASE_URL_MEDIA = 'http://192.168.0.102:8000';
 
 export default function ProfileScreen({ navigation }) {
   const [profile, setProfile] = useState(null);
@@ -306,19 +332,25 @@ return (
 
   // Компонент для одного элемента достижения
   const AchievementDisplayItem = ({ userAchievement }) => {
-    // userAchievement - это объект из массива userAchievementsData,
-    // он содержит все поля от UserAchievementSerializer
-    const {
-      id, // ID самой записи UserAchievement
-      achievement, // Вложенный объект с деталями шаблона Achievement
-      current_progress,
-      current_tier,
-      next_tier,
-      next_requirement,
-      progress_percentage,
-      completed,
-      completed_at
-    } = userAchievement;
+  const {
+    id, // ID самой записи UserAchievement
+    // achievement, // <--- УДАЛИТЬ ЭТУ СТРОКУ, она больше не нужна
+
+    // Добавь поля, которые приходят напрямую с бэкенда:
+    name, // Имя достижения
+    description, // Описание достижения
+    icon, // Иконка достижения
+    unit_type, // Единица измерения достижения
+    category, // Категория достижения
+
+    current_progress,
+    current_tier,
+    next_tier,
+    next_requirement,
+    progress_percentage,
+    completed,
+    completed_at
+  } = userAchievement;
 
     const tierColor = getAchievementTierColor(current_tier);
     const tierGlow = getAchievementTierGlow(current_tier);
@@ -328,19 +360,19 @@ return (
       progressText += ` / ${next_requirement}`;
     }
     // achievement.unit_type.symbol - символ единицы измерения
-    if (achievement.unit_type && achievement.unit_type.symbol) {
-      progressText += ` ${achievement.unit_type.symbol}`;
+    if (unit_type && unit_type.symbol) {
+      progressText += ` ${unit_type.symbol}`;
     }
 
     return (
       <View style={[styles.achievementItemContainerStyle, { borderColor: tierColor, shadowColor: tierGlow }]}>
         <View style={[styles.achievementIconWrapperStyle, { backgroundColor: 'rgba(0,0,0,0.2)', borderColor: tierColor, shadowColor: tierGlow }]}>
-          <RenderAchievementIcon achievementData={achievement} currentTier={current_tier} />
+          <RenderAchievementIcon achievementData={userAchievement} currentTier={current_tier} />
         </View>
         
         <View style={styles.achievementDetailsStyle}>
-          <Text style={[styles.achievementNameStyle, { textShadowColor: tierGlow }]}>{achievement.name}</Text>
-          {achievement.description && <Text style={styles.achievementDescriptionStyle}>{achievement.description}</Text>}
+          <Text style={[styles.achievementNameStyle, { textShadowColor: tierGlow }]}>{name}</Text>
+          {description && <Text style={styles.achievementDescriptionStyle}>{description}</Text>}
           
           {!completed ? (
             <View style={styles.achievementProgressContainerStyle}>

@@ -1,7 +1,7 @@
 import { getAccessToken, refreshAccessToken, logout } from './authService';
 
 // Базовый URL вашего API
-const BASE_URL = 'https://drf-project-6vzx.onrender.com';
+const BASE_URL = 'http://192.168.0.102:8000';
 // Общий префикс для всех API-эндпоинтов
 const API_PREFIX = '/api';
 
