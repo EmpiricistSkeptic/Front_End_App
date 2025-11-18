@@ -1,5 +1,5 @@
 // LoginScreen.js
-import React, { useState } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import {
   View,
   Text,
@@ -9,10 +9,11 @@ import {
   Dimensions,
   StatusBar,
   ActivityIndicator,
-  Alert,
+  ScrollView,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-// Импортируем функцию логина из authService
 import { login as authLogin } from '../services/authService';
 
 const { width, height } = Dimensions.get('window');
@@ -23,29 +24,59 @@ export default function LoginScreen({ navigation }) {
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
 
+  const passwordInputRef = useRef(null);
+
+  // --- Мемоизированные частицы ---
+  const particles = useMemo(
+    () =>
+      [...Array(20)].map((_, i) => ({
+        key: `p-${i}`,
+        left: Math.random() * width,
+        top: Math.random() * height,
+        size: Math.random() * 4 + 1,
+        opacity: Math.random() * 0.5 + 0.3,
+      })),
+    []
+  );
+
   const handleLogin = async () => {
     setErrorMessage('');
 
-    if (!username || !password) {
+    const trimmedUsername = username.trim();
+    const trimmedPassword = password.trim();
+
+    if (!trimmedUsername || !trimmedPassword) {
       setErrorMessage('Пожалуйста, введите имя пользователя и пароль');
       return;
     }
 
     try {
       setLoading(true);
-      // Вызываем обёртку authService.login
-      await authLogin({ username, password });
-      
-      // Успешный вход, переходим на Home (обнуляя стек)
+
+      await authLogin({ username: trimmedUsername, password: trimmedPassword });
+
       navigation.reset({
         index: 0,
         routes: [{ name: 'Home' }],
       });
     } catch (error) {
-      // Ошибка логина, выводим сообщение
-      const msg = error.message || 'Не удалось войти';
-      setErrorMessage(`Ошибка входа: ${msg}`);
-      console.error('Login error:', error);
+      const rawMessage = error?.message || '';
+
+      let msg = 'Не удалось войти. Проверьте логин/пароль или подключение к интернету.';
+
+      if (rawMessage.includes('Network request failed')) {
+        msg = 'Не удалось подключиться к серверу. Проверьте интернет-соединение.';
+      } else if (rawMessage.includes('401') || rawMessage.includes('400')) {
+        msg = 'Неверное имя пользователя или пароль.';
+      } else if (rawMessage.includes('500')) {
+        msg = 'Ошибка на сервере. Попробуйте позже.';
+      }
+
+      setErrorMessage(msg);
+
+      if (__DEV__) {
+        console.error('Login error:', error);
+      }
     } finally {
       setLoading(false);
     }
@@ -59,137 +90,156 @@ export default function LoginScreen({ navigation }) {
     <View style={styles.container}>
       <StatusBar barStyle="light-content" />
       <LinearGradient colors={['#121539', '#080b20']} style={styles.background}>
-        {/* Particle effects background */}
-        <View style={styles.particlesContainer}>
-          {[...Array(20)].map((_, i) => (
-            <View 
-              key={i} 
+        {/* Фон с частицами */}
+        <View style={styles.particlesContainer} pointerEvents="none">
+          {particles.map(p => (
+            <View
+              key={p.key}
               style={[
-                styles.particle, 
-                { 
-                  left: Math.random() * width, 
-                  top: Math.random() * height,
-                  width: Math.random() * 4 + 1,
-                  height: Math.random() * 4 + 1,
-                  opacity: Math.random() * 0.5 + 0.3
-                }
-              ]} 
+                styles.particle,
+                {
+                  left: p.left,
+                  top: p.top,
+                  width: p.size,
+                  height: p.size,
+                  opacity: p.opacity,
+                },
+              ]}
             />
           ))}
         </View>
-        
-        <View style={styles.statusWindow}>
-          {/* Status Window Header */}
-          <View style={styles.windowHeader}>
-            <View style={styles.headerDot} />
-            <Text style={styles.headerText}>SYSTEM</Text>
-          </View>
-          
-          {/* Form Container */}
-          <View style={styles.formContainer}>
-            <Text style={styles.formTitle}>
-              LOGIN
-            </Text>
-            
-            <View style={styles.divider} />
 
-            {errorMessage ? (
-              <View style={styles.errorContainer}>
-                <Text style={styles.errorText}>{errorMessage}</Text>
-              </View>
-            ) : null}
-            
-            <View style={styles.inputsSection}>
-              <View style={styles.inputContainer}>
-                <Text style={styles.inputLabel}>USERNAME</Text>
-                <TextInput
-                  style={styles.inputField}
-                  placeholder="Enter username"
-                  placeholderTextColor="rgba(200, 214, 229, 0.5)"
-                  value={username}
-                  onChangeText={setUsername}
-                  autoCapitalize="none"
-                />
-              </View>
+        <KeyboardAvoidingView
+          style={styles.keyboardAvoider}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 40 : 0}
+        >
+          <View style={styles.statusWindow}>
+            {/* Header */}
+            <View style={styles.windowHeader}>
+              <View style={styles.headerDot} />
+              <Text style={styles.headerText}>SYSTEM</Text>
+            </View>
 
-              <View style={styles.inputContainer}>
-                <Text style={styles.inputLabel}>PASSWORD</Text>
-                <TextInput
-                  style={styles.inputField}
-                  placeholder="Enter password"
-                  placeholderTextColor="rgba(200, 214, 229, 0.5)"
-                  secureTextEntry
-                  value={password}
-                  onChangeText={setPassword}
-                />
-              </View>
-            </View>
-            
-            <View style={styles.statsContainer}>
-              <View style={styles.statItem}>
-                <Text style={styles.statLabel}>STATUS</Text>
-                <Text style={styles.statValue}>VERIFICATION</Text>
-              </View>
-              <View style={styles.statItem}>
-                <Text style={styles.statLabel}>SECURITY</Text>
-                <Text style={styles.statValue}>LEVEL 1</Text>
-              </View>
-            </View>
-            
-            <TouchableOpacity 
-              style={[styles.actionButton, loading && styles.disabledButton]}
-              onPress={handleLogin}
-              disabled={loading}
+            {/* Скролл-контент — чтобы на маленьких экранах всё было доступно */}
+            <ScrollView
+              style={styles.formScroll}
+              contentContainerStyle={styles.formContainer}
+              keyboardShouldPersistTaps="handled"
             >
-              <LinearGradient
-                colors={['#4dabf7', '#3250b4']}
-                style={styles.buttonGradient}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
+              <Text style={styles.formTitle}>LOGIN</Text>
+
+              <View style={styles.divider} />
+
+              {errorMessage ? (
+                <View style={styles.errorContainer}>
+                  <Text style={styles.errorText}>{errorMessage}</Text>
+                </View>
+              ) : null}
+
+              <View style={styles.inputsSection}>
+                <View style={styles.inputContainer}>
+                  <Text style={styles.inputLabel}>USERNAME</Text>
+                  <TextInput
+                    style={styles.inputField}
+                    placeholder="Enter username"
+                    placeholderTextColor="rgba(200, 214, 229, 0.5)"
+                    value={username}
+                    onChangeText={setUsername}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    textContentType="username"
+                    autoComplete="username"
+                    returnKeyType="next"
+                    onSubmitEditing={() => passwordInputRef.current?.focus()}
+                  />
+                </View>
+
+                <View style={styles.inputContainer}>
+                  <Text style={styles.inputLabel}>PASSWORD</Text>
+                  <TextInput
+                    ref={passwordInputRef}
+                    style={styles.inputField}
+                    placeholder="Enter password"
+                    placeholderTextColor="rgba(200, 214, 229, 0.5)"
+                    secureTextEntry
+                    value={password}
+                    onChangeText={setPassword}
+                    autoCapitalize="none"      // <- чтобы не было заглавной буквы
+                    autoCorrect={false}        // <- отключаем автокоррекцию
+                    textContentType="password"
+                    autoComplete="password"
+                    returnKeyType="go"
+                    onSubmitEditing={handleLogin}
+                  />
+                </View>
+              </View>
+
+              <View style={styles.statsContainer}>
+                <View style={styles.statItem}>
+                  <Text style={styles.statLabel}>STATUS</Text>
+                  <Text style={styles.statValue}>VERIFICATION</Text>
+                </View>
+                <View style={styles.statItem}>
+                  <Text style={styles.statLabel}>SECURITY</Text>
+                  <Text style={styles.statValue}>LEVEL 1</Text>
+                </View>
+              </View>
+
+              <TouchableOpacity
+                style={[styles.actionButton, loading && styles.disabledButton]}
+                onPress={handleLogin}
+                disabled={loading}
               >
-                {loading ? (
-                  <ActivityIndicator color="#ffffff" size="small" />
-                ) : (
-                  <Text style={styles.buttonText}>LOG IN</Text>
-                )}
-              </LinearGradient>
-              <View style={styles.buttonGlow} />
-            </TouchableOpacity>
+                <LinearGradient
+                  colors={['#4dabf7', '#3250b4']}
+                  style={styles.buttonGradient}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                >
+                  {loading ? (
+                    <ActivityIndicator color="#ffffff" size="small" />
+                  ) : (
+                    <Text style={styles.buttonText}>LOG IN</Text>
+                  )}
+                </LinearGradient>
+                <View style={styles.buttonGlow} />
+              </TouchableOpacity>
 
-            <TouchableOpacity 
-              style={styles.registerLink}
-              onPress={goToRegistration}
-            >
-              <Text style={styles.registerLinkText}>
-                Don't have an account? REGISTER
-              </Text>
-            </TouchableOpacity>
+              <TouchableOpacity style={styles.registerLink} onPress={goToRegistration}>
+                <Text style={styles.registerLinkText}>
+                  Don't have an account? REGISTER
+                </Text>
+              </TouchableOpacity>
+            </ScrollView>
+
+            {/* Footer */}
+            <View style={styles.footer}>
+              <Text style={styles.footerText}>HUNTER ASSOCIATION</Text>
+            </View>
           </View>
-          
-          {/* Footer */}
-          <View style={styles.footer}>
-            <Text style={styles.footerText}>HUNTER ASSOCIATION</Text>
-          </View>
-        </View>
+        </KeyboardAvoidingView>
       </LinearGradient>
     </View>
   );
-};
+}
 
 const styles = StyleSheet.create({
-  // стили остаются без изменений
   container: {
     flex: 1,
   },
   background: {
+    flex: 1,
+  },
+  keyboardAvoider: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
   },
   particlesContainer: {
     position: 'absolute',
-    width: width,
-    height: height,
+    width,
+    height,
   },
   particle: {
     position: 'absolute',
@@ -197,8 +247,9 @@ const styles = StyleSheet.create({
     borderRadius: 50,
   },
   statusWindow: {
-    width: width * 0.85,
-    height: height * 0.8,
+    width: width * 0.95,         // стало шире
+    height: height * 0.9,        // стало выше, почти на весь экран
+    maxHeight: height * 0.95,    // на всякий случай небольшой запас
     backgroundColor: 'rgba(16, 20, 45, 0.75)',
     borderRadius: 8,
     borderWidth: 1,
@@ -225,9 +276,13 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     letterSpacing: 1,
   },
-  formContainer: {
+  formScroll: {
     flex: 1,
+  },
+  formContainer: {
     padding: 20,
+    flexGrow: 1,
+    justifyContent: 'flex-start',
   },
   formTitle: {
     color: '#4dabf7',
@@ -359,4 +414,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
 });
+
+
 

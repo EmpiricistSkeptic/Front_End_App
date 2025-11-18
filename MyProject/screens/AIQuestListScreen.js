@@ -1,15 +1,27 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, Image, ActivityIndicator, Modal} from 'react-native';
+import React, { useState, useCallback, useMemo } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  TouchableOpacity,
+  Alert,
+  ActivityIndicator,
+  Modal,
+} from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import apiService from '../services/apiService';
+import { useFocusEffect } from '@react-navigation/native';
 import { MaterialIcons, Ionicons } from '@expo/vector-icons';
 import moment from 'moment';
-import 'moment/locale/ru';  // Импорт русской локали отдельно
+import 'moment/locale/ru';
 
-// Инициализируем moment на русском языке
+import apiService from '../services/apiService';
+import { useProfile } from '../context/ProfileContext';
+
+// русская локаль для дат
 moment.locale('ru');
 
-export default function AIQuestListScreen({ navigation, route }) {
+export default function AIQuestListScreen({ navigation }) {
   const [quests, setQuests] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeFilter, setActiveFilter] = useState('ALL');
@@ -17,101 +29,170 @@ export default function AIQuestListScreen({ navigation, route }) {
   const [questDetailsVisible, setQuestDetailsVisible] = useState(false);
   const [loadingDetails, setLoadingDetails] = useState(false);
 
-  useEffect(() => {
-    fetchQuests();
-  }, []);
+  // берём refreshProfile из контекста, чтобы подтянуть XP/уровень после complete/fail
+  const { refreshProfile } = useProfile();
 
-  useEffect(() => {
-    const unsubscribe = navigation.addListener('focus', () => {
-      fetchQuests();
-    });
-    
-    return unsubscribe;
-  }, [navigation]);
+  // единая обработка 401/истёкшей сессии
+  const handleSessionError = useCallback(
+    (error) => {
+      console.error('Session or network error (quests):', error);
 
-    const fetchQuests = async () => {
-    setLoading(true);
+      const status = error?.response?.status ?? error?.status;
+      const message =
+        error?.response?.data?.detail ||
+        error?.response?.data?.error ||
+        error?.message ||
+        '';
+
+      if (
+        status === 401 ||
+        message.toString().toLowerCase().includes('session expired')
+      ) {
+        navigation.reset({
+          index: 0,
+          routes: [{ name: 'Login' }],
+        });
+        return true;
+      }
+
+      return false;
+    },
+    [navigation]
+  );
+
+  // загрузка списка квестов
+  const fetchQuests = useCallback(async () => {
     try {
-      const responseData = await apiService.get('quests/'); // responseData - это тот самый объект
+      const responseData = await apiService.get('quests/');
       console.log('Fetched quests data object:', responseData);
-      // Убедись, что responseData.results существует и является массивом
-      setQuests(responseData.results || []); // <--- ИСПРАВЛЕНИЕ
+      setQuests(responseData.results || []);
     } catch (error) {
+      if (handleSessionError(error)) return;
       console.error('Error fetching quests', error);
-      Alert.alert('Ошибка', 'Не удалось загрузить ваши квесты. Попробуйте еще раз.');
-      setQuests([]); // Важно установить в массив даже при ошибке
-    } finally {
-      setLoading(false);
+      Alert.alert(
+        'Ошибка',
+        'Не удалось загрузить ваши квесты. Попробуйте еще раз.'
+      );
+      setQuests([]);
     }
-  };
+  }, [handleSessionError]);
 
-  const fetchQuestDetails = async (id) => {
-    setLoadingDetails(true);
-    try {
-      const response = await apiService.get(`quests/${id}/`);
-      console.log('Fetched quest details:', response);
-      setSelectedQuest(response);
-      setQuestDetailsVisible(true);
-    } catch (error) {
-      console.error('Error fetching quest details', error);
-      Alert.alert('Ошибка', 'Не удалось загрузить детали квеста. Попробуйте еще раз.');
-    } finally {
-      setLoadingDetails(false);
-    }
-  };
-
-  const handleCompleteQuest = async (id) => {
-    try {
-      await apiService.patch(`quests/${id}/complete`);
-      Alert.alert('Квест выполнен', 'Вы успешно выполнили этот квест! Награда получена.');
-      fetchQuests(); // Обновляем список квестов
-
-      if (selectedQuest && selectedQuest.id === questId) {
-        fetchQuestDetails(questId);
+  // загрузка деталей конкретного квеста
+  const fetchQuestDetails = useCallback(
+    async (id) => {
+      setLoadingDetails(true);
+      try {
+        const response = await apiService.get(`quests/${id}/`);
+        console.log('Fetched quest details:', response);
+        setSelectedQuest(response);
+        setQuestDetailsVisible(true);
+      } catch (error) {
+        if (handleSessionError(error)) return;
+        console.error('Error fetching quest details', error);
+        Alert.alert(
+          'Ошибка',
+          'Не удалось загрузить детали квеста. Попробуйте еще раз.'
+        );
+      } finally {
+        setLoadingDetails(false);
       }
+    },
+    [handleSessionError]
+  );
 
-      if (route.params?.fetchProfileData) {
-        route.params.fetchProfileData();
-      }
+  // единый паттерн: грузим квесты при фокусе экрана (и первом открытии),
+  // без дублирующих useEffect
+  useFocusEffect(
+    useCallback(() => {
+      let isActive = true;
+
+      const load = async () => {
+        setLoading(true);
+        try {
+          await fetchQuests();
+        } finally {
+          if (isActive) {
+            setLoading(false);
+          }
+        }
+      };
+
+      load();
+
+      return () => {
+        isActive = false;
+      };
+    }, [fetchQuests])
+  );
+
+  // выполнение квеста
+  const handleCompleteQuest = async (questId) => {
+    try {
+      await apiService.patch(`quests/${questId}/complete/`);
+      Alert.alert(
+        'Квест выполнен',
+        'Вы успешно выполнили этот квест! Награда получена.'
+      );
+
+      // бэк уже пересчитал XP/уровень → подтягиваем профиль
+      await Promise.all([
+        fetchQuests(),
+        selectedQuest && selectedQuest.id === questId
+          ? fetchQuestDetails(questId)
+          : Promise.resolve(),
+        refreshProfile(),
+      ]);
     } catch (error) {
+      if (handleSessionError(error)) return;
       console.error('Error completing quest', error);
-      Alert.alert('Ошибка', 'Не удалось отметить квест как выполненный. Попробуйте еще раз.');
+      Alert.alert(
+        'Ошибка',
+        'Не удалось отметить квест как выполненный. Попробуйте еще раз.'
+      );
     }
   };
 
-  const handleFailQuest = async (questId) => {
+  // провал квеста
+  const handleFailQuest = (questId) => {
     Alert.alert(
       'Отметить как проваленный?',
       'Вы уверены, что хотите отметить этот квест как проваленный? Штрафы будут применены.',
       [
         { text: 'Отмена', style: 'cancel' },
-        { 
-          text: 'Подтвердить', 
+        {
+          text: 'Подтвердить',
           style: 'destructive',
           onPress: async () => {
             try {
-              await apiService.post(`/quests/fail/${questId}/`);
+              await apiService.post(`quests/fail/${questId}/`);
               Alert.alert('Квест провален', 'Квест отмечен как проваленный.');
-              fetchQuests();
-              if (selectedQuest && selectedQuest.id === questId) {
-                fetchQuestDetails(questId);
-              }
+
+              await Promise.all([
+                fetchQuests(),
+                selectedQuest && selectedQuest.id === questId
+                  ? fetchQuestDetails(questId)
+                  : Promise.resolve(),
+                refreshProfile(),
+              ]);
             } catch (error) {
+              if (handleSessionError(error)) return;
               console.error('Error failing quest', error);
-              Alert.alert('Ошибка', 'Не удалось отметить квест как проваленный.');
+              Alert.alert(
+                'Ошибка',
+                'Не удалось отметить квест как проваленный.'
+              );
             }
-          }
-        }
+          },
+        },
       ]
     );
   };
 
-  const getFilteredQuests = () => {
-    if (activeFilter === 'ALL') {
-      return quests;
-    }
-    return quests.filter(quest => quest.quest_type === activeFilter);
-  };
+  // фильтрация квестов мемоизирована
+  const filteredQuests = useMemo(() => {
+    if (activeFilter === 'ALL') return quests;
+    return quests.filter((quest) => quest.quest_type === activeFilter);
+  }, [quests, activeFilter]);
 
   const renderQuestTypeIcon = (type) => {
     switch (type) {
@@ -173,23 +254,23 @@ export default function AIQuestListScreen({ navigation, route }) {
 
   const getTimeRemaining = (expiresAt) => {
     if (!expiresAt) return null;
-    
+
     const now = moment();
     const expiry = moment(expiresAt);
-    
+
     if (now > expiry) {
       return 'Просрочено';
     }
-    
+
     const duration = moment.duration(expiry.diff(now));
     const hours = Math.floor(duration.asHours());
     const minutes = Math.floor(duration.minutes());
-    
+
     if (hours > 24) {
       const days = Math.floor(hours / 24);
       return `${days} дн. ${hours % 24} ч.`;
     }
-    
+
     return `${hours} ч. ${minutes} мин.`;
   };
 
@@ -206,14 +287,14 @@ export default function AIQuestListScreen({ navigation, route }) {
     return moment(completedAt).format('DD MMM YYYY, HH:mm');
   };
 
-  // Компонент для модального окна с деталями квеста
+  // модалка деталей квеста
   const QuestDetailsModal = () => {
     if (!selectedQuest) return null;
-    
+
     return (
       <Modal
         animationType="slide"
-        transparent={true}
+        transparent
         visible={questDetailsVisible}
         onRequestClose={() => setQuestDetailsVisible(false)}
       >
@@ -223,14 +304,15 @@ export default function AIQuestListScreen({ navigation, route }) {
               colors={['#1f274c', '#151a35']}
               style={styles.modalContent}
             >
-              {/* Заголовок модального окна с кнопкой закрытия */}
               <View style={styles.modalHeader}>
                 <Text style={styles.modalTitle}>Детали квеста</Text>
-                <TouchableOpacity onPress={() => setQuestDetailsVisible(false)}>
+                <TouchableOpacity
+                  onPress={() => setQuestDetailsVisible(false)}
+                >
                   <MaterialIcons name="close" size={24} color="#ffffff" />
                 </TouchableOpacity>
               </View>
-              
+
               {loadingDetails ? (
                 <View style={styles.loadingContainer}>
                   <ActivityIndicator size="large" color="#4dabf7" />
@@ -238,101 +320,167 @@ export default function AIQuestListScreen({ navigation, route }) {
                 </View>
               ) : (
                 <ScrollView style={styles.modalScrollView}>
-                  {/* Тип квеста и статус */}
                   <View style={styles.detailsTopRow}>
-                    <View style={[styles.typeBadge, { backgroundColor: getQuestTypeColor(selectedQuest.quest_type) }]}>
+                    <View
+                      style={[
+                        styles.typeBadge,
+                        {
+                          backgroundColor: getQuestTypeColor(
+                            selectedQuest.quest_type
+                          ),
+                        },
+                      ]}
+                    >
                       {renderQuestTypeIcon(selectedQuest.quest_type)}
-                      <Text style={styles.typeText}>{getQuestTypeText(selectedQuest.quest_type)}</Text>
+                      <Text style={styles.typeText}>
+                        {getQuestTypeText(selectedQuest.quest_type)}
+                      </Text>
                     </View>
-                    <View style={[styles.statusBadge, { backgroundColor: getStatusColor(selectedQuest.status) }]}>
+                    <View
+                      style={[
+                        styles.statusBadge,
+                        {
+                          backgroundColor: getStatusColor(
+                            selectedQuest.status
+                          ),
+                        },
+                      ]}
+                    >
                       <Text style={styles.statusText}>
-                        {selectedQuest.status === 'ACTIVE' ? 'АКТИВЕН' :
-                        selectedQuest.status === 'COMPLETED' ? 'ВЫПОЛНЕН' : 'ПРОВАЛЕН'}
+                        {selectedQuest.status === 'ACTIVE'
+                          ? 'АКТИВЕН'
+                          : selectedQuest.status === 'COMPLETED'
+                          ? 'ВЫПОЛНЕН'
+                          : 'ПРОВАЛЕН'}
                       </Text>
                     </View>
                   </View>
-                  
-                  {/* Заголовок квеста */}
+
                   <Text style={styles.detailsTitle}>{selectedQuest.title}</Text>
-                  
-                  {/* Срок выполнения для срочных квестов */}
-                  {selectedQuest.quest_type === 'URGENT' && selectedQuest.expires_at && (
-                    <View style={styles.detailsInfoRow}>
-                      <MaterialIcons 
-                        name={isExpired(selectedQuest.expires_at) ? "timer-off" : "timer"}
-                        size={18} 
-                        color={isExpired(selectedQuest.expires_at) ? "#f44336" : "#4dabf7"} 
-                      />
-                      <Text style={styles.detailsInfoText}>
-                        Срок выполнения: {moment(selectedQuest.expires_at).format('DD MMM YYYY, HH:mm')}
-                        {isExpired(selectedQuest.expires_at) ? ' (Просрочено)' : ` (${getTimeRemaining(selectedQuest.expires_at)} осталось)`}
-                      </Text>
-                    </View>
-                  )}
-                  
-                  {/* Дата создания квеста */}
+
+                  {selectedQuest.quest_type === 'URGENT' &&
+                    selectedQuest.expires_at && (
+                      <View style={styles.detailsInfoRow}>
+                        <MaterialIcons
+                          name={
+                            isExpired(selectedQuest.expires_at)
+                              ? 'timer-off'
+                              : 'timer'
+                          }
+                          size={18}
+                          color={
+                            isExpired(selectedQuest.expires_at)
+                              ? '#f44336'
+                              : '#4dabf7'
+                          }
+                        />
+                        <Text style={styles.detailsInfoText}>
+                          Срок выполнения:{' '}
+                          {moment(selectedQuest.expires_at).format(
+                            'DD MMM YYYY, HH:mm'
+                          )}
+                          {isExpired(selectedQuest.expires_at)
+                            ? ' (Просрочено)'
+                            : ` (${getTimeRemaining(
+                                selectedQuest.expires_at
+                              )} осталось)`}
+                        </Text>
+                      </View>
+                    )}
+
                   <View style={styles.detailsInfoRow}>
                     <MaterialIcons name="event" size={18} color="#4dabf7" />
                     <Text style={styles.detailsInfoText}>
-                      Создан: {moment(selectedQuest.created_at).format('DD MMM YYYY, HH:mm')}
+                      Создан:{' '}
+                      {moment(selectedQuest.created_at).format(
+                        'DD MMM YYYY, HH:mm'
+                      )}
                     </Text>
                   </View>
-                  
-                  {/* Дата выполнения/провала для завершенных квестов */}
-                  {shouldShowCompletedDate(selectedQuest.status, selectedQuest.completed_at) && (
+
+                  {shouldShowCompletedDate(
+                    selectedQuest.status,
+                    selectedQuest.completed_at
+                  ) && (
                     <View style={styles.detailsInfoRow}>
-                      <MaterialIcons 
-                        name={selectedQuest.status === 'COMPLETED' ? "check-circle" : "cancel"} 
-                        size={18} 
-                        color={selectedQuest.status === 'COMPLETED' ? "#4caf50" : "#f44336"} 
+                      <MaterialIcons
+                        name={
+                          selectedQuest.status === 'COMPLETED'
+                            ? 'check-circle'
+                            : 'cancel'
+                        }
+                        size={18}
+                        color={
+                          selectedQuest.status === 'COMPLETED'
+                            ? '#4caf50'
+                            : '#f44336'
+                        }
                       />
                       <Text style={styles.detailsInfoText}>
-                        {selectedQuest.status === 'COMPLETED' ? 'Выполнен: ' : 'Провален: '}
+                        {selectedQuest.status === 'COMPLETED'
+                          ? 'Выполнен: '
+                          : 'Провален: '}
                         {formatCompletedDate(selectedQuest.completed_at)}
                       </Text>
                     </View>
                   )}
-                  
-                  {/* Разделитель */}
+
                   <View style={styles.divider} />
-                  
-                  {/* Полное описание квеста */}
+
                   <Text style={styles.sectionTitle}>Описание</Text>
-                  <Text style={styles.detailsDescription}>{selectedQuest.description}</Text>
-                  
-                  {/* Награды */}
+                  <Text style={styles.detailsDescription}>
+                    {selectedQuest.description}
+                  </Text>
+
                   <Text style={styles.sectionTitle}>Награды</Text>
                   <View style={styles.detailsRewardsContainer}>
                     {selectedQuest.reward_points > 0 && (
                       <View style={styles.detailsRewardItem}>
                         <Ionicons name="star" size={18} color="#ffd700" />
-                        <Text style={styles.detailsRewardText}>{selectedQuest.reward_points} XP</Text>
+                        <Text style={styles.detailsRewardText}>
+                          {selectedQuest.reward_points} XP
+                        </Text>
                       </View>
                     )}
                     {selectedQuest.reward_other && (
                       <View style={styles.detailsRewardItem}>
-                        <MaterialIcons name="card-giftcard" size={18} color="#4dabf7" />
-                        <Text style={styles.detailsRewardText}>{selectedQuest.reward_other}</Text>
+                        <MaterialIcons
+                          name="card-giftcard"
+                          size={18}
+                          color="#4dabf7"
+                        />
+                        <Text style={styles.detailsRewardText}>
+                          {selectedQuest.reward_other}
+                        </Text>
                       </View>
                     )}
                   </View>
-                  
-                  {/* Штрафы (если есть) */}
+
                   {selectedQuest.penalty_info && (
                     <>
-                      <Text style={styles.sectionTitle}>Штрафы при провале</Text>
+                      <Text style={styles.sectionTitle}>
+                        Штрафы при провале
+                      </Text>
                       <View style={styles.detailsPenaltyContainer}>
-                        <MaterialIcons name="warning" size={18} color="#f44336" />
-                        <Text style={styles.detailsPenaltyText}>{selectedQuest.penalty_info}</Text>
+                        <MaterialIcons
+                          name="warning"
+                          size={18}
+                          color="#f44336"
+                        />
+                        <Text style={styles.detailsPenaltyText}>
+                          {selectedQuest.penalty_info}
+                        </Text>
                       </View>
                     </>
                   )}
-                  
-                  {/* Кнопки действий для активных квестов */}
+
                   {selectedQuest.status === 'ACTIVE' && (
                     <View style={styles.detailsActionButtonsContainer}>
                       <TouchableOpacity
-                        style={[styles.detailsActionButton, styles.completeButton]}
+                        style={[
+                          styles.detailsActionButton,
+                          styles.completeButton,
+                        ]}
                         onPress={() => {
                           setQuestDetailsVisible(false);
                           handleCompleteQuest(selectedQuest.id);
@@ -342,8 +490,14 @@ export default function AIQuestListScreen({ navigation, route }) {
                           colors={['#4caf50', '#388e3c']}
                           style={styles.buttonGradient}
                         >
-                          <MaterialIcons name="check" size={18} color="#ffffff" />
-                          <Text style={styles.actionButtonText}>ВЫПОЛНИТЬ</Text>
+                          <MaterialIcons
+                            name="check"
+                            size={18}
+                            color="#ffffff"
+                          />
+                          <Text style={styles.actionButtonText}>
+                            ВЫПОЛНИТЬ
+                          </Text>
                         </LinearGradient>
                       </TouchableOpacity>
 
@@ -358,8 +512,14 @@ export default function AIQuestListScreen({ navigation, route }) {
                           colors={['#f44336', '#d32f2f']}
                           style={styles.buttonGradient}
                         >
-                          <MaterialIcons name="close" size={18} color="#ffffff" />
-                          <Text style={styles.actionButtonText}>ПРОВАЛИТЬ</Text>
+                          <MaterialIcons
+                            name="close"
+                            size={18}
+                            color="#ffffff"
+                          />
+                          <Text style={styles.actionButtonText}>
+                            ПРОВАЛИТЬ
+                          </Text>
                         </LinearGradient>
                       </TouchableOpacity>
                     </View>
@@ -374,150 +534,330 @@ export default function AIQuestListScreen({ navigation, route }) {
   };
 
   return (
-    <LinearGradient
-      colors={['#0c0e1a', '#1a1d33']}
-      style={styles.container}
-    >
-      {/* --- Заголовок и Фильтры остаются без изменений --- */}
-      <Text style={styles.headerText}>КВЕСТЫ</Text>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filtersContainer}>
-         {/* ... твои TouchableOpacity для фильтров ... */}
-        <TouchableOpacity style={[ styles.filterButton, activeFilter === 'ALL' && styles.activeFilter ]} onPress={() => setActiveFilter('ALL')}>
-          <Text style={[ styles.filterText, activeFilter === 'ALL' && styles.activeFilterText ]}>ВСЕ</Text>
+    <LinearGradient colors={['#0c0e1a', '#1a1d33']} style={styles.container}>
+      <Text style={styles.headerText}>QUESTS</Text>
+
+      {/* Фильтры */}
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        style={styles.filtersContainer}
+      >
+        <TouchableOpacity
+          style={[
+            styles.filterButton,
+            activeFilter === 'ALL' && styles.activeFilter,
+          ]}
+          onPress={() => setActiveFilter('ALL')}
+        >
+          <Text
+            style={[
+              styles.filterText,
+              activeFilter === 'ALL' && styles.activeFilterText,
+            ]}
+          >
+            ALL
+          </Text>
         </TouchableOpacity>
-        <TouchableOpacity style={[ styles.filterButton, activeFilter === 'DAILY' && styles.activeFilter, activeFilter === 'DAILY' && { borderColor: '#4caf50' } ]} onPress={() => setActiveFilter('DAILY')}>
-          <MaterialIcons name="replay" size={16} color={activeFilter === 'DAILY' ? '#4caf50' : '#ffffff'} style={styles.filterIcon} />
-          <Text style={[ styles.filterText, activeFilter === 'DAILY' && styles.activeFilterText, activeFilter === 'DAILY' && { color: '#4caf50' } ]}>ЕЖЕДНЕВНЫЕ</Text>
+
+        <TouchableOpacity
+          style={[
+            styles.filterButton,
+            activeFilter === 'DAILY' && styles.activeFilter,
+            activeFilter === 'DAILY' && { borderColor: '#4caf50' },
+          ]}
+          onPress={() => setActiveFilter('DAILY')}
+        >
+          <MaterialIcons
+            name="replay"
+            size={16}
+            color={activeFilter === 'DAILY' ? '#4caf50' : '#ffffff'}
+            style={styles.filterIcon}
+          />
+          <Text
+            style={[
+              styles.filterText,
+              activeFilter === 'DAILY' && styles.activeFilterText,
+              activeFilter === 'DAILY' && { color: '#4caf50' },
+            ]}
+          >
+            DAILY
+          </Text>
         </TouchableOpacity>
-        {/* ... остальные фильтры ... */}
-        <TouchableOpacity style={[ styles.filterButton, activeFilter === 'URGENT' && styles.activeFilter, activeFilter === 'URGENT' && { borderColor: '#f44336' } ]} onPress={() => setActiveFilter('URGENT')}>
-          <MaterialIcons name="timer" size={16} color={activeFilter === 'URGENT' ? '#f44336' : '#ffffff'} style={styles.filterIcon} />
-          <Text style={[ styles.filterText, activeFilter === 'URGENT' && styles.activeFilterText, activeFilter === 'URGENT' && { color: '#f44336' } ]}>СРОЧНЫЕ</Text>
+
+        <TouchableOpacity
+          style={[
+            styles.filterButton,
+            activeFilter === 'URGENT' && styles.activeFilter,
+            activeFilter === 'URGENT' && { borderColor: '#f44336' },
+          ]}
+          onPress={() => setActiveFilter('URGENT')}
+        >
+          <MaterialIcons
+            name="timer"
+            size={16}
+            color={activeFilter === 'URGENT' ? '#f44336' : '#ffffff'}
+            style={styles.filterIcon}
+          />
+          <Text
+            style={[
+              styles.filterText,
+              activeFilter === 'URGENT' && styles.activeFilterText,
+              activeFilter === 'URGENT' && { color: '#f44336' },
+            ]}
+          >
+            URGENT
+          </Text>
         </TouchableOpacity>
-        <TouchableOpacity style={[ styles.filterButton, activeFilter === 'MAIN' && styles.activeFilter, activeFilter === 'MAIN' && { borderColor: '#ffc107' } ]} onPress={() => setActiveFilter('MAIN')}>
-          <MaterialIcons name="star" size={16} color={activeFilter === 'MAIN' ? '#ffc107' : '#ffffff'} style={styles.filterIcon} />
-          <Text style={[ styles.filterText, activeFilter === 'MAIN' && styles.activeFilterText, activeFilter === 'MAIN' && { color: '#ffc107' } ]}>ОСНОВНЫЕ</Text>
+
+        <TouchableOpacity
+          style={[
+            styles.filterButton,
+            activeFilter === 'MAIN' && styles.activeFilter,
+            activeFilter === 'MAIN' && { borderColor: '#ffc107' },
+          ]}
+          onPress={() => setActiveFilter('MAIN')}
+        >
+          <MaterialIcons
+            name="star"
+            size={16}
+            color={activeFilter === 'MAIN' ? '#ffc107' : '#ffffff'}
+            style={styles.filterIcon}
+          />
+          <Text
+            style={[
+              styles.filterText,
+              activeFilter === 'MAIN' && styles.activeFilterText,
+              activeFilter === 'MAIN' && { color: '#ffc107' },
+            ]}
+          >
+            BASIC
+          </Text>
         </TouchableOpacity>
-        <TouchableOpacity style={[ styles.filterButton, activeFilter === 'CHALLENGE' && styles.activeFilter, activeFilter === 'CHALLENGE' && { borderColor: '#9c27b0' } ]} onPress={() => setActiveFilter('CHALLENGE')}>
-          <MaterialIcons name="flag" size={16} color={activeFilter === 'CHALLENGE' ? '#9c27b0' : '#ffffff'} style={styles.filterIcon} />
-          <Text style={[ styles.filterText, activeFilter === 'CHALLENGE' && styles.activeFilterText, activeFilter === 'CHALLENGE' && { color: '#9c27b0' } ]}>ЧЕЛЛЕНДЖИ</Text>
+
+        <TouchableOpacity
+          style={[
+            styles.filterButton,
+            activeFilter === 'CHALLENGE' && styles.activeFilter,
+            activeFilter === 'CHALLENGE' && { borderColor: '#9c27b0' },
+          ]}
+          onPress={() => setActiveFilter('CHALLENGE')}
+        >
+          <MaterialIcons
+            name="flag"
+            size={16}
+            color={activeFilter === 'CHALLENGE' ? '#9c27b0' : '#ffffff'}
+            style={styles.filterIcon}
+          />
+          <Text
+            style={[
+              styles.filterText,
+              activeFilter === 'CHALLENGE' && styles.activeFilterText,
+              activeFilter === 'CHALLENGE' && { color: '#9c27b0' },
+            ]}
+          >
+            CHALLENGES
+          </Text>
         </TouchableOpacity>
       </ScrollView>
 
-      {/* --- Отображение списка квестов (с изменениями) --- */}
+      {/* Список квестов */}
       <ScrollView style={styles.questsContainer}>
         {loading ? (
-            <View style={styles.loadingContainer}>
-                <Text style={styles.loadingText}>Загрузка квестов...</Text>
-                <ActivityIndicator size="large" color="#4dabf7" style={styles.loadingIndicator} />
-            </View>
-        ) : getFilteredQuests().length === 0 ? (
-            <View style={styles.emptyContainer}>
-                <MaterialIcons name="search-off" size={60} color="#4dabf7" style={styles.emptyIcon} />
-                <Text style={styles.noQuestsText}>Нет активных квестов</Text>
-                <Text style={styles.noQuestsSubtext}>Возвращайтесь позже для новых заданий</Text>
-            </View>
+          <View style={styles.loadingContainer}>
+            <Text style={styles.loadingText}>Loading quests...</Text>
+            <ActivityIndicator
+              size="large"
+              color="#4dabf7"
+              style={styles.loadingIndicator}
+            />
+          </View>
+        ) : filteredQuests.length === 0 ? (
+          <View style={styles.emptyContainer}>
+            <MaterialIcons
+              name="search-off"
+              size={60}
+              color="#4dabf7"
+              style={styles.emptyIcon}
+            />
+            <Text style={styles.noQuestsText}>There are no active quests</Text>
+            <Text style={styles.noQuestsSubtext}>
+              Come back later for new quests
+            </Text>
+          </View>
         ) : (
-          getFilteredQuests().map(quest => (
+          filteredQuests.map((quest) => (
             <View key={quest.id} style={styles.questWrapper}>
-              {/* TouchableOpacity теперь открывает детали квеста */}
-              <TouchableOpacity 
-                activeOpacity={0.8} 
+              <TouchableOpacity
+                activeOpacity={0.8}
                 onPress={() => fetchQuestDetails(quest.id)}
               >
                 <LinearGradient
-                  colors={['#1f274c', '#151a35']} // Немного другие цвета для градиента карточки
+                  colors={['#1f274c', '#151a35']}
                   style={[
                     styles.questItem,
-                    { borderLeftColor: getQuestTypeColor(quest.quest_type) } // Убрали ширину отсюда, зададим в стиле
+                    { borderLeftColor: getQuestTypeColor(quest.quest_type) },
                   ]}
                 >
-                  {/* Верхняя часть: Тип, Статус и Время/Дата */}
                   <View style={styles.questTopRow}>
                     <View style={styles.questTypeAndStatus}>
-                        <View style={[styles.typeBadge, { backgroundColor: getQuestTypeColor(quest.quest_type) }]}>
-                            {renderQuestTypeIcon(quest.quest_type)}
-                            <Text style={styles.typeText}>{getQuestTypeText(quest.quest_type)}</Text>
-                        </View>
-                        <View style={[styles.statusBadge, { backgroundColor: getStatusColor(quest.status) }]}>
-                            <Text style={styles.statusText}>
-                            {quest.status === 'ACTIVE' ? 'АКТИВЕН' :
-                             quest.status === 'COMPLETED' ? 'ВЫПОЛНЕН' : 'ПРОВАЛЕН'}
-                            </Text>
-                        </View>
+                      <View
+                        style={[
+                          styles.typeBadge,
+                          {
+                            backgroundColor: getQuestTypeColor(
+                              quest.quest_type
+                            ),
+                          },
+                        ]}
+                      >
+                        {renderQuestTypeIcon(quest.quest_type)}
+                        <Text style={styles.typeText}>
+                          {getQuestTypeText(quest.quest_type)}
+                        </Text>
+                      </View>
+                      <View
+                        style={[
+                          styles.statusBadge,
+                          { backgroundColor: getStatusColor(quest.status) },
+                        ]}
+                      >
+                        <Text style={styles.statusText}>
+                          {quest.status === 'ACTIVE'
+                            ? 'ACTIVE'
+                            : quest.status === 'COMPLETED'
+                            ? 'COMPLETED'
+                            : 'FAILED'}
+                        </Text>
+                      </View>
                     </View>
-                    {/* Время/Дата справа */}
-                    {quest.quest_type === 'URGENT' && quest.expires_at && quest.status === 'ACTIVE' && (
-                        <View style={[ styles.timeRemainingContainer, isExpired(quest.expires_at) && styles.expiredContainer ]}>
-                            <MaterialIcons
-                            name={isExpired(quest.expires_at) ? "timer-off" : "timer"}
-                            size={14} // Меньше иконка
-                            color={isExpired(quest.expires_at) ? "#f44336" : "#a0a0a0"} // Менее яркий цвет
-                            />
-                            <Text style={[ styles.timeRemainingText, isExpired(quest.expires_at) && styles.expiredText ]}>
-                            {getTimeRemaining(quest.expires_at)}
-                            </Text>
-                        </View>
-                    )}
-                    {shouldShowCompletedDate(quest.status, quest.completed_at) && (
-                        <View style={styles.completedDateContainer}>
-                            <MaterialIcons
-                            name={quest.status === 'COMPLETED' ? "check-circle-outline" : "cancel-outline"} // Outline иконки
+
+                    {quest.quest_type === 'URGENT' &&
+                      quest.expires_at &&
+                      quest.status === 'ACTIVE' && (
+                        <View
+                          style={[
+                            styles.timeRemainingContainer,
+                            isExpired(quest.expires_at) &&
+                              styles.expiredContainer,
+                          ]}
+                        >
+                          <MaterialIcons
+                            name={
+                              isExpired(quest.expires_at)
+                                ? 'timer-off'
+                                : 'timer'
+                            }
                             size={14}
-                            color={quest.status === 'COMPLETED' ? "#4caf50" : "#f44336"}
-                            />
-                            <Text style={styles.completedDateText}>
-                            {formatCompletedDate(quest.completed_at)}
-                            </Text>
+                            color={
+                              isExpired(quest.expires_at)
+                                ? '#f44336'
+                                : '#a0a0a0'
+                            }
+                          />
+                          <Text
+                            style={[
+                              styles.timeRemainingText,
+                              isExpired(quest.expires_at) &&
+                                styles.expiredText,
+                            ]}
+                          >
+                            {getTimeRemaining(quest.expires_at)}
+                          </Text>
                         </View>
+                      )}
+
+                    {shouldShowCompletedDate(
+                      quest.status,
+                      quest.completed_at
+                    ) && (
+                      <View style={styles.completedDateContainer}>
+                        <MaterialIcons
+                          name={
+                            quest.status === 'COMPLETED'
+                              ? 'check-circle-outline'
+                              : 'cancel-outline'
+                          }
+                          size={14}
+                          color={
+                            quest.status === 'COMPLETED'
+                              ? '#4caf50'
+                              : '#f44336'
+                          }
+                        />
+                        <Text style={styles.completedDateText}>
+                          {formatCompletedDate(quest.completed_at)}
+                        </Text>
+                      </View>
                     )}
                   </View>
 
-                  {/* Заголовок */}
                   <Text style={styles.questTitle}>{quest.title}</Text>
 
-                  {/* Описание (сокращенное) */}
-                  <Text style={styles.questDescription} numberOfLines={2} ellipsizeMode="tail">
-                      {quest.description}
+                  <Text
+                    style={styles.questDescription}
+                    numberOfLines={2}
+                    ellipsizeMode="tail"
+                  >
+                    {quest.description}
                   </Text>
 
-                  {/* Нижняя часть: Награды и Штрафы */}
                   <View style={styles.questBottomRow}>
-                    {/* Награды */}
                     <View style={styles.rewardsContainer}>
-                        {quest.reward_points > 0 && (
-                            <View style={styles.rewardItem}>
-                                <Ionicons name="star" size={16} color="#ffd700" />
-                                <Text style={styles.rewardText}>{quest.reward_points} XP</Text>
-                            </View>
-                        )}
-                        {quest.reward_other && (
-                            <View style={styles.rewardItem}>
-                                <MaterialIcons name="card-giftcard" size={16} color="#4dabf7" />
-                                <Text style={styles.rewardText} numberOfLines={1} ellipsizeMode="tail">
-                                    {quest.reward_other}
-                                </Text>
-                            </View>
-                        )}
+                      {quest.reward_points > 0 && (
+                        <View style={styles.rewardItem}>
+                          <Ionicons name="star" size={16} color="#ffd700" />
+                          <Text style={styles.rewardText}>
+                            {quest.reward_points} XP
+                          </Text>
+                        </View>
+                      )}
+                      {quest.reward_other && (
+                        <View style={styles.rewardItem}>
+                          <MaterialIcons
+                            name="card-giftcard"
+                            size={16}
+                            color="#4dabf7"
+                          />
+                          <Text
+                            style={styles.rewardText}
+                            numberOfLines={1}
+                            ellipsizeMode="tail"
+                          >
+                            {quest.reward_other}
+                          </Text>
+                        </View>
+                      )}
                     </View>
 
-                    {/* Штраф (если есть и квест активен или провален) */}
                     {quest.penalty_info && quest.status !== 'COMPLETED' && (
                       <View style={styles.penaltyContainer}>
-                          <MaterialIcons name="warning-amber" size={16} color="#f44336" />
-                          <Text style={styles.penaltyText} numberOfLines={1} ellipsizeMode="tail">
-                              {quest.penalty_info}
-                          </Text>
+                        <MaterialIcons
+                          name="warning-amber"
+                          size={16}
+                          color="#f44336"
+                        />
+                        <Text
+                          style={styles.penaltyText}
+                          numberOfLines={1}
+                          ellipsizeMode="tail"
+                        >
+                          {quest.penalty_info}
+                        </Text>
                       </View>
                     )}
+
                     <View style={styles.detailsIndicator}>
-                      <MaterialIcons name="chevron-right" size={22} color="#64b5f6" />
+                      <MaterialIcons
+                        name="chevron-right"
+                        size={22}
+                        color="#64b5f6"
+                      />
                     </View>
                   </View>
                 </LinearGradient>
               </TouchableOpacity>
 
-              {/* Кнопки действий (вынесены из TouchableOpacity/LinearGradient) */}
               {quest.status === 'ACTIVE' && (
                 <View style={styles.actionButtonsContainer}>
                   <TouchableOpacity
@@ -525,11 +865,15 @@ export default function AIQuestListScreen({ navigation, route }) {
                     onPress={() => handleCompleteQuest(quest.id)}
                   >
                     <LinearGradient
-                      colors={['#4caf50', '#388e3c']} // Зеленый для выполнения
+                      colors={['#4caf50', '#388e3c']}
                       style={styles.buttonGradient}
                     >
-                      <MaterialIcons name="check" size={18} color="#ffffff" />
-                      <Text style={styles.actionButtonText}>ВЫПОЛНИТЬ</Text>
+                      <MaterialIcons
+                        name="check"
+                        size={18}
+                        color="#ffffff"
+                      />
+                      <Text style={styles.actionButtonText}>COMPLETE</Text>
                     </LinearGradient>
                   </TouchableOpacity>
 
@@ -538,16 +882,20 @@ export default function AIQuestListScreen({ navigation, route }) {
                     onPress={() => handleFailQuest(quest.id)}
                   >
                     <LinearGradient
-                       colors={['#f44336', '#d32f2f']} // Красный для провала
-                       style={styles.buttonGradient}
+                      colors={['#f44336', '#d32f2f']}
+                      style={styles.buttonGradient}
                     >
-                      <MaterialIcons name="close" size={18} color="#ffffff" />
-                      <Text style={styles.actionButtonText}>ПРОВАЛИТЬ</Text>
+                      <MaterialIcons
+                        name="close"
+                        size={18}
+                        color="#ffffff"
+                      />
+                      <Text style={styles.actionButtonText}>FAIL</Text>
                     </LinearGradient>
                   </TouchableOpacity>
                 </View>
               )}
-            </View> // questWrapper
+            </View>
           ))
         )}
       </ScrollView>
@@ -654,10 +1002,10 @@ const styles = StyleSheet.create({
     backgroundColor: '#151a35',
     borderRadius: 10,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 6,
-    elevation: 8,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.22, // чуть легче тень
+    shadowRadius: 4,
+    elevation: 4, // легче по сравнению с 8
   },
   questItem: {
     borderLeftWidth: 4,
@@ -822,8 +1170,8 @@ const styles = StyleSheet.create({
     textShadowRadius: 1,
     fontFamily: 'System',
   },
-  
-  // Модальное окно с деталями квеста
+
+  // модалка
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.7)',
@@ -837,10 +1185,10 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     overflow: 'hidden',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 5 },
-    shadowOpacity: 0.5,
-    shadowRadius: 10,
-    elevation: 15,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.35,
+    shadowRadius: 8,
+    elevation: 10,
   },
   modalContent: {
     padding: 15,
@@ -960,5 +1308,5 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     overflow: 'hidden',
     marginHorizontal: 5,
-  }
+  },
 });

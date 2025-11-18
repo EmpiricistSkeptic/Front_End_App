@@ -1,133 +1,173 @@
-import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Dimensions, StatusBar, Image } from 'react-native';
+// WelcomeScreen.js
+import React, { useMemo } from 'react';
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  StyleSheet,
+  Dimensions,
+  StatusBar,
+  SafeAreaView,
+  ScrollView,
+} from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { BlurView } from 'expo-blur';
 
 const { width, height } = Dimensions.get('window');
 
-export default function LoginScreen({ navigation }) {
+export default function WelcomeScreen({ navigation }) {
+  // Мемоизированные частицы, чтобы не прыгали на каждый рендер
+  const particles = useMemo(
+    () =>
+      [...Array(20)].map((_, i) => ({
+        id: i,
+        left: Math.random() * width,
+        top: Math.random() * height,
+        w: Math.random() * 4 + 1,
+        h: Math.random() * 4 + 1,
+        opacity: Math.random() * 0.5 + 0.3,
+      })),
+    []
+  );
+
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="light-content" />
       <LinearGradient colors={['#121539', '#080b20']} style={styles.background}>
-        {/* Particle effects background */}
-        <View style={styles.particlesContainer}>
-          {[...Array(20)].map((_, i) => (
-            <View 
-              key={i} 
+        {/* Фоновые частицы */}
+        <View style={styles.particlesContainer} pointerEvents="none">
+          {particles.map((p) => (
+            <View
+              key={p.id}
               style={[
-                styles.particle, 
-                { 
-                  left: Math.random() * width, 
-                  top: Math.random() * height,
-                  width: Math.random() * 4 + 1,
-                  height: Math.random() * 4 + 1,
-                  opacity: Math.random() * 0.5 + 0.3
-                }
-              ]} 
+                styles.particle,
+                {
+                  left: p.left,
+                  top: p.top,
+                  width: p.w,
+                  height: p.h,
+                  opacity: p.opacity,
+                },
+              ]}
             />
           ))}
         </View>
-        
-        <View style={styles.statusWindow}>
-          {/* Status Window Header */}
-          <View style={styles.windowHeader}>
-            <View style={styles.headerDot} />
-            <Text style={styles.headerText}>SYSTEM</Text>
-          </View>
-          
-          {/* Status Window Content */}
-          <View style={styles.windowContent}>
-            <Text style={styles.appTitle}>LEVEL UP</Text>
-            
-            <View style={styles.divider} />
-            
-            <Text style={styles.welcomeText}>WELCOME, HUNTER</Text>
-            <Text style={styles.subtitleText}>Please log in or register to continue</Text>
-            
-            <View style={styles.statsContainer}>
-              <View style={styles.statItem}>
-                <Text style={styles.statLabel}>STATUS</Text>
-                <Text style={styles.statValue}>STANDBY</Text>
+
+        {/* ScrollView, чтобы на маленьких экранах всё можно было увидеть */}
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          bounces={false}
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={styles.statusWindow}>
+            {/* Header окна */}
+            <View className="window-header" style={styles.windowHeader}>
+              <View style={styles.headerDot} />
+              <Text style={styles.headerText}>SYSTEM</Text>
+            </View>
+
+            {/* Content */}
+            <View style={styles.windowContent}>
+              <Text style={styles.appTitle}>LEVEL UP</Text>
+
+              <View style={styles.divider} />
+
+              <Text style={styles.welcomeText}>WELCOME, HUNTER</Text>
+              <Text style={styles.subtitleText}>
+                Please log in or register to continue
+              </Text>
+
+              <View style={styles.statsContainer}>
+                <View style={styles.statItem}>
+                  <Text style={styles.statLabel}>STATUS</Text>
+                  <Text style={styles.statValue}>STANDBY</Text>
+                </View>
+                <View style={styles.statItem}>
+                  <Text style={styles.statLabel}>ACCESS</Text>
+                  <Text style={styles.statValue}>PENDING</Text>
+                </View>
               </View>
-              <View style={styles.statItem}>
-                <Text style={styles.statLabel}>ACCESS</Text>
-                <Text style={styles.statValue}>PENDING</Text>
+
+              <View style={styles.buttonsContainer}>
+                <TouchableOpacity
+                  style={styles.button}
+                  onPress={() => navigation.navigate('Login')}
+                >
+                  <LinearGradient
+                    colors={['#4dabf7', '#3250b4']}
+                    style={styles.buttonGradient}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                  >
+                    <Text style={styles.buttonText}>LOG IN</Text>
+                  </LinearGradient>
+                  <View style={styles.buttonGlow} />
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.button, { marginTop: 15 }]}
+                  onPress={() => navigation.navigate('Registration')}
+                >
+                  <LinearGradient
+                    colors={['#4dabf7', '#3250b4']}
+                    style={styles.buttonGradient}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                  >
+                    <Text style={styles.buttonText}>REGISTER</Text>
+                  </LinearGradient>
+                  <View style={styles.buttonGlow} />
+                </TouchableOpacity>
               </View>
             </View>
-            
-            <View style={styles.buttonsContainer}>
-              <TouchableOpacity 
-                style={styles.button} 
-                onPress={() => navigation.navigate('Login')}
-              >
-                <LinearGradient
-                  colors={['#4dabf7', '#3250b4']}
-                  style={styles.buttonGradient}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
-                >
-                  <Text style={styles.buttonText}>LOG IN</Text>
-                </LinearGradient>
-                <View style={styles.buttonGlow} />
-              </TouchableOpacity>
-              
-              <TouchableOpacity 
-                style={[styles.button, { marginTop: 15 }]} 
-                onPress={() => navigation.navigate('Registration')}
-              >
-                <LinearGradient
-                  colors={['#4dabf7', '#3250b4']}
-                  style={styles.buttonGradient}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
-                >
-                  <Text style={styles.buttonText}>REGISTER</Text>
-                </LinearGradient>
-                <View style={styles.buttonGlow} />
-              </TouchableOpacity>
+
+            {/* Footer */}
+            <View style={styles.footer}>
+              <Text style={styles.footerText}>HUNTER ASSOCIATION</Text>
             </View>
           </View>
-          
-          {/* Footer */}
-          <View style={styles.footer}>
-            <Text style={styles.footerText}>HUNTER ASSOCIATION</Text>
-          </View>
-        </View>
+        </ScrollView>
       </LinearGradient>
-    </View>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+    backgroundColor: '#080b20',
+  },
   container: {
     flex: 1,
   },
   background: {
     flex: 1,
-    justifyContent: 'center', // можно изменить на 'flex-start', если нужно еще больше отодвинуть содержимое от верха
-    alignItems: 'center',
   },
   particlesContainer: {
     position: 'absolute',
-    width: width,
-    height: height,
+    width,
+    height,
   },
   particle: {
     position: 'absolute',
     backgroundColor: '#4dabf7',
     borderRadius: 50,
   },
+  scrollContent: {
+    flexGrow: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 24,
+  },
   statusWindow: {
-    width: width * 0.85,
+    width: width * 0.9,                // шире, как на экране логина
+    minHeight: height * 0.8,           // высокий, на весь экран
+    maxHeight: height * 0.9,
     backgroundColor: 'rgba(16, 20, 45, 0.75)',
     borderRadius: 8,
     borderWidth: 1,
     borderColor: '#4dabf7',
     overflow: 'hidden',
-    minHeight: height * 0.7, // расширяет окно по высоте
-    justifyContent: 'space-between', // распределяет содержимое по вертикали
-    marginVertical: 30, // отступы сверху и снизу
+    justifyContent: 'space-between',
   },
   windowHeader: {
     flexDirection: 'row',
@@ -180,6 +220,7 @@ const styles = StyleSheet.create({
     color: '#c8d6e5',
     fontSize: 14,
     marginBottom: 20,
+    textAlign: 'center',
   },
   statsContainer: {
     flexDirection: 'row',
@@ -249,5 +290,6 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
   },
 });
+
 
 

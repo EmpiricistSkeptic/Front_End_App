@@ -1,165 +1,168 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Dimensions, StatusBar, Image } from 'react-native';
+import React, { useCallback, useMemo } from 'react';
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  StyleSheet,
+  Dimensions,
+  StatusBar,
+  Image,
+} from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons, MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
 import { createMaterialTopTabNavigator } from '@react-navigation/material-top-tabs';
-// Убираем прямой доступ к AsyncStorage
-import apiService from '../services/apiService';
+import { useFocusEffect } from '@react-navigation/native';
 
 import TaskScreen from './TaskScreen';
 import AIQuestListScreen from './AIQuestListScreen';
 import HabitScreen from './HabitScreen';
 
+import { useProfile } from '../context/ProfileContext';
+
 const Tab = createMaterialTopTabNavigator();
 const { width, height } = Dimensions.get('window');
 
+// Хелпер ранга (вынесен вне компонента)
+function getRankFromLevel(level) {
+  if (level < 10) return 'E';
+  if (level < 20) return 'D';
+  if (level < 30) return 'C';
+  if (level < 40) return 'B';
+  if (level < 50) return 'A';
+  return 'S';
+}
+
 export default function HomeScreen({ navigation }) {
-  const [profileData, setProfileData] = useState({
-    level: 1,
-    points: 0,
-    totalPoints: 1000,
-    username: ''
-  });
+  // Достаём данные профиля из глобального контекста
+  const { profileData, totalPoints, expPercentage, refreshProfile } = useProfile();
 
-  // Инициализация экрана: сразу пытаемся получить профиль
-  useEffect(() => {
-    const initializeScreen = async () => {
-      try {
-        // Пытаемся подгрузить профиль — если токен живой, это сработает
-        await fetchProfileData();
-      } catch (error) {
-        // При неуспехе (401 или отсутствие токена) переходим на Login
-        console.error('Init error:', error);
-        navigation.reset({ index: 0, routes: [{ name: 'Login' }] });
-      }
-    };
-    initializeScreen();
-  }, []);
-  
-  // Обновляем профиль при возвращении на экран
-  useEffect(() => {
-    const unsubscribe = navigation.addListener('focus', () => {
-      fetchProfileData().catch(err => {
-        console.error('Fetch on focus error:', err);
-        if (err.message.includes('Session expired')) {
-          navigation.reset({ index: 0, routes: [{ name: 'Login' }] });
+  // Безопасные значения, пока профиль ещё не успел загрузиться
+  const level = profileData?.level ?? 1;
+  const points = profileData?.points ?? 0;
+  const username = profileData?.username ?? '';
+  const avatar = profileData?.avatar ?? null;
+  const safeTotalPoints = totalPoints || 1000;
+  const safeExpPercentage =
+    Number.isFinite(expPercentage) && expPercentage >= 0
+      ? Math.min(100, expPercentage)
+      : 0;
+
+  // Мемоизированные частицы
+  const particles = useMemo(
+    () =>
+      [...Array(20)].map((_, i) => ({
+        key: i,
+        left: Math.random() * width,
+        top: Math.random() * height,
+        width: Math.random() * 4 + 1,
+        height: Math.random() * 4 + 1,
+        opacity: Math.random() * 0.5 + 0.3,
+      })),
+    []
+  );
+
+  // Обновляем профиль при фокусе (и при первом открытии экрана)
+  useFocusEffect(
+    useCallback(() => {
+      let isActive = true;
+
+      const loadProfile = async () => {
+        try {
+          await refreshProfile();
+        } catch (err) {
+          if (!isActive) return;
+          console.error('Fetch profile error (HomeScreen):', err);
+
+          const status = err?.response?.status ?? err?.status;
+
+          if (status === 401 || err?.message?.includes?.('Session expired')) {
+            navigation.reset({ index: 0, routes: [{ name: 'Login' }] });
+          }
         }
-      });
-    });
-    return unsubscribe;
-  }, [navigation]);
-  
-  // Расчет порога опыта
-  const calculateXpThreshold = (level) => Math.floor(1000 * (1.5 ** (level - 1)));
-  
-  // Получение данных профиля
-  const fetchProfileData = async () => {
-    const response = await apiService.get('profile/{pk}'); // без leading slash
-    const level = response.level || 1;
-    const totalPoints = calculateXpThreshold(level);
-    setProfileData({
-      level,
-      points: response.points || 0,
-      totalPoints,
-      username: response.username || '',
-      avatar: response.avatar_url || null
-    });
-  };
+      };
 
-  // Add this helper function
-  function getRankFromLevel(level) {
-    if (level < 10) return 'E';
-    if (level < 20) return 'D';
-    if (level < 30) return 'C';
-    if (level < 40) return 'B';
-    if (level < 50) return 'A';
-    return 'S';
-  }
-  
-  // Calculate experience progress percentage for display
-  const calculateExpPercentage = () => {
-    return (profileData.points / profileData.totalPoints) * 100;
-  };
-  
+      loadProfile();
+
+      return () => {
+        isActive = false;
+      };
+    }, [refreshProfile, navigation])
+  );
+
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" />
       <LinearGradient colors={['#121539', '#080b20']} style={styles.background}>
         {/* Particle effects background */}
         <View style={styles.particlesContainer}>
-          {[...Array(20)].map((_, i) => (
-            <View 
-              key={i} 
+          {particles.map((p) => (
+            <View
+              key={p.key}
               style={[
-                styles.particle, 
-                { 
-                  left: Math.random() * width, 
-                  top: Math.random() * height,
-                  width: Math.random() * 4 + 1,
-                  height: Math.random() * 4 + 1,
-                  opacity: Math.random() * 0.5 + 0.3
-                }
-              ]} 
+                styles.particle,
+                {
+                  left: p.left,
+                  top: p.top,
+                  width: p.width,
+                  height: p.height,
+                  opacity: p.opacity,
+                },
+              ]}
             />
           ))}
         </View>
-        
-        {/* Enhanced Header with Solo Leveling theme */}
+
+        {/* Header */}
         <View style={styles.header}>
           <View style={styles.headerLeft}>
-            {/* Level display with glowing effect */}
             <View style={styles.levelContainer}>
               <Text style={styles.levelLabel}>HUNTER RANK</Text>
-              <Text style={styles.levelText}>LVL {profileData.level}</Text>
+              <Text style={styles.levelText}>LVL {level}</Text>
               <View style={styles.rankDecoration}>
-                <Text style={styles.rankText}>RANK {getRankFromLevel(profileData.level)}</Text>
+                <Text style={styles.rankText}>RANK {getRankFromLevel(level)}</Text>
               </View>
             </View>
-            
-            {/* Enhanced EXP bar with glow effect */}
+
             <View style={styles.pointsBarOuterContainer}>
               <Text style={styles.pointsLabel}>COMBAT POWER</Text>
               <View style={styles.pointsBarContainer}>
-                <View style={[styles.pointsBar, { width: `${calculateExpPercentage()}%` }]} />
+                <View style={[styles.pointsBar, { width: `${safeExpPercentage}%` }]} />
                 <View style={styles.pointsBarGlow} />
-                <Text style={styles.pointsText}>{profileData.points} / {profileData.totalPoints}</Text>
+                <Text style={styles.pointsText}>
+                  {points} / {safeTotalPoints}
+                </Text>
               </View>
-              <Text style={styles.expPercentage}>{Math.round(calculateExpPercentage())}%</Text>
+              <Text style={styles.expPercentage}>{Math.round(safeExpPercentage)}%</Text>
             </View>
           </View>
-          
-          {/* Avatar with glowing effect similar to ProfileScreen */}
-          <TouchableOpacity 
+
+          <TouchableOpacity
             style={styles.profileButton}
             onPress={() => navigation.navigate('Profile')}
           >
             <View style={styles.avatarGlow}>
               <View style={styles.profileImageContainer}>
-                {profileData.avatar ? (
-                  <Image 
-                    source={{ uri: `${profileData.avatar}?t=${Date.now()}` }} 
-                    style={styles.profileImage} 
-                  />
+                {avatar ? (
+                  <Image source={{ uri: avatar }} style={styles.profileImage} />
                 ) : (
                   <View style={styles.profileImage}>
                     <Text style={styles.profileInitial}>
-                      {profileData.username ? profileData.username.charAt(0).toUpperCase() : 'U'}
+                      {username ? username.charAt(0).toUpperCase() : 'U'}
                     </Text>
                   </View>
                 )}
               </View>
             </View>
-            
-            {/* Level badge with glow */}
+
             <View style={styles.levelBadgeContainer}>
               <View style={styles.levelBadge}>
-                <Text style={styles.levelBadgeText}>{profileData.level}</Text>
+                <Text style={styles.levelBadgeText}>{level}</Text>
               </View>
             </View>
           </TouchableOpacity>
         </View>
-        
-        {/* Tab Navigation */}
+
+        {/* Tabs */}
         <Tab.Navigator
           screenOptions={{
             tabBarStyle: {
@@ -183,50 +186,54 @@ export default function HomeScreen({ navigation }) {
             tabBarPressColor: 'rgba(77, 171, 247, 0.1)',
           }}
         >
-          <Tab.Screen 
-            name="Tasks" 
-            component={TaskScreen}
-            initialParams={{ fetchProfileData: fetchProfileData }}
-          />
-          <Tab.Screen 
-            name="Quests" 
-            component={AIQuestListScreen} 
-            initialParams={{ fetchProfileData: fetchProfileData }}
-          />
-          <Tab.Screen 
-            name="Habits" 
-            component={HabitScreen} 
-          />
+          <Tab.Screen name="Tasks" component={TaskScreen} />
+          <Tab.Screen name="Quests" component={AIQuestListScreen} />
+          <Tab.Screen name="Habits" component={HabitScreen} />
         </Tab.Navigator>
-        
+
         {/* Bottom Navigation */}
         <View style={styles.bottomNav}>
           <LinearGradient
             colors={['rgba(16, 20, 45, 0.9)', 'rgba(16, 20, 45, 0.75)']}
             style={styles.navBackground}
           >
-            <TouchableOpacity style={styles.navItem} onPress={() => navigation.navigate('Home')}>
+            <TouchableOpacity
+              style={styles.navItem}
+              onPress={() => navigation.navigate('Home')}
+            >
               <MaterialCommunityIcons name="sword-cross" size={24} color="#4dabf7" />
               <Text style={styles.navText}>Tasks</Text>
             </TouchableOpacity>
-            
-            <TouchableOpacity style={styles.navItem} onPress={() => navigation.navigate('Pomodoro')}>
+
+            <TouchableOpacity
+              style={styles.navItem}
+              onPress={() => navigation.navigate('Pomodoro')}
+            >
               <MaterialIcons name="timer" size={24} color="#4dabf7" />
               <Text style={styles.navText}>Timer</Text>
             </TouchableOpacity>
-            
-            <TouchableOpacity style={styles.navItem} onPress={() => navigation.navigate('Nutrition')}>
+
+            <TouchableOpacity
+              style={styles.navItem}
+              onPress={() => navigation.navigate('Nutrition')}
+            >
               <MaterialCommunityIcons name="food-apple" size={24} color="#4dabf7" />
               <Text style={styles.navText}>Calories</Text>
             </TouchableOpacity>
-            
-            <TouchableOpacity style={styles.navItem} onPress={() => navigation.navigate('Groups')}>
+
+            <TouchableOpacity
+              style={styles.navItem}
+              onPress={() => navigation.navigate('Groups')}
+            >
               <Ionicons name="people" size={24} color="#4dabf7" />
               <Text style={styles.navText}>Guild</Text>
             </TouchableOpacity>
-            
-            <TouchableOpacity style={styles.navItem} onPress={() => navigation.navigate('Assistant')}>
-              <Ionicons name="hardware-chip-outline" size={24} color="#4dabf7" /> 
+
+            <TouchableOpacity
+              style={styles.navItem}
+              onPress={() => navigation.navigate('Assistant')}
+            >
+              <Ionicons name="hardware-chip-outline" size={24} color="#4dabf7" />
               <Text style={styles.navText}>AI Assistant</Text>
             </TouchableOpacity>
           </LinearGradient>
@@ -236,9 +243,7 @@ export default function HomeScreen({ navigation }) {
   );
 }
 
-// Updated styles with Solo Leveling/anime aesthetic for HomeScreen header
 const styles = StyleSheet.create({
-  // Keep your existing styles...
   container: {
     flex: 1,
   },
@@ -260,8 +265,7 @@ const styles = StyleSheet.create({
     shadowRadius: 5,
     elevation: 5,
   },
-  
-  // Enhanced header styles
+
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -276,8 +280,7 @@ const styles = StyleSheet.create({
     flex: 1,
     marginRight: 15,
   },
-  
-  // Level display with anime-style decoration
+
   levelContainer: {
     marginBottom: 12,
   },
@@ -313,8 +316,7 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     letterSpacing: 1,
   },
-  
-  // Enhanced EXP bar with glow effect
+
   pointsBarOuterContainer: {
     position: 'relative',
     marginBottom: 5,
@@ -371,8 +373,7 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: 'bold',
   },
-  
-  // Enhanced profile button with glow effects
+
   profileButton: {
     position: 'relative',
   },
@@ -415,8 +416,7 @@ const styles = StyleSheet.create({
     textShadowOffset: { width: 0, height: 0 },
     textShadowRadius: 10,
   },
-  
-  // Level badge with glow
+
   levelBadgeContainer: {
     position: 'absolute',
     bottom: -5,
@@ -445,8 +445,7 @@ const styles = StyleSheet.create({
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 2,
   },
-  
-  // Keep all other styles from your existing code...
+
   bottomNav: {
     width: '100%',
     paddingBottom: 20,
@@ -467,3 +466,5 @@ const styles = StyleSheet.create({
     marginTop: 5,
   },
 });
+
+

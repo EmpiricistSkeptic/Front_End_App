@@ -1,199 +1,293 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import {
-  View, Text, TextInput, TouchableOpacity, StyleSheet,
-  Dimensions, StatusBar, Alert, ActivityIndicator
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  StyleSheet,
+  Dimensions,
+  StatusBar,
+  Alert,
+  ActivityIndicator,
+  ScrollView,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-// 1. Импортируем нашу функцию регистрации
 import { register } from '../services/authService';
 
 const { width, height } = Dimensions.get('window');
 
 export default function RegistrationScreen({ navigation }) {
   const [username, setUsername] = useState('');
-  const [email, setEmail]     = useState('');
+  const [email, setEmail]       = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading]   = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
 
+  const emailInputRef = useRef(null);
+  const passwordInputRef = useRef(null);
+  const confirmInputRef = useRef(null);
+
+  // Мемоизированные частицы (чтобы фон не прыгал на каждый рендер)
+  const particles = useMemo(
+    () =>
+      [...Array(20)].map((_, i) => ({
+        key: `p-${i}`,
+        left: Math.random() * width,
+        top: Math.random() * height,
+        size: Math.random() * 4 + 1,
+        opacity: Math.random() * 0.5 + 0.3,
+      })),
+    []
+  );
+
   const handleRegistration = async () => {
     setErrorMessage('');
 
-    // валидация полей
-    if (!username || !email || !password || !confirmPassword) {
+    const trimmedUsername = username.trim();
+    const trimmedEmail = email.trim();
+    const trimmedPassword = password.trim();
+    const trimmedConfirmPassword = confirmPassword.trim();
+
+    // простая фронтенд-валидация
+    if (!trimmedUsername || !trimmedEmail || !trimmedPassword || !trimmedConfirmPassword) {
       setErrorMessage('Пожалуйста, заполните все поля');
       return;
     }
-    if (password !== confirmPassword) {
+
+    if (trimmedPassword !== trimmedConfirmPassword) {
       setErrorMessage('Пароли не совпадают');
       return;
     }
+
+    if (trimmedPassword.length < 6) {
+      setErrorMessage('Пароль должен быть не короче 6 символов');
+      return;
+    }
+
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
+    if (!emailRegex.test(trimmedEmail)) {
       setErrorMessage('Пожалуйста, введите корректный email');
       return;
     }
 
     try {
       setLoading(true);
-      // 2. Вместо fetch вызываем нашу обёртку
-      await register({ username, email, password, password2: confirmPassword });
-      
-      // 3. После успешной регистрации можно сразу перейти на главный экран
+
+      await register({
+        username: trimmedUsername,
+        email: trimmedEmail,
+        password: trimmedPassword,
+        password2: trimmedConfirmPassword,
+      });
+
       Alert.alert('Успешно', 'Вы успешно зарегистрировались!', [
-        { text: 'OK', onPress: () => navigation.navigate('Login') }
+        { text: 'OK', onPress: () => navigation.navigate('Login') },
       ]);
     } catch (error) {
-      // 4. register выбросит Error с сообщением из API
-      setErrorMessage(error.message || 'Не удалось зарегистрироваться');
-      console.error('Registration error:', error);
+      const rawMessage = error?.message || '';
+
+      let msg = 'Не удалось зарегистрироваться. Попробуйте ещё раз.';
+
+      if (rawMessage.includes('Network request failed')) {
+        msg = 'Не удалось подключиться к серверу. Проверьте интернет-соединение.';
+      } else if (rawMessage) {
+        // показываем то, что собрал authService.register
+        msg = rawMessage;
+      }
+
+      setErrorMessage(msg);
+
+      if (__DEV__) {
+        console.error('Registration error:', error);
+      }
     } finally {
       setLoading(false);
     }
+  };
+
+  const goToLogin = () => {
+    navigation.navigate('Login');
   };
 
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" />
       <LinearGradient colors={['#121539', '#080b20']} style={styles.background}>
-        {/* Particle effects background */}
-        <View style={styles.particlesContainer}>
-          {[...Array(20)].map((_, i) => (
-            <View 
-              key={i} 
+        {/* Фоновые частицы */}
+        <View style={styles.particlesContainer} pointerEvents="none">
+          {particles.map(p => (
+            <View
+              key={p.key}
               style={[
-                styles.particle, 
-                { 
-                  left: Math.random() * width, 
-                  top: Math.random() * height,
-                  width: Math.random() * 4 + 1,
-                  height: Math.random() * 4 + 1,
-                  opacity: Math.random() * 0.5 + 0.3
-                }
-              ]} 
+                styles.particle,
+                {
+                  left: p.left,
+                  top: p.top,
+                  width: p.size,
+                  height: p.size,
+                  opacity: p.opacity,
+                },
+              ]}
             />
           ))}
         </View>
-        
-        <View style={styles.statusWindow}>
-          {/* Status Window Header */}
-          <View style={styles.windowHeader}>
-            <View style={styles.headerDot} />
-            <Text style={styles.headerText}>SYSTEM</Text>
-          </View>
-          
-          {/* Registration Form Content */}
-          <View style={styles.windowContent}>
-            <Text style={styles.appTitle}>REGISTRATION</Text>
-            
-            <View style={styles.divider} />
-            
-            <Text style={styles.welcomeText}>NEW HUNTER</Text>
-            <Text style={styles.subtitleText}>Create your hunter profile</Text>
-            
-            {errorMessage ? (
-              <View style={styles.errorContainer}>
-                <Text style={styles.errorText}>{errorMessage}</Text>
-              </View>
-            ) : null}
-            
-            <View style={styles.formContainer}>
-              <View style={styles.inputContainer}>
-                <Text style={styles.inputLabel}>USERNAME</Text>
-                <TextInput
-                  style={styles.inputField}
-                  placeholder="Enter username"
-                  placeholderTextColor="rgba(200, 214, 229, 0.5)"
-                  value={username}
-                  onChangeText={setUsername}
-                />
-              </View>
-              
-              <View style={styles.inputContainer}>
-                <Text style={styles.inputLabel}>EMAIL</Text>
-                <TextInput
-                  style={styles.inputField}
-                  placeholder="Enter email"
-                  placeholderTextColor="rgba(200, 214, 229, 0.5)"
-                  keyboardType="email-address"
-                  value={email}
-                  onChangeText={setEmail}
-                  autoCapitalize="none"
-                />
-              </View>
-              
-              <View style={styles.inputContainer}>
-                <Text style={styles.inputLabel}>PASSWORD</Text>
-                <TextInput
-                  style={styles.inputField}
-                  placeholder="Enter password"
-                  placeholderTextColor="rgba(200, 214, 229, 0.5)"
-                  secureTextEntry
-                  value={password}
-                  onChangeText={setPassword}
-                />
-              </View>
-              
-              <View style={styles.inputContainer}>
-                <Text style={styles.inputLabel}>CONFIRM PASSWORD</Text>
-                <TextInput
-                  style={styles.inputField}
-                  placeholder="Confirm password"
-                  placeholderTextColor="rgba(200, 214, 229, 0.5)"
-                  secureTextEntry
-                  value={confirmPassword}
-                  onChangeText={setConfirmPassword}
-                />
-              </View>
+
+        <KeyboardAvoidingView
+          style={styles.keyboardAvoider}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 40 : 0}
+        >
+          <View style={styles.statusWindow}>
+            {/* Header */}
+            <View style={styles.windowHeader}>
+              <View style={styles.headerDot} />
+              <Text style={styles.headerText}>SYSTEM</Text>
             </View>
-            
-            <View style={styles.statsContainer}>
-              <View style={styles.statItem}>
-                <Text style={styles.statLabel}>STATUS</Text>
-                <Text style={styles.statValue}>REGISTRATION</Text>
+
+            {/* Скролл-контент чтобы не ломаться на маленьких экранах */}
+            <ScrollView
+              style={styles.contentScroll}
+              contentContainerStyle={styles.windowContent}
+              keyboardShouldPersistTaps="handled"
+            >
+              <Text style={styles.appTitle}>REGISTRATION</Text>
+
+              <View style={styles.divider} />
+
+              <Text style={styles.welcomeText}>NEW HUNTER</Text>
+              <Text style={styles.subtitleText}>Create your hunter profile</Text>
+
+              {errorMessage ? (
+                <View style={styles.errorContainer}>
+                  <Text style={styles.errorText}>{errorMessage}</Text>
+                </View>
+              ) : null}
+
+              <View style={styles.formContainer}>
+                <View style={styles.inputContainer}>
+                  <Text style={styles.inputLabel}>USERNAME</Text>
+                  <TextInput
+                    style={styles.inputField}
+                    placeholder="Enter username"
+                    placeholderTextColor="rgba(200, 214, 229, 0.5)"
+                    value={username}
+                    onChangeText={setUsername}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    textContentType="username"
+                    autoComplete="username"
+                    returnKeyType="next"
+                    onSubmitEditing={() => emailInputRef.current?.focus()}
+                  />
+                </View>
+
+                <View style={styles.inputContainer}>
+                  <Text style={styles.inputLabel}>EMAIL</Text>
+                  <TextInput
+                    ref={emailInputRef}
+                    style={styles.inputField}
+                    placeholder="Enter email"
+                    placeholderTextColor="rgba(200, 214, 229, 0.5)"
+                    keyboardType="email-address"
+                    value={email}
+                    onChangeText={setEmail}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    textContentType="emailAddress"
+                    autoComplete="email"
+                    returnKeyType="next"
+                    onSubmitEditing={() => passwordInputRef.current?.focus()}
+                  />
+                </View>
+
+                <View style={styles.inputContainer}>
+                  <Text style={styles.inputLabel}>PASSWORD</Text>
+                  <TextInput
+                    ref={passwordInputRef}
+                    style={styles.inputField}
+                    placeholder="Enter password"
+                    placeholderTextColor="rgba(200, 214, 229, 0.5)"
+                    secureTextEntry
+                    value={password}
+                    onChangeText={setPassword}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    textContentType="newPassword"
+                    autoComplete="password-new"
+                    returnKeyType="next"
+                    onSubmitEditing={() => confirmInputRef.current?.focus()}
+                  />
+                </View>
+
+                <View style={styles.inputContainer}>
+                  <Text style={styles.inputLabel}>CONFIRM PASSWORD</Text>
+                  <TextInput
+                    ref={confirmInputRef}
+                    style={styles.inputField}
+                    placeholder="Confirm password"
+                    placeholderTextColor="rgba(200, 214, 229, 0.5)"
+                    secureTextEntry
+                    value={confirmPassword}
+                    onChangeText={setConfirmPassword}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    textContentType="newPassword"
+                    autoComplete="password-new"
+                    returnKeyType="go"
+                    onSubmitEditing={handleRegistration}
+                  />
+                </View>
               </View>
-              <View style={styles.statItem}>
-                <Text style={styles.statLabel}>LEVEL</Text>
-                <Text style={styles.statValue}>INIT</Text>
+
+              <View style={styles.statsContainer}>
+                <View style={styles.statItem}>
+                  <Text style={styles.statLabel}>STATUS</Text>
+                  <Text style={styles.statValue}>REGISTRATION</Text>
+                </View>
+                <View style={styles.statItem}>
+                  <Text style={styles.statLabel}>LEVEL</Text>
+                  <Text style={styles.statValue}>INIT</Text>
+                </View>
               </View>
-            </View>
-            
-            <View style={styles.buttonsContainer}>
-              <TouchableOpacity 
-                style={[styles.button, loading && styles.disabledButton]} 
-                onPress={handleRegistration}
-                disabled={loading}
-              >
-                <LinearGradient
-                  colors={['#4dabf7', '#3250b4']}
-                  style={styles.buttonGradient}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
+
+              <View style={styles.buttonsContainer}>
+                <TouchableOpacity
+                  style={[styles.button, loading && styles.disabledButton]}
+                  onPress={handleRegistration}
+                  disabled={loading}
                 >
-                  {loading ? (
-                    <ActivityIndicator color="#ffffff" size="small" />
-                  ) : (
-                    <Text style={styles.buttonText}>REGISTER</Text>
-                  )}
-                </LinearGradient>
-                <View style={styles.buttonGlow} />
-              </TouchableOpacity>
-              
-              <TouchableOpacity 
-                style={styles.loginLink} 
-                onPress={() => navigation.navigate('Login')}
-              >
-                <Text style={styles.loginLinkText}>Already have an account? LOG IN</Text>
-              </TouchableOpacity>
+                  <LinearGradient
+                    colors={['#4dabf7', '#3250b4']}
+                    style={styles.buttonGradient}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                  >
+                    {loading ? (
+                      <ActivityIndicator color="#ffffff" size="small" />
+                    ) : (
+                      <Text style={styles.buttonText}>REGISTER</Text>
+                    )}
+                  </LinearGradient>
+                  <View style={styles.buttonGlow} />
+                </TouchableOpacity>
+
+                <TouchableOpacity style={styles.loginLink} onPress={goToLogin}>
+                  <Text style={styles.loginLinkText}>
+                    Already have an account? LOG IN
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </ScrollView>
+
+            {/* Footer */}
+            <View style={styles.footer}>
+              <Text style={styles.footerText}>HUNTER ASSOCIATION</Text>
             </View>
           </View>
-          
-          {/* Footer */}
-          <View style={styles.footer}>
-            <Text style={styles.footerText}>HUNTER ASSOCIATION</Text>
-          </View>
-        </View>
+        </KeyboardAvoidingView>
       </LinearGradient>
     </View>
   );
@@ -205,13 +299,16 @@ const styles = StyleSheet.create({
   },
   background: {
     flex: 1,
+  },
+  keyboardAvoider: {
+    flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
   },
   particlesContainer: {
     position: 'absolute',
-    width: width,
-    height: height,
+    width,
+    height,
   },
   particle: {
     position: 'absolute',
@@ -219,7 +316,9 @@ const styles = StyleSheet.create({
     borderRadius: 50,
   },
   statusWindow: {
-    width: width * 0.85,
+    width: width * 0.95,         // как на LoginScreen
+    height: height * 0.9,
+    maxHeight: height * 0.95,
     backgroundColor: 'rgba(16, 20, 45, 0.75)',
     borderRadius: 8,
     borderWidth: 1,
@@ -246,9 +345,13 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     letterSpacing: 1,
   },
+  contentScroll: {
+    flex: 1,
+  },
   windowContent: {
     padding: 20,
     alignItems: 'center',
+    flexGrow: 1,
   },
   appTitle: {
     color: '#4dabf7',

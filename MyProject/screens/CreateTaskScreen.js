@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -11,7 +11,7 @@ import {
   Platform,
   ActivityIndicator,
   Modal,
-  FlatList
+  FlatList,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -28,111 +28,113 @@ export default function CreateTaskScreen({ navigation, route }) {
   const [points, setPoints] = useState('');
   const [categories, setCategories] = useState([]);
   const [selectedCategory, setSelectedCategory] = useState(null);
-  const [selectedCategoryName, setSelectedCategoryName] = useState('Select category');
   const [unitTypes, setUnitTypes] = useState([]);
   const [selectedUnitType, setSelectedUnitType] = useState(null);
-  const [selectedUnitTypeName, setSelectedUnitTypeName] = useState('Select unit type');
   const [unitAmount, setUnitAmount] = useState('');
   const [loading, setLoading] = useState(false);
   const [loadingData, setLoadingData] = useState(true);
-  
-  // Состояния для модальных окон выбора
+
+  // Модалки выбора
   const [showCategoryModal, setShowCategoryModal] = useState(false);
   const [showUnitTypeModal, setShowUnitTypeModal] = useState(false);
-  
-  // Состояния для работы с DateTimePicker
+
+  // DateTimePicker
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
   const [dateTimePickerMode, setDateTimePickerMode] = useState('date');
 
-  // Форматированная строка дедлайна для отображения
-  const [formattedDeadline, setFormattedDeadline] = useState('');
+  // --- Derived: имена для dropdown'ов ---
+  const selectedCategoryName = useMemo(() => {
+    const found = categories.find(c => c.id === selectedCategory);
+    return found ? found.name : 'Select category';
+  }, [categories, selectedCategory]);
 
-  // Загружаем категории и типы единиц измерения при монтировании компонента
+  const selectedUnitTypeName = useMemo(() => {
+    const found = unitTypes.find(u => u.id === selectedUnitType);
+    if (!found) return 'Select unit type';
+    const symbol = found.symbol ? ` (${found.symbol})` : '';
+    return `${found.name}${symbol}`;
+  }, [unitTypes, selectedUnitType]);
+
+  // Форматированная строка дедлайна
+  const formattedDeadline = useMemo(() => {
+    if (!deadlineDate) return '';
+    const dateStr = deadlineDate.toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+    });
+
+    const timeStr = deadlineDate.toLocaleTimeString('en-US', {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true,
+    });
+
+    return `${dateStr} at ${timeStr}`;
+  }, [deadlineDate]);
+
+  // --- Эффекты ---
+
+  // Загрузка категорий и unit types параллельно
   useEffect(() => {
+    const fetchCategoriesAndUnitTypes = async () => {
+      setLoadingData(true);
+      try {
+        const [categoriesRes, unitTypesRes] = await Promise.all([
+          apiService.get('categories/'),
+          apiService.get('unit-types/'),
+        ]);
+
+        const categoriesData = Array.isArray(categoriesRes)
+          ? categoriesRes
+          : categoriesRes.results ?? [];
+
+        const unitTypesData = Array.isArray(unitTypesRes)
+          ? unitTypesRes
+          : unitTypesRes.results ?? [];
+
+        setCategories(categoriesData);
+        if (categoriesData.length) {
+          setSelectedCategory(categoriesData[0].id);
+        }
+
+        setUnitTypes(unitTypesData);
+        if (unitTypesData.length) {
+          setSelectedUnitType(unitTypesData[0].id);
+        }
+      } catch (err) {
+        console.error('Error fetching dictionaries:', err);
+        Alert.alert('Error', 'Не удалось загрузить справочники. Попробуйте позже.');
+      } finally {
+        setLoadingData(false);
+      }
+    };
+
     fetchCategoriesAndUnitTypes();
   }, []);
 
-  // Удаляем не сериализуемый callback из navigation params
+  // Удаляем не сериализуемый callback из navigation params — только один раз
   useEffect(() => {
     if (route?.params?.onGoBack) {
       const { onGoBack, ...rest } = route.params;
       navigation.setParams(rest);
     }
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // <- ВАЖНО: пустой массив, чтобы не зациклиться
 
-  // Форматируем дату для отображения при изменении выбранной даты
-  useEffect(() => {
-    const formatDeadline = () => {
-      const dateStr = deadlineDate.toLocaleDateString('en-US', {
-        year: 'numeric',
-        month: 'short',
-        day: 'numeric'
-      });
-      
-      const timeStr = deadlineDate.toLocaleTimeString('en-US', {
-        hour: '2-digit',
-        minute: '2-digit',
-        hour12: true
-      });
-      
-      setFormattedDeadline(`${dateStr} at ${timeStr}`);
-    };
-    
-    formatDeadline();
-  }, [deadlineDate]);
+  // --- Валидация формы для disabled кнопки ---
+  const isFormValid =
+    title.trim().length > 0 &&
+    selectedCategory &&
+    selectedUnitType &&
+    points.trim() !== '' &&
+    unitAmount.trim() !== '';
 
-  const fetchCategoriesAndUnitTypes = async () => {
-  setLoadingData(true);
-
-  // Categories
-  try {
-    const response = await apiService.get('categories/');
-    console.log('categoriesResponse =', response);
-    const categoriesData = Array.isArray(response)
-      ? response
-      : response.results ?? [];
-
-    setCategories(categoriesData);
-    if (categoriesData.length) {
-      setSelectedCategory(categoriesData[0].id);
-      setSelectedCategoryName(categoriesData[0].name);
-    }
-  } catch (err) {
-    console.error('Error fetching categories:', err);
-    Alert.alert('Error', 'Не удалось загрузить категории.');
-    setLoadingData(false);
-    return;
-  }
-
-  // Unit Types
-  try {
-    const response = await apiService.get('unit-types/');
-    console.log('unitTypesResponse =', response);
-    const unitTypesData = Array.isArray(response)
-      ? response
-      : response.results ?? [];
-
-    setUnitTypes(unitTypesData);
-    if (unitTypesData.length) {
-      setSelectedUnitType(unitTypesData[0].id);
-      setSelectedUnitTypeName(
-        `${unitTypesData[0].name} (${unitTypesData[0].symbol})`
-      );
-    }
-  } catch (err) {
-    console.error('Error fetching unit types:', err);
-    Alert.alert('Error', 'Не удалось загрузить типы единиц.');
-  } finally {
-    setLoadingData(false);
-  }
-};
-
-
-
+  // --- Handlers ---
 
   const handleCreateTask = async () => {
-    if (!title) {
+    if (!title.trim()) {
       Alert.alert('Error', 'Title is required');
       return;
     }
@@ -142,40 +144,54 @@ export default function CreateTaskScreen({ navigation, route }) {
       return;
     }
 
-    const pointsNumber = parseInt(points);
-    if (isNaN(pointsNumber) || pointsNumber < 0) {
-      Alert.alert('Error', 'Points must be a positive number');
+    if (!selectedUnitType) {
+      Alert.alert('Error', 'Please select a unit type');
       return;
     }
 
-    const unitAmountNumber = parseInt(unitAmount);
-    if (isNaN(unitAmountNumber) || unitAmountNumber < 0) {
-      Alert.alert('Error', 'Unit amount must be a positive number');
+    const pointsNumber = parseInt(points, 10);
+    if (isNaN(pointsNumber) || pointsNumber <= 0) {
+      Alert.alert('Error', 'Points must be a positive number greater than zero');
+      return;
+    }
+
+    const unitAmountNumber = parseInt(unitAmount, 10);
+    if (isNaN(unitAmountNumber) || unitAmountNumber <= 0) {
+      Alert.alert('Error', 'Unit amount must be a positive number greater than zero');
+      return;
+    }
+
+    // Дедлайн не должен быть в прошлом
+    if (deadlineDate.getTime() <= Date.now()) {
+      Alert.alert('Error', 'Deadline must be in the future');
       return;
     }
 
     setLoading(true);
     try {
-      // Формируем дедлайн в формате, который ожидает API
       const deadline = deadlineDate.toISOString();
-      
+
       await apiService.post('tasks/', {
-        title,
-        description: description || "",
+        title: title.trim(),
+        description: description || '',
         difficulty,
         deadline,
         points: pointsNumber,
         completed: false,
         category_id: selectedCategory,
         unit_type_id: selectedUnitType,
-        unit_amount: unitAmountNumber
+        unit_amount: unitAmountNumber,
       });
 
       Alert.alert('Success', 'Task created successfully!');
       navigation.goBack();
     } catch (error) {
       console.error('Error creating task', error.response ? error.response.data : error);
-      Alert.alert('Error', 'Failed to create task. Please try again.');
+      const detail =
+        error.response?.data?.detail ||
+        error.response?.data?.non_field_errors?.[0] ||
+        'Failed to create task. Please try again.';
+      Alert.alert('Error', detail);
     } finally {
       setLoading(false);
     }
@@ -196,32 +212,30 @@ export default function CreateTaskScreen({ navigation, route }) {
 
   const handleDateChange = (event, selectedDate) => {
     const currentDate = selectedDate || deadlineDate;
-    
+
     if (Platform.OS === 'android') {
       setShowDatePicker(false);
       setShowTimePicker(false);
     }
-    
+
     if (dateTimePickerMode === 'date') {
-      // Сохраняем только дату, сохраняя текущее время
       const newDate = new Date(currentDate);
       newDate.setHours(deadlineDate.getHours(), deadlineDate.getMinutes());
       setDeadlineDate(newDate);
-      
-      // На Android сразу после выбора даты показываем выбор времени
+
       if (event.type === 'set' && Platform.OS === 'android') {
         setTimeout(() => {
           showDateTimePicker('time');
         }, 500);
       }
     } else {
-      // Сохраняем только время, сохраняя текущую дату
       const newDate = new Date(deadlineDate);
       newDate.setHours(currentDate.getHours(), currentDate.getMinutes());
       setDeadlineDate(newDate);
     }
   };
 
+  // --- Loading state для справочников ---
   if (loadingData) {
     return (
       <View style={[styles.container, styles.loadingContainer]}>
@@ -233,6 +247,7 @@ export default function CreateTaskScreen({ navigation, route }) {
     );
   }
 
+  // --- Render ---
   return (
     <View style={styles.container}>
       <LinearGradient colors={['#121539', '#080b20']} style={styles.background}>
@@ -244,7 +259,7 @@ export default function CreateTaskScreen({ navigation, route }) {
           <View style={styles.placeholder} />
         </View>
 
-        <ScrollView style={styles.form}>
+        <ScrollView style={styles.form} keyboardShouldPersistTaps="handled">
           <Text style={styles.label}>Title</Text>
           <TextInput
             style={styles.input}
@@ -252,6 +267,8 @@ export default function CreateTaskScreen({ navigation, route }) {
             onChangeText={setTitle}
             placeholder="Enter task title"
             placeholderTextColor="#88889C"
+            autoCapitalize="sentences"
+            autoCorrect
           />
 
           <Text style={styles.label}>Description</Text>
@@ -267,7 +284,7 @@ export default function CreateTaskScreen({ navigation, route }) {
           />
 
           <Text style={styles.label}>Category</Text>
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.dropdownButton}
             onPress={() => setShowCategoryModal(true)}
           >
@@ -284,14 +301,19 @@ export default function CreateTaskScreen({ navigation, route }) {
                   styles.difficultyOption,
                   difficulty === level && styles.selectedDifficulty,
                   {
-                    backgroundColor: difficulty === level 
-                      ? (level === 'S' ? '#ff2d55' 
-                        : level === 'A' ? '#ff9500' 
-                        : level === 'B' ? '#4dabf7' 
-                        : level === 'C' ? '#34c759' 
-                        : '#8e8e93') 
-                      : 'rgba(255, 255, 255, 0.1)'
-                  }
+                    backgroundColor:
+                      difficulty === level
+                        ? level === 'S'
+                          ? '#ff2d55'
+                          : level === 'A'
+                          ? '#ff9500'
+                          : level === 'B'
+                          ? '#4dabf7'
+                          : level === 'C'
+                          ? '#34c759'
+                          : '#8e8e93'
+                        : 'rgba(255, 255, 255, 0.1)',
+                  },
                 ]}
                 onPress={() => handleDifficultySelection(level)}
               >
@@ -301,15 +323,14 @@ export default function CreateTaskScreen({ navigation, route }) {
           </View>
 
           <Text style={styles.label}>Deadline</Text>
-          
-          {/* Отображение выбранной даты и времени */}
+
           <View style={styles.dateTimeContainer}>
             <Text style={styles.deadlineDisplayText}>
               {formattedDeadline || 'No date selected'}
             </Text>
-            
+
             <View style={styles.dateTimeButtonsContainer}>
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={styles.dateTimeButton}
                 onPress={() => showDateTimePicker('date')}
               >
@@ -323,8 +344,8 @@ export default function CreateTaskScreen({ navigation, route }) {
                   <Text style={styles.dateTimeButtonText}>Select Date</Text>
                 </LinearGradient>
               </TouchableOpacity>
-              
-              <TouchableOpacity 
+
+              <TouchableOpacity
                 style={styles.dateTimeButton}
                 onPress={() => showDateTimePicker('time')}
               >
@@ -340,8 +361,7 @@ export default function CreateTaskScreen({ navigation, route }) {
               </TouchableOpacity>
             </View>
           </View>
-          
-          {/* DateTimePicker для iOS и Android */}
+
           {(showDatePicker || showTimePicker) && (
             <DateTimePicker
               value={deadlineDate}
@@ -351,12 +371,12 @@ export default function CreateTaskScreen({ navigation, route }) {
               onChange={handleDateChange}
               style={styles.dateTimePicker}
               minimumDate={new Date()}
-              themeVariant="dark" // для iOS темной темы
+              themeVariant="dark"
             />
           )}
 
           <Text style={styles.label}>Unit Type</Text>
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.dropdownButton}
             onPress={() => setShowUnitTypeModal(true)}
           >
@@ -379,15 +399,18 @@ export default function CreateTaskScreen({ navigation, route }) {
             style={styles.input}
             value={points}
             onChangeText={setPoints}
-            placeholder="Enter Points reward"
+            placeholder="Enter points reward"
             placeholderTextColor="#88889C"
             keyboardType="numeric"
           />
 
-          <TouchableOpacity 
-            style={styles.createButton}
+          <TouchableOpacity
+            style={[
+              styles.createButton,
+              (!isFormValid || loading) && { opacity: 0.6 },
+            ]}
             onPress={handleCreateTask}
-            disabled={loading}
+            disabled={loading || !isFormValid}
           >
             <LinearGradient
               colors={['#4dabf7', '#3250b4']}
@@ -404,8 +427,8 @@ export default function CreateTaskScreen({ navigation, route }) {
             <View style={styles.buttonGlow} />
           </TouchableOpacity>
         </ScrollView>
-        
-        {/* Modal для выбора категории */}
+
+        {/* Modal: Category */}
         <Modal
           visible={showCategoryModal}
           transparent={true}
@@ -423,14 +446,15 @@ export default function CreateTaskScreen({ navigation, route }) {
                     style={styles.modalItem}
                     onPress={() => {
                       setSelectedCategory(item.id);
-                      setSelectedCategoryName(item.name);
                       setShowCategoryModal(false);
                     }}
                   >
-                    <Text style={[
-                      styles.modalItemText, 
-                      selectedCategory === item.id && styles.selectedModalItemText
-                    ]}>
+                    <Text
+                      style={[
+                        styles.modalItemText,
+                        selectedCategory === item.id && styles.selectedModalItemText,
+                      ]}
+                    >
                       {item.name}
                     </Text>
                     {selectedCategory === item.id && (
@@ -448,8 +472,8 @@ export default function CreateTaskScreen({ navigation, route }) {
             </View>
           </View>
         </Modal>
-        
-        {/* Modal для выбора типа единицы измерения */}
+
+        {/* Modal: Unit Type */}
         <Modal
           visible={showUnitTypeModal}
           transparent={true}
@@ -462,26 +486,31 @@ export default function CreateTaskScreen({ navigation, route }) {
               <FlatList
                 data={unitTypes}
                 keyExtractor={(item) => item.id.toString()}
-                renderItem={({ item }) => (
-                  <TouchableOpacity
-                    style={styles.modalItem}
-                    onPress={() => {
-                      setSelectedUnitType(item.id);
-                      setSelectedUnitTypeName(`${item.name} (${item.symbol})`);
-                      setShowUnitTypeModal(false);
-                    }}
-                  >
-                    <Text style={[
-                      styles.modalItemText, 
-                      selectedUnitType === item.id && styles.selectedModalItemText
-                    ]}>
-                      {`${item.name} (${item.symbol})`}
-                    </Text>
-                    {selectedUnitType === item.id && (
-                      <Ionicons name="checkmark" size={20} color="#4dabf7" />
-                    )}
-                  </TouchableOpacity>
-                )}
+                renderItem={({ item }) => {
+                  const symbol = item.symbol ? ` (${item.symbol})` : '';
+                  const label = `${item.name}${symbol}`;
+                  return (
+                    <TouchableOpacity
+                      style={styles.modalItem}
+                      onPress={() => {
+                        setSelectedUnitType(item.id);
+                        setShowUnitTypeModal(false);
+                      }}
+                    >
+                      <Text
+                        style={[
+                          styles.modalItemText,
+                          selectedUnitType === item.id && styles.selectedModalItemText,
+                        ]}
+                      >
+                        {label}
+                      </Text>
+                      {selectedUnitType === item.id && (
+                        <Ionicons name="checkmark" size={20} color="#4dabf7" />
+                      )}
+                    </TouchableOpacity>
+                  );
+                }}
               />
               <TouchableOpacity
                 style={styles.modalCloseButton}
@@ -677,7 +706,6 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     shadowOffset: { width: 0, height: 0 },
   },
-  // Стили для компонентов выбора даты и времени
   dateTimeContainer: {
     backgroundColor: 'rgba(16, 20, 45, 0.75)',
     borderWidth: 1,

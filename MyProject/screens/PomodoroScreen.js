@@ -1,7 +1,20 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Dimensions, StatusBar, ScrollView, Alert } from 'react-native';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  StyleSheet,
+  Dimensions,
+  StatusBar,
+  ScrollView,
+  Alert,
+} from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Ionicons, MaterialCommunityIcons, MaterialIcons, FontAwesome5 } from '@expo/vector-icons';
+import {
+  Ionicons,
+  MaterialCommunityIcons,
+  MaterialIcons,
+} from '@expo/vector-icons';
 import Slider from '@react-native-community/slider';
 import { Audio } from 'expo-av';
 
@@ -16,9 +29,15 @@ const DEFAULT_POMODORO = {
 
 export default function PomodoroScreen({ navigation }) {
   // Состояния длительностей
-  const [workDuration, setWorkDuration] = useState(DEFAULT_POMODORO.duration_minutes);
-  const [shortBreakDuration, setShortBreakDuration] = useState(DEFAULT_POMODORO.short_break_minutes);
-  const [longBreakDuration, setLongBreakDuration] = useState(DEFAULT_POMODORO.long_break_minutes);
+  const [workDuration, setWorkDuration] = useState(
+    DEFAULT_POMODORO.duration_minutes
+  );
+  const [shortBreakDuration, setShortBreakDuration] = useState(
+    DEFAULT_POMODORO.short_break_minutes
+  );
+  const [longBreakDuration, setLongBreakDuration] = useState(
+    DEFAULT_POMODORO.long_break_minutes
+  );
 
   // Состояния таймера
   const [timeLeft, setTimeLeft] = useState(workDuration * 60);
@@ -27,21 +46,46 @@ export default function PomodoroScreen({ navigation }) {
   const [isRunning, setIsRunning] = useState(false);
   const [workSessionsCompleted, setWorkSessionsCompleted] = useState(0);
 
-  // Функция звукового уведомления
-  const playSound = async () => {
+  // Мемоизированные частицы фона (чтобы не прыгали и не создавались заново)
+  const particles = useMemo(
+    () =>
+      [...Array(20)].map((_, i) => ({
+        key: i,
+        left: Math.random() * width,
+        top: Math.random() * height,
+        width: Math.random() * 4 + 1,
+        height: Math.random() * 4 + 1,
+        opacity: Math.random() * 0.5 + 0.3,
+      })),
+    []
+  );
+
+  // Функция звукового уведомления с корректным освобождением ресурса
+  const playSound = useCallback(async () => {
+    let sound;
     try {
-      const { sound } = await Audio.Sound.createAsync(
+      const result = await Audio.Sound.createAsync(
         require('../assets/notification.mp3')
       );
+      sound = result.sound;
       await sound.playAsync();
     } catch (error) {
       console.error('Ошибка воспроизведения звука', error);
+    } finally {
+      if (sound) {
+        try {
+          await sound.unloadAsync();
+        } catch (e) {
+          console.warn('Ошибка выгрузки звука', e);
+        }
+      }
     }
-  };
+  }, []);
 
   // Переключение режимов по окончании таймера
-  const handleTimerComplete = () => {
+  const handleTimerComplete = useCallback(() => {
     playSound();
+
     if (currentMode === 'work') {
       if (workSessionsCompleted === 0) {
         Alert.alert('Рабочая сессия завершена!', 'Время на короткий перерыв');
@@ -62,30 +106,43 @@ export default function PomodoroScreen({ navigation }) {
       setTimeLeft(workDuration * 60);
       setTotalSeconds(workDuration * 60);
     }
+
     setIsRunning(false);
-  };
+  }, [
+    currentMode,
+    workSessionsCompleted,
+    shortBreakDuration,
+    longBreakDuration,
+    workDuration,
+    playSound,
+  ]);
 
   // Логика работы таймера
   useEffect(() => {
-    let interval = null;
-    if (isRunning && timeLeft > 0) {
-      interval = setInterval(() => {
-        setTimeLeft(prev => prev - 1);
-      }, 1000);
-    } else if (isRunning && timeLeft === 0) {
-      clearInterval(interval);
-      handleTimerComplete();
-    } else {
-      clearInterval(interval);
+    if (!isRunning) {
+      return;
     }
-    return () => clearInterval(interval);
-  }, [isRunning, timeLeft]);
+
+    if (timeLeft === 0) {
+      // Когда время закончилось — сразу вызываем обработчик
+      handleTimerComplete();
+      return;
+    }
+
+    const intervalId = setInterval(() => {
+      setTimeLeft((prev) => (prev > 0 ? prev - 1 : 0));
+    }, 1000);
+
+    return () => clearInterval(intervalId);
+  }, [isRunning, timeLeft, handleTimerComplete]);
 
   // Форматирование времени
   const formatTime = (seconds) => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
-    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+    return `${mins.toString().padStart(2, '0')}:${secs
+      .toString()
+      .padStart(2, '0')}`;
   };
 
   // Управление таймером
@@ -122,32 +179,41 @@ export default function PomodoroScreen({ navigation }) {
     }
   };
 
+  // Безопасный прогресс (на случай, если totalSeconds вдруг станет 0)
+  const progress =
+    totalSeconds > 0
+      ? Math.max(0, Math.min(1, timeLeft / totalSeconds))
+      : 0;
+
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" />
       <LinearGradient colors={['#121539', '#080b20']} style={styles.background}>
-        {/* Фоновая анимация частиц */}
-        <View style={styles.particlesContainer}>
-          {[...Array(20)].map((_, i) => (
-            <View 
-              key={i} 
+        {/* Фоновая анимация частиц (мемоизированы, pointerEvents отключены) */}
+        <View style={styles.particlesContainer} pointerEvents="none">
+          {particles.map((p) => (
+            <View
+              key={p.key}
               style={[
-                styles.particle, 
-                { 
-                  left: Math.random() * width, 
-                  top: Math.random() * height,
-                  width: Math.random() * 4 + 1,
-                  height: Math.random() * 4 + 1,
-                  opacity: Math.random() * 0.5 + 0.3
-                }
-              ]} 
+                styles.particle,
+                {
+                  left: p.left,
+                  top: p.top,
+                  width: p.width,
+                  height: p.height,
+                  opacity: p.opacity,
+                },
+              ]}
             />
           ))}
         </View>
 
         {/* Шапка */}
         <View style={styles.header}>
-          <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={() => navigation.goBack()}
+          >
             <Ionicons name="arrow-back" size={24} color="#4dabf7" />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>POMODORO TIMER</Text>
@@ -157,34 +223,60 @@ export default function PomodoroScreen({ navigation }) {
         </View>
 
         {/* Основное содержимое */}
-        <ScrollView 
+        <ScrollView
           style={styles.mainContent}
           contentContainerStyle={{ paddingBottom: 100 }}
         >
           <View style={styles.timerSection}>
             {/* Выбор режима */}
             <View style={styles.modeSelector}>
-              <TouchableOpacity 
-                style={[styles.modeButton, currentMode === 'work' && styles.activeModeButton]}
+              <TouchableOpacity
+                style={[
+                  styles.modeButton,
+                  currentMode === 'work' && styles.activeModeButton,
+                ]}
                 onPress={() => switchMode('work')}
               >
-                <Text style={[styles.modeButtonText, currentMode === 'work' && styles.activeModeButtonText]}>
+                <Text
+                  style={[
+                    styles.modeButtonText,
+                    currentMode === 'work' && styles.activeModeButtonText,
+                  ]}
+                >
                   WORK
                 </Text>
               </TouchableOpacity>
-              <TouchableOpacity 
-                style={[styles.modeButton, currentMode === 'shortBreak' && styles.activeModeButton]}
+              <TouchableOpacity
+                style={[
+                  styles.modeButton,
+                  currentMode === 'shortBreak' && styles.activeModeButton,
+                ]}
                 onPress={() => switchMode('shortBreak')}
               >
-                <Text style={[styles.modeButtonText, currentMode === 'shortBreak' && styles.activeModeButtonText]}>
+                <Text
+                  style={[
+                    styles.modeButtonText,
+                    currentMode === 'shortBreak' &&
+                      styles.activeModeButtonText,
+                  ]}
+                >
                   SHORT BREAK
                 </Text>
               </TouchableOpacity>
-              <TouchableOpacity 
-                style={[styles.modeButton, currentMode === 'longBreak' && styles.activeModeButton]}
+              <TouchableOpacity
+                style={[
+                  styles.modeButton,
+                  currentMode === 'longBreak' && styles.activeModeButton,
+                ]}
                 onPress={() => switchMode('longBreak')}
               >
-                <Text style={[styles.modeButtonText, currentMode === 'longBreak' && styles.activeModeButtonText]}>
+                <Text
+                  style={[
+                    styles.modeButtonText,
+                    currentMode === 'longBreak' &&
+                      styles.activeModeButtonText,
+                  ]}
+                >
                   LONG BREAK
                 </Text>
               </TouchableOpacity>
@@ -198,7 +290,12 @@ export default function PomodoroScreen({ navigation }) {
                   {currentMode === 'work' ? 'Work Session' : 'Break Session'}
                 </Text>
                 <View style={styles.progressBarContainer}>
-                  <View style={[styles.progressBar, { width: `${(timeLeft / totalSeconds) * 100}%` }]} />
+                  <View
+                    style={[
+                      styles.progressBar,
+                      { width: `${progress * 100}%` },
+                    ]}
+                  />
                 </View>
               </View>
             </View>
@@ -206,7 +303,10 @@ export default function PomodoroScreen({ navigation }) {
             {/* Управление таймером */}
             <View style={styles.controlsContainer}>
               {!isRunning ? (
-                <TouchableOpacity style={styles.controlButton} onPress={startTimer}>
+                <TouchableOpacity
+                  style={styles.controlButton}
+                  onPress={startTimer}
+                >
                   <LinearGradient
                     colors={['#4dabf7', '#3250b4']}
                     style={styles.buttonGradient}
@@ -218,7 +318,10 @@ export default function PomodoroScreen({ navigation }) {
                   <View style={styles.buttonGlow} />
                 </TouchableOpacity>
               ) : (
-                <TouchableOpacity style={styles.controlButton} onPress={pauseTimer}>
+                <TouchableOpacity
+                  style={styles.controlButton}
+                  onPress={pauseTimer}
+                >
                   <LinearGradient
                     colors={['#ff9500', '#ff2d55']}
                     style={styles.buttonGradient}
@@ -227,10 +330,15 @@ export default function PomodoroScreen({ navigation }) {
                   >
                     <Ionicons name="pause" size={24} color="#ffffff" />
                   </LinearGradient>
-                  <View style={[styles.buttonGlow, { borderColor: '#ff9500' }]} />
+                  <View
+                    style={[styles.buttonGlow, { borderColor: '#ff9500' }]}
+                  />
                 </TouchableOpacity>
               )}
-              <TouchableOpacity style={styles.controlButton} onPress={resetTimer}>
+              <TouchableOpacity
+                style={styles.controlButton}
+                onPress={resetTimer}
+              >
                 <LinearGradient
                   colors={['#8e8e93', '#636366']}
                   style={styles.buttonGradient}
@@ -239,7 +347,9 @@ export default function PomodoroScreen({ navigation }) {
                 >
                   <Ionicons name="refresh" size={24} color="#ffffff" />
                 </LinearGradient>
-                <View style={[styles.buttonGlow, { borderColor: '#8e8e93' }]} />
+                <View
+                  style={[styles.buttonGlow, { borderColor: '#8e8e93' }]}
+                />
               </TouchableOpacity>
             </View>
           </View>
@@ -247,8 +357,11 @@ export default function PomodoroScreen({ navigation }) {
           {/* Настройки таймера */}
           <View style={styles.settingsSection}>
             <Text style={styles.sectionTitle}>TIMER SETTINGS</Text>
+
             <View style={styles.settingItem}>
-              <Text style={styles.settingName}>Work Duration: {workDuration} min</Text>
+              <Text style={styles.settingName}>
+                Work Duration: {workDuration} min
+              </Text>
               <Slider
                 style={styles.slider}
                 minimumValue={5}
@@ -267,8 +380,11 @@ export default function PomodoroScreen({ navigation }) {
                 thumbTintColor="#4dabf7"
               />
             </View>
+
             <View style={styles.settingItem}>
-              <Text style={styles.settingName}>Short Break: {shortBreakDuration} min</Text>
+              <Text style={styles.settingName}>
+                Short Break: {shortBreakDuration} min
+              </Text>
               <Slider
                 style={styles.slider}
                 minimumValue={1}
@@ -287,8 +403,11 @@ export default function PomodoroScreen({ navigation }) {
                 thumbTintColor="#4dabf7"
               />
             </View>
+
             <View style={styles.settingItem}>
-              <Text style={styles.settingName}>Long Break: {longBreakDuration} min</Text>
+              <Text style={styles.settingName}>
+                Long Break: {longBreakDuration} min
+              </Text>
               <Slider
                 style={styles.slider}
                 minimumValue={5}
@@ -312,25 +431,59 @@ export default function PomodoroScreen({ navigation }) {
 
         {/* Нижняя навигация */}
         <View style={styles.bottomNav}>
-          <LinearGradient colors={['rgba(16, 20, 45, 0.9)', 'rgba(16, 20, 45, 0.75)']} style={styles.navBackground}>
-            <TouchableOpacity style={styles.navItem} onPress={() => navigation.navigate('Home')}>
-              <MaterialCommunityIcons name="sword-cross" size={24} color="#4dabf7" />
+          <LinearGradient
+            colors={['rgba(16, 20, 45, 0.9)', 'rgba(16, 20, 45, 0.75)']}
+            style={styles.navBackground}
+          >
+            <TouchableOpacity
+              style={styles.navItem}
+              onPress={() => navigation.navigate('Home')}
+            >
+              <MaterialCommunityIcons
+                name="sword-cross"
+                size={24}
+                color="#4dabf7"
+              />
               <Text style={styles.navText}>Tasks</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.navItem} onPress={() => navigation.navigate('Pomodoro')}>
+
+            <TouchableOpacity
+              style={styles.navItem}
+              onPress={() => navigation.navigate('Pomodoro')}
+            >
               <MaterialIcons name="timer" size={24} color="#fff" />
               <Text style={[styles.navText, { color: '#fff' }]}>Timer</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.navItem} onPress={() => navigation.navigate('Nutrition')}>
-              <MaterialCommunityIcons name="food-apple" size={24} color="#4dabf7" />
+
+            <TouchableOpacity
+              style={styles.navItem}
+              onPress={() => navigation.navigate('Nutrition')}
+            >
+              <MaterialCommunityIcons
+                name="food-apple"
+                size={24}
+                color="#4dabf7"
+              />
               <Text style={styles.navText}>Calories</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.navItem} onPress={() => navigation.navigate('Groups')}>
+
+            <TouchableOpacity
+              style={styles.navItem}
+              onPress={() => navigation.navigate('Groups')}
+            >
               <Ionicons name="people" size={24} color="#4dabf7" />
               <Text style={styles.navText}>Guild</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.navItem} onPress={() => navigation.navigate('Assistant')}>
-              <Ionicons name="hardware-chip-outline" size={24} color="#4dabf7" /> 
+
+            <TouchableOpacity
+              style={styles.navItem}
+              onPress={() => navigation.navigate('Assistant')}
+            >
+              <Ionicons
+                name="hardware-chip-outline"
+                size={24}
+                color="#4dabf7"
+              />
               <Text style={styles.navText}>AI Assistant</Text>
             </TouchableOpacity>
           </LinearGradient>
@@ -553,3 +706,4 @@ const styles = StyleSheet.create({
     marginTop: 3,
   },
 });
+

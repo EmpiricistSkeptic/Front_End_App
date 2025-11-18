@@ -1,7 +1,17 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
-  View, Text, TouchableOpacity, StyleSheet, Dimensions, StatusBar,
-  ScrollView, Alert, ActivityIndicator, TextInput, Modal, Switch
+  View,
+  Text,
+  TouchableOpacity,
+  StyleSheet,
+  Dimensions,
+  StatusBar,
+  ScrollView,
+  Alert,
+  ActivityIndicator,
+  TextInput,
+  Modal,
+  Switch,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons, MaterialCommunityIcons, FontAwesome5 } from '@expo/vector-icons';
@@ -19,27 +29,51 @@ const checkIsToday = (dateString) => {
   try {
     const date = parseISO(dateString);
     if (isNaN(date.getTime())) {
-      console.warn("Invalid date string for checkIsToday:", dateString);
+      console.warn('Invalid date string for checkIsToday:', dateString);
       return false;
     }
     return isToday(date);
   } catch (e) {
-    console.error("Error in checkIsToday:", dateString, e);
+    console.error('Error in checkIsToday:', dateString, e);
     return false;
+  }
+};
+
+// Безопасное форматирование даты
+const safeFormatDate = (dateString, fallback = 'Never', pattern = 'MMM d, yyyy') => {
+  if (!dateString) return fallback;
+  try {
+    const date = parseISO(dateString);
+    if (Number.isNaN(date.getTime())) return fallback;
+    return format(date, pattern);
+  } catch (e) {
+    console.warn('Error in safeFormatDate:', dateString, e);
+    return fallback;
   }
 };
 
 // Список доступных иконок и иконка по умолчанию
 const availableIcons = [
-  'dumbbell', 'running', 'book', 'bed', 'apple-alt', 'tint', 'pray',
-  'list-ul', 'laptop-code', 'music', 'paint-brush', 'ban', 'leaf', 'tasks'
+  'dumbbell',
+  'running',
+  'book',
+  'bed',
+  'apple-alt',
+  'tint',
+  'pray',
+  'list-ul',
+  'laptop-code',
+  'music',
+  'paint-brush',
+  'ban',
+  'leaf',
+  'tasks',
 ];
 const defaultIcon = 'list-ul';
 
 // --- Компонент Экрана ---
 
 export default function HabitScreen({ navigation }) {
-
   // --- Состояния Компонента ---
   const [habits, setHabits] = useState([]); // Список привычек
   const [selectedHabit, setSelectedHabit] = useState(null); // Привычка для просмотра деталей
@@ -49,71 +83,95 @@ export default function HabitScreen({ navigation }) {
   // Состояния для модалки создания/редактирования
   const [createEditModalVisible, setCreateEditModalVisible] = useState(false); // Видимость модалки
   const [isEditing, setIsEditing] = useState(false); // Режим (создание/редактирование)
-  const [formData, setFormData] = useState({ // Данные формы
+  const [formData, setFormData] = useState({
+    // Данные формы
     title: '',
     description: '',
-    frequency: 'Daily', // <-- Добавлено значение по умолчанию
+    frequency: 'Daily', // <-- значение по умолчанию
     icon: defaultIcon,
-    notification_enabled: false // <-- Добавлено значение по умолчанию
+    notification_enabled: false, // <-- значение по умолчанию
   });
   const [submitting, setSubmitting] = useState(false); // Индикатор отправки формы
   const [selectedIcon, setSelectedIcon] = useState(defaultIcon); // Выбранная иконка в форме
   const [iconSelectorVisible, setIconSelectorVisible] = useState(false); // Видимость выбора иконок
 
+  // --- Мемоизированные частицы фона ---
+  const particles = useMemo(
+    () =>
+      [...Array(20)].map((_, i) => ({
+        key: i,
+        left: Math.random() * width,
+        top: Math.random() * height,
+        width: Math.random() * 4 + 1,
+        height: Math.random() * 4 + 1,
+        opacity: Math.random() * 0.5 + 0.3,
+      })),
+    []
+  );
+
   // --- Логика и Эффекты ---
 
   // Получение списка привычек с сервера
-  const fetchHabits = useCallback(async (page = 1) => {
-  // Не устанавливаем setLoading(true) здесь, чтобы избежать мерцания при фокусе
-  try {
-    const response = await apiService.get(`habits/?page=${page}`);
-    console.log('habitsResponse =', response);
-    
-    // Правильная обработка пагинированного ответа
-    if (response && typeof response === 'object') {
-      // Извлекаем результаты из пагинированного ответа
-      const habitsData = response.results || [];
-      
-      // Сохраняем информацию о пагинации, если она нужна в будущем
-      if (response.count !== undefined) {
-        // Здесь можно сохранить общее количество если нужно
-        // setTotalHabitsCount(response.count);
+  const fetchHabits = useCallback(
+    async (page = 1, { withSpinner = false } = {}) => {
+      if (withSpinner) setLoading(true);
+      try {
+        const response = await apiService.get(`habits/?page=${page}`);
+        console.log('habitsResponse =', response);
+
+        let habitsData = [];
+        if (response && typeof response === 'object') {
+          habitsData = response.results || [];
+        } else if (Array.isArray(response)) {
+          habitsData = response;
+        }
+
+        setHabits(habitsData);
+      } catch (error) {
+        console.error('Error fetching habits:', error?.response?.data || error?.message);
+
+        const status = error?.response?.status ?? error?.status;
+
+        if (status === 401) {
+          // истекшая сессия / неавторизован
+          Alert.alert('Session expired', 'Please log in again.', [
+            {
+              text: 'OK',
+              onPress: () =>
+                navigation.reset({
+                  index: 0,
+                  routes: [{ name: 'Login' }],
+                }),
+            },
+          ]);
+          setHabits([]);
+          return;
+        }
+
+        Alert.alert(
+          'Loading Error',
+          error?.response?.data?.detail || 'Could not load your habits. Please try again later.'
+        );
+        setHabits([]);
+      } finally {
+        if (withSpinner) setLoading(false);
       }
-      
-      // Устанавливаем привычки из результатов
-      setHabits(habitsData);
-      
-      // Если нужно в будущем, можно отслеживать наличие других страниц
-      // const hasMorePages = response.next !== null;
-    } else {
-      // Если вдруг пришел массив напрямую (непагинированный ответ)
-      const habitsData = Array.isArray(response) ? response : [];
-      setHabits(habitsData);
-    }
-  } catch (error) {
-    console.error('Error fetching habits:', error.response?.data || error.message);
-    Alert.alert('Loading Error', 'Could not load your habits. Please try again later.');
-    setHabits([]);
-  } finally {
-    // Завершаем начальную загрузку, если она была
-    if (loading) setLoading(false);
-  }
-}, [loading]); // Зависимость от loading для установки false
+    },
+    [navigation]
+  );
 
-  // Загрузка при монтировании
+  // Загрузка при монтировании с индикатором
   useEffect(() => {
-    setLoading(true);
-    fetchHabits();
-  }, []);
+    fetchHabits(1, { withSpinner: true });
+  }, [fetchHabits]);
 
-  // Обновление данных при фокусе экрана
+  // Обновление данных при фокусе экрана (без мерцания загрузки)
   useEffect(() => {
     const unsubscribe = navigation.addListener('focus', () => {
-      // Не устанавливаем setLoading(true) при каждом фокусе, чтобы не было мерцания
       fetchHabits();
     });
-    return unsubscribe; // Отписка при размонтировании
-  }, [navigation, fetchHabits]); // Зависимости: navigation и fetchHabits
+    return unsubscribe;
+  }, [navigation, fetchHabits]);
 
   // Безопасное получение имени иконки
   const getSafeIconName = (iconName) => {
@@ -126,8 +184,11 @@ export default function HabitScreen({ navigation }) {
   const handleOpenAddModal = () => {
     setIsEditing(false);
     setFormData({
-      title: '', description: '', frequency: 'Daily',
-      icon: defaultIcon, notification_enabled: false
+      title: '',
+      description: '',
+      frequency: 'Daily',
+      icon: defaultIcon,
+      notification_enabled: false,
     });
     setSelectedIcon(defaultIcon);
     setIconSelectorVisible(false);
@@ -142,14 +203,13 @@ export default function HabitScreen({ navigation }) {
     setFormData({
       title: habit.title,
       description: habit.description || '',
-      frequency: habit.frequency || 'Daily', // Используем значение из привычки
+      frequency: habit.frequency || 'Daily',
       icon: safeIcon,
-      notification_enabled: habit.notification_enabled || false // Используем значение из привычки
+      notification_enabled: habit.notification_enabled || false,
     });
     setSelectedIcon(safeIcon);
-    // setSelectedHabit(habit); // Не нужно, так как детали уже открыты
     setIconSelectorVisible(false);
-    setCreateEditModalVisible(true); // Открываем модалку редактирования
+    setCreateEditModalVisible(true);
   };
 
   // Закрыть модалку деталей
@@ -160,8 +220,6 @@ export default function HabitScreen({ navigation }) {
   // Закрыть модалку создания/редактирования
   const handleCloseCreateEditModal = () => {
     setCreateEditModalVisible(false);
-    // Сбрасывать formData и selectedIcon здесь не обязательно,
-    // т.к. handleOpenAddModal/handleOpenEditModal установят их заново
   };
 
   // Обработчик сохранения (создание или обновление)
@@ -171,37 +229,62 @@ export default function HabitScreen({ navigation }) {
       return;
     }
     setSubmitting(true);
-    const payload = { title: formData.title.trim(),
+
+    const payload = {
+      title: formData.title.trim(),
       description: formData.description.trim(),
-      frequency: formData.frequency, // Добавлено
-      notification_enabled: formData.notification_enabled, // Добавлено
-      icon: selectedIcon  }; // Используем selectedIcon из состояния
+      frequency: formData.frequency,
+      notification_enabled: formData.notification_enabled,
+      icon: selectedIcon,
+    };
 
     try {
       if (isEditing) {
-        // Обновление существующей привычки
         if (!selectedHabit?.id) {
-          throw new Error("Cannot update habit without ID.");
+          throw new Error('Cannot update habit without ID.');
         }
         console.log(`Updating habit ${selectedHabit.id}`);
         await apiService.patch(`habits/${selectedHabit.id}/`, payload);
         Alert.alert('Success', 'Habit updated successfully!');
       } else {
-        // Создание новой привычки
         console.log('Creating new habit');
         await apiService.post('habits/', payload);
         Alert.alert('Success', 'Habit created successfully!');
       }
-      handleCloseCreateEditModal(); // Закрываем модалку
-      if (isEditing && selectedHabit?.id) {
-          // Обновляем детали открытой привычки после редактирования
-          setSelectedHabit(prev => ({...prev, ...payload}));
-      }
-      fetchHabits(); // Обновляем список привычек
 
+      handleCloseCreateEditModal();
+
+      if (isEditing && selectedHabit?.id) {
+        setSelectedHabit((prev) => (prev ? { ...prev, ...payload } : prev));
+      }
+
+      fetchHabits();
     } catch (error) {
-      console.error(`Error ${isEditing ? 'updating' : 'creating'} habit:`, error.response?.data || error.message);
-      Alert.alert('Save Error', `Failed to ${isEditing ? 'update' : 'create'} habit. ${error.response?.data?.detail || 'Please try again.'}`);
+      console.error(
+        `Error ${isEditing ? 'updating' : 'creating'} habit:`,
+        error?.response?.data || error?.message
+      );
+
+      const status = error?.response?.status ?? error?.status;
+      if (status === 401) {
+        Alert.alert('Session expired', 'Please log in again.', [
+          {
+            text: 'OK',
+            onPress: () =>
+              navigation.reset({
+                index: 0,
+                routes: [{ name: 'Login' }],
+              }),
+          },
+        ]);
+      } else {
+        Alert.alert(
+          'Save Error',
+          `Failed to ${isEditing ? 'update' : 'create'} habit. ${
+            error?.response?.data?.detail || 'Please try again.'
+          }`
+        );
+      }
     } finally {
       setSubmitting(false);
     }
@@ -212,23 +295,43 @@ export default function HabitScreen({ navigation }) {
     if (!habitToDelete?.id) return;
 
     Alert.alert(
-      "Confirm Deletion",
-      // Явно используем <Text> здесь не нужно, Alert обрабатывает строки
+      'Confirm Deletion',
       `Are you sure you want to delete "${habitToDelete.title}"?`,
       [
-        { text: "Cancel", style: "cancel" },
+        { text: 'Cancel', style: 'cancel' },
         {
-          text: "Delete", style: "destructive",
+          text: 'Delete',
+          style: 'destructive',
           onPress: async () => {
             try {
               console.log(`Deleting habit ${habitToDelete.id}`);
-              await apiService.delete(`habits/${habitToDelete.id}/`); 
+              await apiService.delete(`habits/${habitToDelete.id}/`);
               Alert.alert('Deleted', `Habit "${habitToDelete.title}" deleted.`);
-              setHabits(prev => prev.filter(h => h.id !== habitToDelete.id)); // Удаляем из списка локально
-              handleCloseDetailsModal(); // Закрываем модалку деталей, если удалили ее
+              setHabits((prev) => prev.filter((h) => h.id !== habitToDelete.id));
+              handleCloseDetailsModal();
             } catch (error) {
-              console.error('Error deleting habit:', error.response?.data || error.message);
-              Alert.alert('Deletion Error', `Failed to delete habit. ${error.response?.data?.detail || 'Please try again.'}`);
+              console.error('Error deleting habit:', error?.response?.data || error?.message);
+
+              const status = error?.response?.status ?? error?.status;
+              if (status === 401) {
+                Alert.alert('Session expired', 'Please log in again.', [
+                  {
+                    text: 'OK',
+                    onPress: () =>
+                      navigation.reset({
+                        index: 0,
+                        routes: [{ name: 'Login' }],
+                      }),
+                  },
+                ]);
+              } else {
+                Alert.alert(
+                  'Deletion Error',
+                  `Failed to delete habit. ${
+                    error?.response?.data?.detail || 'Please try again.'
+                  }`
+                );
+              }
             }
           },
         },
@@ -240,62 +343,99 @@ export default function HabitScreen({ navigation }) {
   // Обработчик отметки привычки
   const handleTrackHabit = async (habitToTrack) => {
     if (!habitToTrack?.id) {
-        Alert.alert('Error', 'Cannot track habit without ID.');
-        return;
+      Alert.alert('Error', 'Cannot track habit without ID.');
+      return;
     }
+
+    // 🔹 Ранний выход: уже отмечено сегодня — не шлём лишний запрос
+    if (checkIsToday(habitToTrack.last_tracked)) {
+      Alert.alert('Already Tracked', 'You have already marked this habit today.');
+      return;
+    }
+
     setTrackingHabitId(habitToTrack.id);
 
     try {
       console.log(`Sending track request for habit ${habitToTrack.id}`);
-      // Используем URL '/habits/{id}/track/' и метод POST
       const response = await apiService.post(`habits/${habitToTrack.id}/track/`, {});
 
-      // Обработка успешного ответа (200 OK)
       if (response && response.streak !== undefined && response.last_tracked) {
         const updateData = {
-            streak: response.streak,
-            last_tracked: response.last_tracked
+          streak: response.streak,
+          last_tracked: response.last_tracked,
         };
-        setHabits(prevHabits =>
-          prevHabits.map(h => h.id === habitToTrack.id ? { ...h, ...updateData } : h)
+        setHabits((prevHabits) =>
+          prevHabits.map((h) => (h.id === habitToTrack.id ? { ...h, ...updateData } : h))
         );
         if (selectedHabit?.id === habitToTrack.id) {
-          setSelectedHabit(prev => ({ ...prev, ...updateData }));
+          setSelectedHabit((prev) => (prev ? { ...prev, ...updateData } : prev));
         }
-        console.log(`Habit ${habitToTrack.id} tracked successfully. New streak: ${response.streak}`);
+        console.log(
+          `Habit ${habitToTrack.id} tracked successfully. New streak: ${response.streak}`
+        );
       } else {
-         console.warn('Unexpected successful response format from track endpoint, fetching habits again.');
-         fetchHabits();
+        console.warn(
+          'Unexpected successful response format from track endpoint, fetching habits again.'
+        );
+        fetchHabits();
       }
-
     } catch (error) {
-      console.error('Error tracking habit:', error.response?.data || error.message, error.response?.status);
-      // Обработка ошибки 400 (Уже отмечено)
-      if (error.response && error.response.status === 400) {
-        Alert.alert('Already Tracked', error.response.data?.detail || 'This habit has already been tracked today.');
-        if (error.response.data?.streak !== undefined && error.response.data?.last_tracked) {
-             const updateData = { streak: error.response.data.streak, last_tracked: error.response.data.last_tracked };
-             setHabits(prevHabits => prevHabits.map(h => h.id === habitToTrack.id ? { ...h, ...updateData } : h));
-             if (selectedHabit?.id === habitToTrack.id) setSelectedHabit(prev => ({ ...prev, ...updateData }));
+      console.error(
+        'Error tracking habit:',
+        error?.response?.data || error?.message,
+        error?.response?.status
+      );
+
+      const status = error?.response?.status ?? error?.status;
+
+      if (status === 401) {
+        Alert.alert('Session expired', 'Please log in again.', [
+          {
+            text: 'OK',
+            onPress: () =>
+              navigation.reset({
+                index: 0,
+                routes: [{ name: 'Login' }],
+              }),
+          },
+        ]);
+      } else if (status === 400) {
+        // Уже отмечено на бэке (рассинхрон)
+        Alert.alert(
+          'Already Tracked',
+          error?.response?.data?.detail || 'This habit has already been tracked today.'
+        );
+        if (
+          error?.response?.data?.streak !== undefined &&
+          error?.response?.data?.last_tracked
+        ) {
+          const updateData = {
+            streak: error.response.data.streak,
+            last_tracked: error.response.data.last_tracked,
+          };
+          setHabits((prevHabits) =>
+            prevHabits.map((h) => (h.id === habitToTrack.id ? { ...h, ...updateData } : h))
+          );
+          if (selectedHabit?.id === habitToTrack.id) {
+            setSelectedHabit((prev) => (prev ? { ...prev, ...updateData } : prev));
+          }
         }
-      }
-      // Обработка ошибки 404 (Не найдено)
-      else if (error.response && error.response.status === 404) {
-           Alert.alert('Not Found', 'Could not find the habit to track.');
-           setHabits(prev => prev.filter(h => h.id !== habitToTrack.id));
-           if (selectedHabit?.id === habitToTrack.id) setSelectedHabit(null);
-      }
-      // Обработка других ошибок (500 и т.д.)
-      else {
-          Alert.alert('Tracking Error', error.response?.data?.detail || 'An unexpected error occurred. Please try again.');
+      } else if (status === 404) {
+        Alert.alert('Not Found', 'Could not find the habit to track.');
+        setHabits((prev) => prev.filter((h) => h.id !== habitToTrack.id));
+        if (selectedHabit?.id === habitToTrack.id) setSelectedHabit(null);
+      } else {
+        Alert.alert(
+          'Tracking Error',
+          error?.response?.data?.detail || 'An unexpected error occurred. Please try again.'
+        );
       }
     } finally {
       setTrackingHabitId(null);
     }
   };
 
-
-  // --- Рендер Функции для Частей UI (для чистоты) ---
+  // --- Рендер Функции ---
 
   // Рендер элемента списка привычек
   const renderHabitItem = (habit) => {
@@ -316,38 +456,38 @@ export default function HabitScreen({ navigation }) {
             <FontAwesome5 name={iconName} size={20} color="#ffffff" solid />
           </View>
           <View style={styles.habitInfo}>
-            {/* Текст названия привычки */}
             <Text style={styles.habitTitle} numberOfLines={1} ellipsizeMode="tail">
               {habit.title}
             </Text>
-            {/* Текст частоты */}
-            <Text style={styles.habitFrequency}>
-              {habit.frequency || 'Daily'}
-            </Text>
+            <Text style={styles.habitFrequency}>{habit.frequency || 'Daily'}</Text>
           </View>
         </View>
 
         {/* Правая часть: Стрик и Кнопка отметки */}
         <View style={styles.habitRight}>
           <View style={styles.streakContainer}>
-            <MaterialCommunityIcons name="fire" size={18} color="#ff9500" style={styles.streakIcon} />
-            {/* Текст стрика */}
+            <MaterialCommunityIcons
+              name="fire"
+              size={18}
+              color="#ff9500"
+              style={styles.streakIcon}
+            />
             <Text style={styles.streakText}>{habit.streak || 0}</Text>
           </View>
           <TouchableOpacity
             style={[styles.trackButton, isTracked && styles.trackButtonDisabled]}
             onPress={(e) => {
-              e.stopPropagation(); // Не открывать детали при нажатии на кнопку
+              e.stopPropagation();
               handleTrackHabit(habit);
             }}
-            disabled={isTrackingThis} // Дизейблим только во время запроса
+            disabled={isTrackingThis}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           >
             {isTrackingThis ? (
               <ActivityIndicator size="small" color="#4dabf7" />
             ) : (
               <Ionicons
-                name={isTracked ? "checkmark-circle" : "ellipse-outline"}
+                name={isTracked ? 'checkmark-circle' : 'ellipse-outline'}
                 size={28}
                 color={isTracked ? '#34c759' : '#4dabf7'}
               />
@@ -360,7 +500,7 @@ export default function HabitScreen({ navigation }) {
 
   // Рендер модального окна деталей
   const renderDetailsModal = () => {
-    if (!selectedHabit) return null; // Не рендерим, если нет выбранной привычки
+    if (!selectedHabit) return null;
 
     const isTracked = checkIsToday(selectedHabit.last_tracked);
     const iconName = getSafeIconName(selectedHabit.icon);
@@ -370,24 +510,20 @@ export default function HabitScreen({ navigation }) {
       <Modal
         animationType="fade"
         transparent={true}
-        visible={true} // Управляется наличием selectedHabit
+        visible={!!selectedHabit}
         onRequestClose={handleCloseDetailsModal}
       >
         <View style={styles.modalOverlay}>
-          {/* Фон для закрытия */}
           <TouchableOpacity
             style={styles.modalBackground}
             onPress={handleCloseDetailsModal}
             activeOpacity={1}
           />
-          {/* Контейнер модалки */}
           <View style={styles.habitDetailsModal}>
-            {/* Заголовок модалки */}
             <View style={styles.modalHeader}>
               <View style={styles.modalIconContainer}>
                 <FontAwesome5 name={iconName} size={24} color="#ffffff" solid />
               </View>
-              {/* Текст заголовка */}
               <Text style={styles.modalTitle} numberOfLines={1} ellipsizeMode="middle">
                 {selectedHabit.title}
               </Text>
@@ -400,18 +536,15 @@ export default function HabitScreen({ navigation }) {
               </TouchableOpacity>
             </View>
 
-            {/* Контент модалки (скроллируемый) */}
             <ScrollView style={styles.modalContentScrollView}>
               <View style={styles.modalContent}>
-                {/* Описание (если есть) */}
                 {selectedHabit.description ? (
                   <View style={styles.descriptionContainer}>
                     <Text style={styles.descriptionLabel}>Description</Text>
                     <Text style={styles.descriptionText}>{selectedHabit.description}</Text>
                   </View>
-                ) : null /* Важно вернуть null, а не пустую строку */}
+                ) : null}
 
-                {/* Статистика */}
                 <View style={styles.modalStatsRow}>
                   <View style={styles.modalStatItem}>
                     <MaterialCommunityIcons name="fire" size={24} color="#ff9500" />
@@ -420,61 +553,99 @@ export default function HabitScreen({ navigation }) {
                   </View>
                   <View style={styles.modalStatItem}>
                     <Ionicons name="calendar-outline" size={24} color="#4dabf7" />
-                    {/* Текст даты последней отметки */}
                     <Text style={styles.modalStatValue}>
-                      {selectedHabit.last_tracked
-                        ? format(parseISO(selectedHabit.last_tracked), 'MMM d, yyyy')
-                        : 'Never' /* Текст, если не отмечено */}
+                      {safeFormatDate(selectedHabit.last_tracked, 'Never', 'MMM d, yyyy')}
                     </Text>
                     <Text style={styles.modalStatLabel}>Last Tracked</Text>
                   </View>
                   <View style={styles.modalStatItem}>
                     <Ionicons name="repeat" size={24} color="#8e8e93" />
-                    <Text style={styles.modalStatValue}>{selectedHabit.frequency || 'Daily'}</Text>
+                    <Text style={styles.modalStatValue}>
+                      {selectedHabit.frequency || 'Daily'}
+                    </Text>
                     <Text style={styles.modalStatLabel}>Frequency</Text>
                   </View>
                 </View>
 
-                {/* Кнопки Редактировать/Удалить */}
                 <View style={styles.editDeleteContainer}>
-                  <TouchableOpacity style={styles.editButton} onPress={() => handleOpenEditModal(selectedHabit)}>
-                    <LinearGradient colors={['#5856D6', '#4B49AF']} style={styles.editDeleteGradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}>
-                      <Ionicons name="create-outline" size={18} color="#ffffff" style={{ marginRight: 5 }} />
+                  <TouchableOpacity
+                    style={styles.editButton}
+                    onPress={() => handleOpenEditModal(selectedHabit)}
+                  >
+                    <LinearGradient
+                      colors={['#5856D6', '#4B49AF']}
+                      style={styles.editDeleteGradient}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 1 }}
+                    >
+                      <Ionicons
+                        name="create-outline"
+                        size={18}
+                        color="#ffffff"
+                        style={{ marginRight: 5 }}
+                      />
                       <Text style={styles.editDeleteText}>Edit</Text>
                     </LinearGradient>
                   </TouchableOpacity>
-                  <TouchableOpacity style={styles.deleteButton} onPress={() => handleDeleteHabit(selectedHabit)}>
-                    <LinearGradient colors={['#FF3B30', '#D12C22']} style={styles.editDeleteGradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}>
-                      <Ionicons name="trash-outline" size={18} color="#ffffff" style={{ marginRight: 5 }} />
+                  <TouchableOpacity
+                    style={styles.deleteButton}
+                    onPress={() => handleDeleteHabit(selectedHabit)}
+                  >
+                    <LinearGradient
+                      colors={['#FF3B30', '#D12C22']}
+                      style={styles.editDeleteGradient}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 1 }}
+                    >
+                      <Ionicons
+                        name="trash-outline"
+                        size={18}
+                        color="#ffffff"
+                        style={{ marginRight: 5 }}
+                      />
                       <Text style={styles.editDeleteText}>Delete</Text>
                     </LinearGradient>
                   </TouchableOpacity>
                 </View>
 
-                {/* Кнопка Отметить */}
                 <TouchableOpacity
-                  style={[styles.actionButton, styles.modalTrackButton, isTracked && styles.actionButtonDisabled]}
+                  style={[
+                    styles.actionButton,
+                    styles.modalTrackButton,
+                    isTracked && styles.actionButtonDisabled,
+                  ]}
                   onPress={() => handleTrackHabit(selectedHabit)}
-                  disabled={isTrackingThis} // Дизейблим во время запроса
+                  disabled={isTrackingThis}
                 >
                   <LinearGradient
                     colors={isTracked ? ['#555', '#333'] : ['#34C759', '#28a745']}
-                    style={styles.buttonGradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+                    style={styles.buttonGradient}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
                   >
                     {isTrackingThis ? (
                       <ActivityIndicator color="#ffffff" />
                     ) : (
                       <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                        <Ionicons name={isTracked ? "checkmark-done-circle-outline" : "checkmark-circle-outline"} size={20} color="#ffffff" style={{ marginRight: 8 }} />
-                        {/* Текст кнопки */}
+                        <Ionicons
+                          name={
+                            isTracked
+                              ? 'checkmark-done-circle-outline'
+                              : 'checkmark-circle-outline'
+                          }
+                          size={20}
+                          color="#ffffff"
+                          style={{ marginRight: 8 }}
+                        />
                         <Text style={styles.buttonText}>
                           {isTracked ? 'COMPLETED TODAY' : 'MARK AS DONE'}
                         </Text>
                       </View>
                     )}
                   </LinearGradient>
-                  {/* Свечение под кнопкой */}
-                  {!isTracked && !isTrackingThis && <View style={[styles.buttonGlow, styles.trackButtonGlow]} />}
+                  {!isTracked && !isTrackingThis && (
+                    <View style={[styles.buttonGlow, styles.trackButtonGlow]} />
+                  )}
                 </TouchableOpacity>
               </View>
             </ScrollView>
@@ -494,18 +665,16 @@ export default function HabitScreen({ navigation }) {
         onRequestClose={handleCloseCreateEditModal}
       >
         <View style={styles.modalOverlay}>
-          {/* Фон для закрытия */}
           <TouchableOpacity
             style={styles.modalBackground}
             onPress={handleCloseCreateEditModal}
             activeOpacity={1}
           />
-          {/* Контейнер модалки */}
           <View style={styles.createEditModal}>
-            {/* Заголовок */}
             <View style={styles.modalHeader}>
-              {/* Текст заголовка */}
-              <Text style={styles.modalTitle}>{isEditing ? "Edit Habit" : "Create New Habit"}</Text>
+              <Text style={styles.modalTitle}>
+                {isEditing ? 'Edit Habit' : 'Create New Habit'}
+              </Text>
               <TouchableOpacity
                 style={styles.closeButton}
                 onPress={handleCloseCreateEditModal}
@@ -515,55 +684,75 @@ export default function HabitScreen({ navigation }) {
               </TouchableOpacity>
             </View>
 
-            {/* Форма (скроллируемая) */}
-            <ScrollView style={styles.formScrollView} keyboardShouldPersistTaps="handled">
+            <ScrollView
+              style={styles.formScrollView}
+              keyboardShouldPersistTaps="handled"
+            >
               <View style={styles.formContent}>
-                {/* Поле: Иконка */}
                 <View style={styles.formField}>
                   <Text style={styles.formLabel}>Icon</Text>
-                  <TouchableOpacity style={styles.iconSelector} onPress={() => setIconSelectorVisible(!iconSelectorVisible)}>
+                  <TouchableOpacity
+                    style={styles.iconSelector}
+                    onPress={() => setIconSelectorVisible(!iconSelectorVisible)}
+                  >
                     <View style={styles.selectedIconContainer}>
                       <FontAwesome5 name={selectedIcon} size={24} color="#ffffff" solid />
                     </View>
                     <Text style={styles.iconSelectorText}>Change Icon</Text>
-                    <Ionicons name={iconSelectorVisible ? "chevron-up" : "chevron-down"} size={20} color="#ffffff" />
+                    <Ionicons
+                      name={iconSelectorVisible ? 'chevron-up' : 'chevron-down'}
+                      size={20}
+                      color="#ffffff"
+                    />
                   </TouchableOpacity>
-                  {/* Выбор иконок (если видимый) */}
                   {iconSelectorVisible && (
                     <View style={styles.iconsGrid}>
-                      {availableIcons.map(icon => (
+                      {availableIcons.map((icon) => (
                         <TouchableOpacity
                           key={icon}
-                          style={[styles.iconOption, selectedIcon === icon && styles.selectedIconOption]}
-                          onPress={() => { setSelectedIcon(icon); setIconSelectorVisible(false); }}
+                          style={[
+                            styles.iconOption,
+                            selectedIcon === icon && styles.selectedIconOption,
+                          ]}
+                          onPress={() => {
+                            setSelectedIcon(icon);
+                            setIconSelectorVisible(false);
+                          }}
                         >
-                          <FontAwesome5 name={icon} size={24} color={selectedIcon === icon ? '#000000' : '#ffffff'} solid />
+                          <FontAwesome5
+                            name={icon}
+                            size={24}
+                            color={selectedIcon === icon ? '#000000' : '#ffffff'}
+                            solid
+                          />
                         </TouchableOpacity>
                       ))}
                     </View>
                   )}
                 </View>
 
-                {/* Поле: Название */}
                 <View style={styles.formField}>
                   <Text style={styles.formLabel}>Title *</Text>
                   <TextInput
                     style={styles.textInput}
                     value={formData.title}
-                    onChangeText={(text) => setFormData(prev => ({ ...prev, title: text }))}
+                    onChangeText={(text) =>
+                      setFormData((prev) => ({ ...prev, title: text }))
+                    }
                     placeholder="E.g., Drink Water, Read a Book"
                     placeholderTextColor="#8e8e93"
                     autoCapitalize="sentences"
                   />
                 </View>
 
-                {/* Поле: Описание */}
                 <View style={styles.formField}>
                   <Text style={styles.formLabel}>Description (optional)</Text>
                   <TextInput
                     style={[styles.textInput, styles.textareaInput]}
                     value={formData.description}
-                    onChangeText={(text) => setFormData(prev => ({ ...prev, description: text }))}
+                    onChangeText={(text) =>
+                      setFormData((prev) => ({ ...prev, description: text }))
+                    }
                     placeholder="Add details or motivation"
                     placeholderTextColor="#8e8e93"
                     multiline={true}
@@ -572,18 +761,26 @@ export default function HabitScreen({ navigation }) {
                   />
                 </View>
 
-                {/* Поле: Частота */}
                 <View style={styles.formField}>
                   <Text style={styles.formLabel}>Frequency</Text>
                   <View style={styles.frequencySelector}>
-                    {['Daily', 'Weekly', 'Monthly'].map(freq => (
+                    {['Daily', 'Weekly', 'Monthly'].map((freq) => (
                       <TouchableOpacity
                         key={freq}
-                        style={[styles.frequencyOption, formData.frequency === freq && styles.frequencySelected]}
-                        onPress={() => setFormData(prev => ({ ...prev, frequency: freq }))}
+                        style={[
+                          styles.frequencyOption,
+                          formData.frequency === freq && styles.frequencySelected,
+                        ]}
+                        onPress={() =>
+                          setFormData((prev) => ({ ...prev, frequency: freq }))
+                        }
                       >
-                        {/* Текст опции частоты */}
-                        <Text style={[styles.frequencyText, formData.frequency === freq && styles.frequencyTextSelected]}>
+                        <Text
+                          style={[
+                            styles.frequencyText,
+                            formData.frequency === freq && styles.frequencyTextSelected,
+                          ]}
+                        >
                           {freq}
                         </Text>
                       </TouchableOpacity>
@@ -591,47 +788,67 @@ export default function HabitScreen({ navigation }) {
                   </View>
                 </View>
 
-                {/* Поле: Уведомления */}
                 <View style={[styles.formField, styles.notificationToggle]}>
                   <Text style={styles.formLabel}>Notifications</Text>
                   <Switch
                     value={formData.notification_enabled}
-                    onValueChange={(value) => setFormData(prev => ({ ...prev, notification_enabled: value }))}
+                    onValueChange={(value) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        notification_enabled: value,
+                      }))
+                    }
                     trackColor={{ false: '#767577', true: '#3250b4' }}
                     thumbColor={formData.notification_enabled ? '#4dabf7' : '#f4f3f4'}
                   />
                 </View>
-                {/* Поясняющий текст под переключателем */}
-                 <Text style={styles.notificationText}>
-                    Enable reminders for this habit (feature coming soon).
-                 </Text>
+                <Text style={styles.notificationText}>
+                  Enable reminders for this habit (feature coming soon).
+                </Text>
 
-                {/* Кнопки Сохранить/Отмена */}
                 <View style={styles.formActions}>
                   <TouchableOpacity
-                    style={[styles.actionButton, { opacity: submitting ? 0.7 : 1 }]}
+                    style={[
+                      styles.actionButton,
+                      { opacity: submitting ? 0.7 : 1 },
+                    ]}
                     onPress={handleSaveHabit}
                     disabled={submitting}
                   >
-                    <LinearGradient colors={['#4dabf7', '#3250b4']} style={styles.buttonGradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}>
+                    <LinearGradient
+                      colors={['#4dabf7', '#3250b4']}
+                      style={styles.buttonGradient}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 1 }}
+                    >
                       {submitting ? (
                         <ActivityIndicator color="#ffffff" />
                       ) : (
-                        // Текст кнопки сохранения
-                        <Text style={styles.buttonText}>{isEditing ? 'SAVE CHANGES' : 'CREATE HABIT'}</Text>
+                        <Text style={styles.buttonText}>
+                          {isEditing ? 'SAVE CHANGES' : 'CREATE HABIT'}
+                        </Text>
                       )}
                     </LinearGradient>
-                    {/* Свечение под кнопкой */}
-                    {!submitting && <View style={[styles.buttonGlow, styles.createButtonGlow]} />}
+                    {!submitting && (
+                      <View style={[styles.buttonGlow, styles.createButtonGlow]} />
+                    )}
                   </TouchableOpacity>
 
                   <TouchableOpacity
-                    style={[styles.actionButton, styles.cancelButton, { opacity: submitting ? 0.7 : 1 }]}
+                    style={[
+                      styles.actionButton,
+                      styles.cancelButton,
+                      { opacity: submitting ? 0.7 : 1 },
+                    ]}
                     onPress={handleCloseCreateEditModal}
                     disabled={submitting}
                   >
-                    <LinearGradient colors={['#8e8e93', '#636366']} style={styles.buttonGradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}>
-                      {/* Текст кнопки отмены */}
+                    <LinearGradient
+                      colors={['#8e8e93', '#636366']}
+                      style={styles.buttonGradient}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 1 }}
+                    >
                       <Text style={styles.buttonText}>CANCEL</Text>
                     </LinearGradient>
                   </TouchableOpacity>
@@ -644,44 +861,31 @@ export default function HabitScreen({ navigation }) {
     );
   };
 
-  // Рендер частиц фона (если нужны)
-  const renderParticles = () => {
-      return (
-        <View style={styles.particlesContainer} pointerEvents="none">
-          {[...Array(20)].map((_, i) => (
-            <View
-              key={i}
-              style={[
-                styles.particle,
-                { // Динамические стили для случайного расположения
-                  left: Math.random() * width,
-                  top: Math.random() * height,
-                  width: Math.random() * 4 + 1,
-                  height: Math.random() * 4 + 1,
-                  opacity: Math.random() * 0.5 + 0.3
-                }
-              ]}
-            >
-              {/* ВАЖНО: Пустой <Text /> внутри пустого <View>, чтобы избежать потенциальной ошибки */}
-              <Text />
-            </View>
-          ))}
-        </View>
-      );
-  };
-
   // --- Основной Рендер Компонента ---
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" />
       <LinearGradient colors={['#121539', '#080b20']} style={styles.background}>
+        {/* Частицы на фоне (мемоизированы, не прыгают) */}
+        <View style={styles.particlesContainer} pointerEvents="none">
+          {particles.map((p) => (
+            <View
+              key={p.key}
+              style={[
+                styles.particle,
+                {
+                  left: p.left,
+                  top: p.top,
+                  width: p.width,
+                  height: p.height,
+                  opacity: p.opacity,
+                },
+              ]}
+            />
+          ))}
+        </View>
 
-        {/* Частицы на фоне */}
-        {renderParticles()}
-
-        {/* Основной контент экрана */}
         <View style={styles.mainContent}>
-          {/* Заголовок секции и кнопка добавления */}
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>ACTIVE HABITS</Text>
             <TouchableOpacity style={styles.addButton} onPress={handleOpenAddModal}>
@@ -689,38 +893,37 @@ export default function HabitScreen({ navigation }) {
             </TouchableOpacity>
           </View>
 
-          {/* Контейнер для списка привычек */}
           <ScrollView
             style={styles.habitsContainer}
-            contentContainerStyle={styles.habitsScrollContent} // Добавляет отступ снизу
+            contentContainerStyle={styles.habitsScrollContent}
           >
-            {/* Условный рендеринг: Загрузка / Пустой список / Список привычек */}
             {loading ? (
-              <ActivityIndicator size="large" color="#4dabf7" style={{ marginTop: 50 }} />
+              <ActivityIndicator
+                size="large"
+                color="#4dabf7"
+                style={{ marginTop: 50 }}
+              />
             ) : habits.length === 0 ? (
-              // Сообщение, если привычек нет (текст обернут)
-              <View style={styles.noHabitsContainer}>
+              <View className="noHabitsContainer" style={styles.noHabitsContainer}>
                 <Text style={styles.noHabitsText}>No active habits yet.</Text>
-                <Text style={styles.noHabitsSubText}>Tap the '+' button to add your first habit!</Text>
+                <Text style={styles.noHabitsSubText}>
+                  Tap the '+' button to add your first habit!
+                </Text>
               </View>
             ) : (
-              // Рендерим список привычек
-              habits.map(habit => renderHabitItem(habit))
+              habits.map((habit) => renderHabitItem(habit))
             )}
           </ScrollView>
         </View>
 
-        {/* Рендер модальных окон (будут показаны только если есть selectedHabit или createEditModalVisible) */}
         {renderDetailsModal()}
         {renderCreateEditModal()}
-
       </LinearGradient>
     </View>
   );
 }
 
 // --- Стили ---
-// Используем твои стили без изменений
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -731,33 +934,30 @@ const styles = StyleSheet.create({
   particlesContainer: {
     ...StyleSheet.absoluteFillObject,
     zIndex: 0,
-    // pointerEvents: 'none', // Добавлено в JSX
   },
   particle: {
     position: 'absolute',
-    backgroundColor: 'rgba(255, 255, 255, 0.3)', // Полупрозрачные белые точки
-    borderRadius: 5, // Круглые частицы
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    borderRadius: 5,
   },
   mainContent: {
     flex: 1,
-    paddingTop: StatusBar.currentHeight ? StatusBar.currentHeight + -30 : 60, // Отступ сверху
+    paddingTop: StatusBar.currentHeight ? StatusBar.currentHeight + -30 : 60,
     paddingHorizontal: 15,
     paddingBottom: 10,
-    zIndex: 1, // Поверх частиц
+    zIndex: 1,
   },
   sectionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingVertical: 15,
-    // borderBottomWidth: 1,
-    // borderBottomColor: 'rgba(255, 255, 255, 0.1)',
     marginBottom: 10,
   },
   sectionTitle: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#AEAEB2', // Серый цвет для заголовка секции
+    color: '#AEAEB2',
     letterSpacing: 1,
     textTransform: 'uppercase',
   },
@@ -767,28 +967,28 @@ const styles = StyleSheet.create({
     borderRadius: 50,
   },
   habitsContainer: {
-    flex: 1, // Занимает оставшееся место
+    flex: 1,
   },
   habitsScrollContent: {
-    paddingBottom: 20, // Отступ снизу для последнего элемента
+    paddingBottom: 20,
   },
   noHabitsContainer: {
-      flexGrow: 1, // Чтобы занимало место, если ScrollView пустой
-      justifyContent: 'center',
-      alignItems: 'center',
-      paddingBottom: 50, // Сдвинуть текст чуть выше центра
+    flexGrow: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingBottom: 50,
   },
   noHabitsText: {
-      fontSize: 18,
-      color: '#ffffff',
-      marginBottom: 10,
-      textAlign: 'center',
+    fontSize: 18,
+    color: '#ffffff',
+    marginBottom: 10,
+    textAlign: 'center',
   },
   noHabitsSubText: {
-      fontSize: 14,
-      color: '#AEAEB2',
-      textAlign: 'center',
-      paddingHorizontal: 20,
+    fontSize: 14,
+    color: '#AEAEB2',
+    textAlign: 'center',
+    paddingHorizontal: 20,
   },
   habitItem: {
     backgroundColor: 'rgba(255, 255, 255, 0.08)',
@@ -802,14 +1002,12 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255, 255, 255, 0.1)',
   },
   habitTrackedToday: {
-    // borderColor: '#34c759', // Зеленая рамка
-    // borderWidth: 1.5,
-    backgroundColor: 'rgba(52, 199, 89, 0.15)', // Полупрозрачный зеленый фон
+    backgroundColor: 'rgba(52, 199, 89, 0.15)',
   },
   habitLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    flex: 1, // Занимает доступное место слева
+    flex: 1,
     marginRight: 10,
   },
   habitIconContainer: {
@@ -822,7 +1020,7 @@ const styles = StyleSheet.create({
     marginRight: 12,
   },
   habitInfo: {
-    flex: 1, // Позволяет тексту сужаться
+    flex: 1,
   },
   habitTitle: {
     fontSize: 16,
@@ -832,7 +1030,7 @@ const styles = StyleSheet.create({
   },
   habitFrequency: {
     fontSize: 13,
-    color: '#AEAEB2', // Серый цвет
+    color: '#AEAEB2',
   },
   habitRight: {
     flexDirection: 'row',
@@ -841,7 +1039,7 @@ const styles = StyleSheet.create({
   streakContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginRight: 15, // Отступ до кнопки трека
+    marginRight: 15,
     backgroundColor: 'rgba(0, 0, 0, 0.2)',
     paddingHorizontal: 8,
     paddingVertical: 4,
@@ -850,48 +1048,42 @@ const styles = StyleSheet.create({
   streakText: {
     fontSize: 15,
     fontWeight: 'bold',
-    color: '#ff9500', // Оранжевый цвет для стрика
+    color: '#ff9500',
     marginRight: 3,
   },
-  streakIcon: {
-    // Стили для иконки огня уже заданы
-  },
+  streakIcon: {},
   trackButton: {
-    padding: 5, // Небольшой паддинг для области нажатия
+    padding: 5,
   },
-  trackButtonDisabled: {
-    // Стили для дизейбл кнопки не нужны, иконка меняет цвет
-  },
-
-  // Стили для модальных окон
+  trackButtonDisabled: {},
   modalOverlay: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    // Используем position absolute для рендеринга поверх всего
     position: 'absolute',
-    top: 0, left: 0, right: 0, bottom: 0,
-    zIndex: 1000, // Высокий zIndex
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 1000,
   },
-  modalBackground: { // Фон для закрытия по тапу
-      ...StyleSheet.absoluteFillObject,
-      backgroundColor: 'rgba(0, 0, 0, 0.7)', // Более темный фон
-      zIndex: 1, // Под модалкой, но над остальным контентом
+  modalBackground: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    zIndex: 1,
   },
-
-  // Стили для модалки деталей
   habitDetailsModal: {
     width: width * 0.9,
-    maxHeight: height * 0.75, // Ограничение высоты
-    backgroundColor: '#1C1C1E', // Темно-серый фон модалки
+    maxHeight: height * 0.75,
+    backgroundColor: '#1C1C1E',
     borderRadius: 20,
-    padding: 0, // Убираем общий паддинг, добавляем в header/content
-    overflow: 'hidden', // Чтобы градиенты кнопок не вылезали
-    zIndex: 2, // Поверх фона
+    padding: 0,
+    overflow: 'hidden',
+    zIndex: 2,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.1)',
-    elevation: 10, // Тень для Android
-    shadowColor: '#000', // Тень для iOS
+    elevation: 10,
+    shadowColor: '#000',
     shadowOffset: { width: 0, height: 5 },
     shadowOpacity: 0.3,
     shadowRadius: 15,
@@ -903,7 +1095,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(255, 255, 255, 0.1)',
-    backgroundColor: 'rgba(255, 255, 255, 0.05)' // Немного другой фон для хедера
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
   },
   modalIconContainer: {
     width: 40,
@@ -918,48 +1110,45 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: 'bold',
     color: '#ffffff',
-    flex: 1, // Занимает доступное место
-    marginRight: 10, // Отступ от кнопки закрытия
+    flex: 1,
+    marginRight: 10,
   },
   closeButton: {
-    padding: 8, // Увеличим область нажатия
+    padding: 8,
     borderRadius: 15,
     backgroundColor: 'rgba(255, 255, 255, 0.1)',
   },
-  modalContentScrollView: {
-     // maxHeight учтен в habitDetailsModal
-  },
+  modalContentScrollView: {},
   modalContent: {
     padding: 20,
   },
   descriptionContainer: {
-      marginBottom: 20,
-      padding: 15,
-      backgroundColor: 'rgba(255, 255, 255, 0.05)',
-      borderRadius: 8,
+    marginBottom: 20,
+    padding: 15,
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderRadius: 8,
   },
   descriptionLabel: {
-      fontSize: 14,
-      fontWeight: '600',
-      color: '#AEAEB2',
-      marginBottom: 5,
-      textTransform: 'uppercase',
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#AEAEB2',
+    marginBottom: 5,
+    textTransform: 'uppercase',
   },
   descriptionText: {
-      fontSize: 15,
-      color: '#ffffff',
-      lineHeight: 21,
+    fontSize: 15,
+    color: '#ffffff',
+    lineHeight: 21,
   },
   modalStatsRow: {
     flexDirection: 'row',
-    justifyContent: 'space-around', // Используем space-around для отступов
+    justifyContent: 'space-around',
     marginBottom: 25,
-    // Убрал рамки сверху/снизу, они были лишними
   },
   modalStatItem: {
     alignItems: 'center',
-    flex: 1, // Равномерно делят ширину
-    paddingHorizontal: 5, // Небольшой отступ между элементами
+    flex: 1,
+    paddingHorizontal: 5,
   },
   modalStatValue: {
     fontSize: 18,
@@ -977,25 +1166,24 @@ const styles = StyleSheet.create({
   },
   editDeleteContainer: {
     flexDirection: 'row',
-    justifyContent: 'space-between', // Кнопки по краям
-    marginBottom: 20, // Отступ до кнопки трека
+    justifyContent: 'space-between',
+    marginBottom: 20,
   },
-  editButton: { // Используем flex: 1 для равной ширины
+  editButton: {
     flex: 1,
-    marginRight: 5, // Маленький отступ между кнопками
+    marginRight: 5,
     borderRadius: 10,
     overflow: 'hidden',
   },
-  deleteButton: { // Используем flex: 1 для равной ширины
+  deleteButton: {
     flex: 1,
-    marginLeft: 5, // Маленький отступ между кнопками
+    marginLeft: 5,
     borderRadius: 10,
     overflow: 'hidden',
   },
   editDeleteGradient: {
     paddingVertical: 12,
-    // borderRadius уже есть у родителя
-    flexDirection: 'row', // Для иконки и текста
+    flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -1006,29 +1194,25 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   modalTrackButton: {
-      marginTop: 10, // Отступ сверху для кнопки трека в модалке
+    marginTop: 10,
   },
-
-  // Стили для модалки создания/редактирования
   createEditModal: {
     width: width * 0.9,
-    maxHeight: height * 0.85, // Чуть больше высота
+    maxHeight: height * 0.85,
     backgroundColor: '#1C1C1E',
     borderRadius: 20,
     padding: 0,
     overflow: 'hidden',
-    zIndex: 2, // Поверх фона
+    zIndex: 2,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.1)',
-    elevation: 10, // Тень для Android
-    shadowColor: '#000', // Тень для iOS
+    elevation: 10,
+    shadowColor: '#000',
     shadowOffset: { width: 0, height: 5 },
     shadowOpacity: 0.3,
     shadowRadius: 15,
   },
-  formScrollView: {
-      // MaxHeight учтен в createEditModal
-  },
+  formScrollView: {},
   formContent: {
     padding: 20,
   },
@@ -1050,37 +1234,37 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.2)',
-    minHeight: 50, // Минимальная высота для однострочного
-    paddingVertical: 12, // Вертикальный паддинг
+    minHeight: 50,
+    paddingVertical: 12,
   },
   textareaInput: {
-    minHeight: 90, // Увеличил высоту для удобства
-    paddingVertical: 15, // Увеличил вертикальный паддинг
-    textAlignVertical: 'top', // Для Android
+    minHeight: 90,
+    paddingVertical: 15,
+    textAlignVertical: 'top',
   },
   iconSelector: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: 'rgba(255, 255, 255, 0.1)',
     borderRadius: 8,
-    padding: 10, // Уменьшил паддинг
+    padding: 10,
     minHeight: 50,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.2)',
   },
   selectedIconContainer: {
-      width: 36, // Уменьшил размер
-      height: 36,
-      borderRadius: 6,
-      backgroundColor: 'rgba(0, 0, 0, 0.2)',
-      justifyContent: 'center',
-      alignItems: 'center',
-      marginRight: 10,
+    width: 36,
+    height: 36,
+    borderRadius: 6,
+    backgroundColor: 'rgba(0, 0, 0, 0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 10,
   },
   iconSelectorText: {
-      flex: 1,
-      fontSize: 16,
-      color: '#ffffff',
+    flex: 1,
+    fontSize: 16,
+    color: '#ffffff',
   },
   iconsGrid: {
     flexDirection: 'row',
@@ -1088,47 +1272,39 @@ const styles = StyleSheet.create({
     marginTop: 10,
     backgroundColor: 'rgba(0, 0, 0, 0.2)',
     borderRadius: 8,
-    padding: 10, // Паддинг вокруг сетки
-    justifyContent: 'center', // Центрируем иконки если их мало
+    padding: 10,
+    justifyContent: 'center',
   },
   iconOption: {
-    // Рассчитываем ширину на основе доступного пространства и количества иконок в ряду (например, 6)
-    // width = (modalWidth - totalPadding) / itemsPerRow
-    width: (width * 0.9 - 40 - 20 - 12) / 6, // 40=padding*2, 20=gridPadding*2, 12=margin*2*кол-во_пробелов
-    aspectRatio: 1, // Квадратные иконки
+    width: (width * 0.9 - 40 - 20 - 12) / 6,
+    aspectRatio: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    margin: 3, // Уменьшил отступ
+    margin: 3,
     borderRadius: 8,
     borderWidth: 1,
     borderColor: 'transparent',
     backgroundColor: 'rgba(255, 255, 255, 0.1)',
   },
   selectedIconOption: {
-    backgroundColor: '#4dabf7', // Цвет выделения
+    backgroundColor: '#4dabf7',
     borderColor: '#ffffff',
   },
   frequencySelector: {
     flexDirection: 'row',
-    // backgroundColor: 'rgba(255, 255, 255, 0.1)', // Фон не нужен, т.к. у опций есть
-    borderRadius: 8,
-    overflow: 'hidden', // Чтобы скруглить углы у опций
-    // borderWidth: 1, // Убрал общую рамку
-    // borderColor: 'rgba(255, 255, 255, 0.2)',
   },
   frequencyOption: {
-    flex: 1, // Равномерно делит пространство
+    flex: 1,
     paddingVertical: 12,
     alignItems: 'center',
     backgroundColor: 'rgba(255, 255, 255, 0.1)',
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.2)',
-    // Добавляем отступы между кнопками и скругление
     borderRadius: 8,
     marginHorizontal: 3,
   },
   frequencySelected: {
-    backgroundColor: '#4dabf7', // Цвет выделения
+    backgroundColor: '#4dabf7',
     borderColor: '#4dabf7',
   },
   frequencyText: {
@@ -1143,35 +1319,33 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    // Убрал стили контейнера, теперь это просто поле
-    // marginBottom у formField
   },
   notificationText: {
     fontSize: 13,
     color: '#AEAEB2',
-    marginTop: -15, // Поднимаем под переключатель
-    marginBottom: 15, // Отодвигаем кнопки
-    paddingLeft: 5, // Небольшой отступ слева
+    marginTop: -15,
+    marginBottom: 15,
+    paddingLeft: 5,
   },
   formActions: {
-    marginTop: 10, // Небольшой отступ перед кнопками
+    marginTop: 10,
   },
   actionButton: {
     borderRadius: 12,
-    marginBottom: 15, // Отступ между кнопками
-    overflow: 'hidden', // Для градиента и свечения
-    position: 'relative', // Для свечения
-    minHeight: 50, // Минимальная высота
+    marginBottom: 15,
+    overflow: 'hidden',
+    position: 'relative',
+    minHeight: 50,
     justifyContent: 'center',
   },
   actionButtonDisabled: {
-    opacity: 0.6, // Делаем кнопку полупрозрачной, если она disabled
+    opacity: 0.6,
   },
   buttonGradient: {
-    paddingVertical: 16, // Вертикальный паддинг
+    paddingVertical: 16,
     justifyContent: 'center',
     alignItems: 'center',
-    flexDirection: 'row', // Для иконки + текста
+    flexDirection: 'row',
   },
   buttonText: {
     color: '#ffffff',
@@ -1180,23 +1354,21 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     letterSpacing: 0.5,
   },
-  buttonGlow: { // Эффект свечения (опционально)
-      position: 'absolute',
-      bottom: -5, // Позиция свечения
-      left: '15%',
-      width: '70%',
-      height: 15, // Высота свечения
-      borderRadius: 10,
-      opacity: 0.4,
-      zIndex: -1,
+  buttonGlow: {
+    position: 'absolute',
+    bottom: -5,
+    left: '15%',
+    width: '70%',
+    height: 15,
+    borderRadius: 10,
+    opacity: 0.4,
+    zIndex: -1,
   },
   trackButtonGlow: {
-      backgroundColor: '#34c759', // Зеленое свечение
+    backgroundColor: '#34c759',
   },
   createButtonGlow: {
-      backgroundColor: '#4dabf7', // Синее свечение
+    backgroundColor: '#4dabf7',
   },
-  cancelButton: {
-    // Стили для кнопки отмены (можно убрать градиент и сделать проще)
-  },
+  cancelButton: {},
 });
