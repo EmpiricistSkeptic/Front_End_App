@@ -69,6 +69,14 @@ export async function leaveGroup(groupOrId) {
   return apiService.post(`${BASE}/${id}/leave/`, {}); // пустое тело ок
 }
 
+export async function getGroupMembers(groupOrId, { page = 1 } = {}) {
+  const id = mustId(groupOrId);
+  const params = new URLSearchParams();
+  if (page) params.append('page', String(page));
+  const qs = params.toString() ? `?${params.toString()}` : '';
+  return apiService.get(`${BASE}/${id}/members/${qs}`);
+}
+
 /** ---- Сообщения ---- */
 export async function getMessages(groupOrId, nextUrl = null) {
   const id = mustId(groupOrId);

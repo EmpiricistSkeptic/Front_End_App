@@ -16,8 +16,10 @@ import {
   MaterialIcons,
 } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
+
 import DiscoverTab from './components/DiscoverTab';
 import MyTab from './components/MyTab';
+import HuntersTab from './components/HuntersTab';
 
 const { width, height } = Dimensions.get('window');
 
@@ -36,7 +38,7 @@ const COLORS = {
 };
 
 export default function GroupsHomeScreen({ navigation }) {
-  const [tab, setTab] = useState('discover'); // 'discover' | 'mine'
+  const [tab, setTab] = useState('discover'); // 'discover' | 'mine' | 'hunters'
   const [search, setSearch] = useState('');
   const [refreshTick, setRefreshTick] = useState(0); // ключ рефреша
 
@@ -61,7 +63,7 @@ export default function GroupsHomeScreen({ navigation }) {
     []
   );
 
-  const activeTab = tab; // useMemo тут не нужен, стейт и так мемоизирован
+  const activeTab = tab;
 
   return (
     <SafeAreaView
@@ -173,6 +175,7 @@ export default function GroupsHomeScreen({ navigation }) {
               marginTop: 12,
             }}
           >
+            {/* Discover */}
             <TouchableOpacity
               onPress={() => setTab('discover')}
               style={{
@@ -203,6 +206,8 @@ export default function GroupsHomeScreen({ navigation }) {
                 Discover
               </Text>
             </TouchableOpacity>
+
+            {/* My */}
             <TouchableOpacity
               onPress={() => setTab('mine')}
               style={{
@@ -231,6 +236,38 @@ export default function GroupsHomeScreen({ navigation }) {
                 My
               </Text>
             </TouchableOpacity>
+
+            {/* Hunters */}
+            <TouchableOpacity
+              onPress={() => setTab('hunters')}
+              style={{
+                flex: 1,
+                paddingVertical: 10,
+                alignItems: 'center',
+                borderRadius: 8,
+                backgroundColor:
+                  activeTab === 'hunters'
+                    ? 'rgba(77,171,247,0.15)'
+                    : 'transparent',
+                borderWidth: activeTab === 'hunters' ? 1 : 0,
+                borderColor:
+                  activeTab === 'hunters'
+                    ? COLORS.borderBlue
+                    : 'transparent',
+              }}
+            >
+              <Text
+                style={{
+                  color:
+                    activeTab === 'hunters'
+                      ? COLORS.accentBlue
+                      : COLORS.textSecondary,
+                  fontWeight: '700',
+                }}
+              >
+                Hunters
+              </Text>
+            </TouchableOpacity>
           </View>
         </View>
 
@@ -249,8 +286,14 @@ export default function GroupsHomeScreen({ navigation }) {
               navigation={navigation}
               refreshKey={refreshTick}
             />
-          ) : (
+          ) : activeTab === 'mine' ? (
             <MyTab
+              search={search}
+              navigation={navigation}
+              refreshKey={refreshTick}
+            />
+          ) : (
+            <HuntersTab
               search={search}
               navigation={navigation}
               refreshKey={refreshTick}
@@ -365,3 +408,4 @@ export default function GroupsHomeScreen({ navigation }) {
     </SafeAreaView>
   );
 }
+

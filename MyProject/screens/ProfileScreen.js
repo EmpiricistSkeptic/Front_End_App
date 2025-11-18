@@ -40,7 +40,13 @@ import { logout as authLogout } from '../services/authService';
 const { width, height } = Dimensions.get('window');
 const BASE_URL_MEDIA = 'http://192.168.0.102:8000';
 
-// ранги как в HomeScreen
+// ---- Вспомогательные функции ----
+
+// Формула расчета порога опыта (для чужих профилей)
+function calculateXpThreshold(level) {
+  return Math.floor(1000 * Math.pow(1.5, level - 1));
+}
+
 function getRankFromLevel(level) {
   if (level < 10) return 'E';
   if (level < 20) return 'D';
@@ -50,105 +56,122 @@ function getRankFromLevel(level) {
   return 'S';
 }
 
-export default function ProfileScreen({ navigation }) {
-  // ---- Профиль берём из CONTEXT ----
+export default function ProfileScreen({ navigation, route }) {
+  // 1. Получаем ID из параметров навигации (если перешли к другу)
+  const { userId } = route.params || {};
+
+  // 2. Контекст (ТОЛЬКО для текущего юзера)
   const {
-    profileData,
-    totalPoints,
-    expPercentage,
+    profileData: myProfileData,
     refreshProfile,
   } = useProfile();
 
-  // локальные стейты только для редактирования и UI
+  // 3. Определяем владельца
+  // Если userId нет ИЛИ он совпадает с моим ID -> это мой профиль
+  const isOwner = !userId || (myProfileData && userId === myProfileData.id);
+
+  // 4. Локальный стейт для ЧУЖОГО профиля
+  const [otherUserProfile, setOtherUserProfile] = useState(null);
+  const [loadingOtherProfile, setLoadingOtherProfile] = useState(false);
+
+  // Локальные стейты UI
   const [isEditing, setIsEditing] = useState(false);
   const [username, setUsername] = useState('');
   const [bio, setBio] = useState('');
   const [avatar, setAvatar] = useState(null);
   const [avatarChanged, setAvatarChanged] = useState(false);
   const [activeTab, setActiveTab] = useState('achievements');
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(false); // Для сохранения изменений
 
+  // История (только для владельца)
   const [completedTasks, setCompletedTasks] = useState([]);
-  const [userAchievementsData, setUserAchievementsData] = useState([]);
-  const [achievementsLoading, setAchievementsLoading] = useState(true);
   const [historyLoaded, setHistoryLoaded] = useState(false);
 
-  // ---- Мемоизированные частицы (как на других экранах) ----
+  // ---- Единый объект профиля для отображения ----
+  const displayProfile = isOwner ? myProfileData : otherUserProfile;
+
+  // Безопасные значения для рендера
+  const level = displayProfile?.level ?? 1;
+  const points = displayProfile?.points ?? 0;
+  
+  // Считаем математику на лету (чтобы работало и для Context, и для API данных)
+  const totalPoints = calculateXpThreshold(level);
+  const expPercentage = totalPoints > 0 ? (points / totalPoints) * 100 : 0;
+  const safeExpPercentage = Math.min(100, Math.max(0, expPercentage));
+
+  const profileUsername = displayProfile?.username ?? '';
+  const profileBio = displayProfile?.bio ?? '';
+  // Если редактируем - показываем локальный аватар, иначе - из профиля
+  const profileAvatar = (isEditing && avatar) ? avatar : (displayProfile?.avatar_url || displayProfile?.avatar);
+
+  // ---- Частицы ----
   const particles = useMemo(
     () =>
-      [...Array(30)].map((_, i) => ({
-        key: i,
+      [...Array(20)].map((_, i) => ({ // Ставим 20 штук, как в логине
+        key: `p-${i}`,
         left: Math.random() * width,
         top: Math.random() * height,
-        width: Math.random() * 6 + 1,
-        height: Math.random() * 6 + 1,
+        size: Math.random() * 4 + 1, // Используем size вместо width/height
         opacity: Math.random() * 0.5 + 0.3,
       })),
     []
   );
 
-  // ---- Безопасные значения из контекста ----
-  const level = profileData?.level ?? 1;
-  const points = profileData?.points ?? 0;
-  const safeTotalPoints = totalPoints || 1000;
-  const safeExpPercentage =
-    Number.isFinite(expPercentage) && expPercentage >= 0
-      ? Math.min(100, expPercentage)
-      : 0;
-  const profileUsername = profileData?.username ?? '';
-  const profileBio = profileData?.bio ?? '';
-  const profileAvatar = profileData?.avatar ?? null;
+  // ---- Эффекты ----
 
-  // ---- Синхронизация локальных полей редактирования, когда профиль обновился ----
+  // Синхронизация полей редактирования (Только если владелец)
   useEffect(() => {
-    if (profileData) {
+    if (isOwner && displayProfile) {
       setUsername(profileUsername);
       setBio(profileBio);
-      setAvatar(profileAvatar);
+      setAvatar(null); // Сбрасфываем локальный выбор при обновлении данных
       setAvatarChanged(false);
     }
-  }, [profileData, profileUsername, profileBio, profileAvatar]);
+  }, [displayProfile, isOwner, profileUsername, profileBio]);
 
-  // ---- Обработка 401 / истекшей сессии ----
-  const handleSessionError = useCallback(
-    (err) => {
-      console.error('Session or network error (ProfileScreen):', err);
-      const status = err?.response?.status ?? err?.status;
-      if (
-        status === 401 ||
-        err?.message?.includes?.('Session expired')
-      ) {
-        navigation.reset({ index: 0, routes: [{ name: 'Login' }] });
-      }
-    },
-    [navigation]
+  // Загрузка данных (Главный эффект)
+  useFocusEffect(
+    useCallback(() => {
+      let isActive = true;
+
+      const loadData = async () => {
+        try {
+          if (isOwner) {
+            // Если я хозяин - обновляем контекст
+            await refreshProfile();
+          } else {
+            // Если чужой - грузим по ID
+            setLoadingOtherProfile(true);
+            const response = await apiService.get(`profile/${userId}/`);
+            if (isActive) {
+              setOtherUserProfile(response);
+            }
+          }
+
+          // Историю грузим только если это мой профиль и вкладка активна
+          if (isOwner && activeTab === 'history') {
+            await fetchCompletedTasks();
+          }
+        } catch (err) {
+          if (!isActive) return;
+          console.error('Error loading profile:', err);
+          if (err?.response?.status === 404) {
+             Alert.alert('Error', 'User not found');
+             navigation.goBack();
+          }
+        } finally {
+          if (isActive) setLoadingOtherProfile(false);
+        }
+      };
+
+      loadData();
+      return () => { isActive = false; };
+    }, [userId, isOwner, refreshProfile, activeTab])
   );
 
-  // ---- Загрузка прогресса достижений ----
-  const fetchUserAchievementsProgress = useCallback(async () => {
-    setAchievementsLoading(true);
-    try {
-      const response = await apiService.get('achievements/me/progress/');
-      setUserAchievementsData(response.results || response || []);
-      console.log(
-        'User achievements progress loaded:',
-        response.results || response
-      );
-    } catch (error) {
-      console.error(
-        'Error fetching user achievements progress:',
-        error
-      );
-      handleSessionError(error);
-      setUserAchievementsData([]);
-      Alert.alert('Error', 'Could not load achievements progress.');
-    } finally {
-      setAchievementsLoading(false);
-    }
-  }, [handleSessionError]);
-
-  // ---- Загрузка выполненных задач (история) ----
-  const fetchCompletedTasks = useCallback(async () => {
+  // Загрузка истории (отдельно, если переключили вкладку)
+  const fetchCompletedTasks = async () => {
+    if (!isOwner) return; // Чужую историю не грузим
     try {
       const responseData = await apiService.get('tasks/completed/');
       if (responseData && Array.isArray(responseData.results)) {
@@ -159,63 +182,26 @@ export default function ProfileScreen({ navigation }) {
       setHistoryLoaded(true);
     } catch (error) {
       console.error('Error fetching completed tasks:', error);
-      handleSessionError(error);
       setCompletedTasks([]);
     }
-  }, [handleSessionError]);
+  };
 
-  // ---- useFocusEffect: один набор запросов при фокусе (без дублей) ----
-  useFocusEffect(
-    useCallback(() => {
-      let isActive = true;
-
-      const loadData = async () => {
-        try {
-          await refreshProfile();
-          await fetchUserAchievementsProgress();
-
-          // Если активна вкладка истории, то обновляем и её
-          if (activeTab === 'history') {
-            await fetchCompletedTasks();
-          }
-        } catch (err) {
-          if (!isActive) return;
-          handleSessionError(err);
-        }
-      };
-
-      loadData();
-
-      return () => {
-        isActive = false;
-      };
-    }, [
-      refreshProfile,
-      fetchUserAchievementsProgress,
-      fetchCompletedTasks,
-      activeTab,
-      handleSessionError,
-    ])
-  );
-
-  // ---- Разрешения на ImagePicker один раз при монтировании ----
+  // Выбор картинки (Только владелец)
   useEffect(() => {
     (async () => {
-      if (Platform.OS !== 'web') {
+      if (Platform.OS !== 'web' && isOwner) {
         const { status } =
           await ImagePicker.requestMediaLibraryPermissionsAsync();
         if (status !== 'granted') {
-          Alert.alert(
-            'Permission required',
-            'Sorry, we need camera roll permissions to upload avatars'
-          );
+           // Можно показать алерт, но не блокировать
         }
       }
     })();
-  }, []);
+  }, [isOwner]);
 
-  // ---- Выбор аватара ----
   const pickImage = async () => {
+    if (!isOwner) return;
+
     try {
       let result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
@@ -224,41 +210,28 @@ export default function ProfileScreen({ navigation }) {
         quality: 0.8,
       });
 
-      if (
-        !result.canceled &&
-        result.assets &&
-        result.assets.length > 0
-      ) {
+      if (!result.canceled && result.assets && result.assets.length > 0) {
         setAvatar(result.assets[0].uri);
         setAvatarChanged(true);
       }
     } catch (error) {
-      console.error('Ошибка выбора изображения:', error);
-      Alert.alert(
-        'Ошибка',
-        'Не удалось выбрать изображение: ' + error.message
-      );
+      Alert.alert('Error', 'Could not select image');
     }
   };
 
-  // ---- Обновление профиля ----
+  // Обновление профиля (Только владелец)
   const updateProfile = async () => {
+    if (!isOwner) return;
     setIsLoading(true);
     try {
       const formData = new FormData();
       formData.append('username', username);
       formData.append('bio', bio || '');
 
-      if (avatarChanged) {
-        if (
-          avatar &&
-          (avatar.startsWith('file:') ||
-            avatar.startsWith('content:'))
-        ) {
+      if (avatarChanged && avatar) {
           let fileType = 'jpeg';
           const uriParts = avatar.split('.');
-          const extension =
-            uriParts[uriParts.length - 1].toLowerCase();
+          const extension = uriParts[uriParts.length - 1].toLowerCase();
           if (['jpg', 'jpeg', 'png'].includes(extension)) {
             fileType = extension === 'jpg' ? 'jpeg' : extension;
           }
@@ -268,129 +241,80 @@ export default function ProfileScreen({ navigation }) {
             name: `avatar.${fileType}`,
             type: `image/${fileType}`,
           });
-        } else if (avatar === null) {
+      } else if (avatar === null && avatarChanged) {
+          // Логика удаления аватара, если нужно
           formData.append('avatar_clear', 'true');
-        }
       }
 
-      const updatedData = await apiService.patchFormData(
-        'profile/{pk}/',
-        formData
-      );
+      // Используем ID из контекста для надежности
+      await apiService.patchFormData('profile/me/', formData);
 
-      // синхронизируем с контекстом
       await refreshProfile();
-
-      setAvatar(updatedData.avatar_url || null);
       setAvatarChanged(false);
       setIsEditing(false);
-
       Alert.alert('Success', 'Profile updated successfully!');
     } catch (error) {
       console.error('Profile update error:', error);
-      let errorMessage =
-        'Failed to update profile. Please try again.';
-      if (error.response && error.response.data) {
-        const serverError = error.response.data;
-        if (typeof serverError === 'string') {
-          errorMessage = serverError;
-        } else if (typeof serverError === 'object') {
-          const fieldErrors = Object.entries(serverError).map(
-            ([key, value]) =>
-              `${key}: ${
-                Array.isArray(value) ? value.join(', ') : value
-              }`
-          );
-          if (fieldErrors.length > 0)
-            errorMessage = fieldErrors.join('\n');
-        }
-      } else if (error.message && error.message.includes('413')) {
-        errorMessage =
-          'Avatar image too large. Please choose a smaller image.';
-      }
-      Alert.alert('Error', errorMessage);
+      Alert.alert('Error', 'Failed to update profile.');
     } finally {
       setIsLoading(false);
     }
   };
 
-  // ---- Logout: выходим и чистим навигацию ----
   const handleLogout = async () => {
-  try {
-    // делегируем всё authService'у:
-    await authLogout();
-  } catch (error) {
-    console.error('Ошибка логаута:', error);
-    Alert.alert('Ошибка', 'Не удалось корректно выйти из аккаунта, но локальные данные очищены.');
-  } finally {
-    // В любом случае чистим навигацию и кидаем на Welcome/Login
-    navigation.reset({
-      index: 0,
-      routes: [{ name: 'Welcome' }], // или 'Login', как у тебя устроено
-    });
-  }
-};
-
-  // ---- Цвет сложности (для истории) ----
-  const getDifficultyColor = (difficulty) => {
-    switch (difficulty) {
-      case 'S':
-        return '#ff2d55';
-      case 'A':
-        return '#ff9500';
-      case 'B':
-        return '#4dabf7';
-      case 'C':
-        return '#34c759';
-      case 'D':
-        return '#8e8e93';
-      default:
-        return '#4dabf7';
+    try {
+      await authLogout();
+    } catch (error) {
+      console.error('Ошибка логаута:', error);
+    } finally {
+      navigation.reset({ index: 0, routes: [{ name: 'Welcome' }] });
     }
   };
 
-  // ---- Цвета для тиров достижений ----
+  // ---- Цвета (Helper functions) ----
+  const getDifficultyColor = (difficulty) => {
+    switch (difficulty) {
+      case 'S': return '#ff2d55';
+      case 'A': return '#ff9500';
+      case 'B': return '#4dabf7';
+      case 'C': return '#34c759';
+      case 'D': return '#8e8e93';
+      default: return '#4dabf7';
+    }
+  };
+
   const getAchievementTierColor = (tier) => {
     switch (tier?.toUpperCase()) {
-      case 'BRONZE':
-        return '#bf6a32';
-      case 'SILVER':
-        return '#a8a8b2';
-      case 'GOLD':
-        return '#ffbf00';
-      case 'PLATINUM':
-        return '#89cff0';
-      case 'DIAMOND':
-        return '#b026ff';
-      default:
-        return '#6c757d';
+      case 'BRONZE': return '#bf6a32';
+      case 'SILVER': return '#a8a8b2';
+      case 'GOLD': return '#ffbf00';
+      case 'PLATINUM': return '#89cff0';
+      case 'DIAMOND': return '#b026ff';
+      default: return '#6c757d';
     }
   };
 
   const getAchievementTierGlow = (tier) => {
     switch (tier?.toUpperCase()) {
-      case 'BRONZE':
-        return 'rgba(191, 106, 50, 0.6)';
-      case 'SILVER':
-        return 'rgba(168, 168, 178, 0.5)';
-      case 'GOLD':
-        return 'rgba(255, 191, 0, 0.6)';
-      case 'PLATINUM':
-        return 'rgba(137, 207, 240, 0.6)';
-      case 'DIAMOND':
-        return 'rgba(176, 38, 255, 0.7)';
-      default:
-        return 'rgba(108, 117, 125, 0.4)';
+      case 'BRONZE': return 'rgba(191, 106, 50, 0.6)';
+      case 'SILVER': return 'rgba(168, 168, 178, 0.5)';
+      case 'GOLD': return 'rgba(255, 191, 0, 0.6)';
+      case 'PLATINUM': return 'rgba(137, 207, 240, 0.6)';
+      case 'DIAMOND': return 'rgba(176, 38, 255, 0.7)';
+      default: return 'rgba(108, 117, 125, 0.4)';
     }
   };
 
-  // ---- Иконка достижения ----
+  // ---- Компонент Иконки ----
   const RenderAchievementIcon = ({ achievementData, currentTier }) => {
     const iconSize = 28;
     const activeColor = getAchievementTierColor(currentTier);
 
-    if (achievementData.icon && typeof achievementData.icon === 'string') {
-      let iconUrl = achievementData.icon;
+    // ВАЖНО: Данные теперь вложены в .achievement
+    const staticData = achievementData.achievement || {}; 
+
+    if (staticData.icon && typeof staticData.icon === 'string') {
+      let iconUrl = staticData.icon;
       if (
         BASE_URL_MEDIA &&
         !iconUrl.startsWith('http') &&
@@ -405,78 +329,29 @@ export default function ProfileScreen({ navigation }) {
             styles.achievementImageIcon,
             { borderColor: activeColor },
           ]}
-          onError={(e) =>
-            console.log(
-              'Error loading achievement image:',
-              e.nativeEvent.error,
-              iconUrl
-            )
-          }
         />
       );
     }
 
-    if (achievementData.category && achievementData.category.name) {
-      const categoryName =
-        achievementData.category.name.toLowerCase();
+    if (staticData.category && staticData.category.name) {
+      const categoryName = staticData.category.name.toLowerCase();
       switch (categoryName) {
-        case 'english':
-          return (
-            <MaterialCommunityIcons
-              name="translate"
-              size={iconSize}
-              color={activeColor}
-            />
-          );
-        case 'fitness':
-          return (
-            <MaterialCommunityIcons
-              name="sword-cross"
-              size={iconSize}
-              color={activeColor}
-            />
-          );
-        case 'reading':
-          return (
-            <FontAwesome5
-              name="book-dead"
-              size={iconSize * 0.9}
-              color={activeColor}
-            />
-          );
-        case 'coding':
-          return (
-            <Ionicons
-              name="hardware-chip-outline"
-              size={iconSize}
-              color={activeColor}
-            />
-          );
-        default:
-          return (
-            <AntDesign
-              name="star"
-              size={iconSize}
-              color={activeColor}
-            />
-          );
+        case 'english': return <MaterialCommunityIcons name="translate" size={iconSize} color={activeColor} />;
+        case 'fitness': return <MaterialCommunityIcons name="sword-cross" size={iconSize} color={activeColor} />;
+        case 'reading': return <FontAwesome5 name="book-dead" size={iconSize * 0.9} color={activeColor} />;
+        case 'coding': return <Ionicons name="hardware-chip-outline" size={iconSize} color={activeColor} />;
+        default: return <AntDesign name="star" size={iconSize} color={activeColor} />;
       }
     }
 
-    return (
-      <AntDesign name="trophy" size={iconSize} color={activeColor} />
-    );
+    return <AntDesign name="trophy" size={iconSize} color={activeColor} />;
   };
 
-  // ---- Один элемент достижения ----
+  // ---- Элемент Достижения ----
   const AchievementDisplayItem = ({ userAchievement }) => {
+    // ВАЖНО: Распаковка с учетом вложенности
     const {
       id,
-      name,
-      description,
-      icon,
-      unit_type,
-      category,
       current_progress,
       current_tier,
       next_tier,
@@ -485,6 +360,9 @@ export default function ProfileScreen({ navigation }) {
       completed,
       completed_at,
     } = userAchievement;
+
+    // Статические данные из вложенного объекта
+    const { name, description, unit_type } = userAchievement.achievement || {};
 
     const tierColor = getAchievementTierColor(current_tier);
     const tierGlow = getAchievementTierGlow(current_tier);
@@ -530,24 +408,17 @@ export default function ProfileScreen({ navigation }) {
           ]}
         >
           <RenderAchievementIcon
-            achievementData={userAchievement}
+            achievementData={userAchievement} // Передаем весь объект, внутри разберемся
             currentTier={current_tier}
           />
         </View>
 
         <View style={styles.achievementDetailsStyle}>
-          <Text
-            style={[
-              styles.achievementNameStyle,
-              { textShadowColor: tierGlow },
-            ]}
-          >
+          <Text style={[styles.achievementNameStyle, { textShadowColor: tierGlow }]}>
             {name}
           </Text>
           {description && (
-            <Text style={styles.achievementDescriptionStyle}>
-              {description}
-            </Text>
+            <Text style={styles.achievementDescriptionStyle}>{description}</Text>
           )}
 
           {!completed ? (
@@ -555,14 +426,8 @@ export default function ProfileScreen({ navigation }) {
               <View style={styles.achievementProgressBarWrapperStyle}>
                 <View style={styles.achievementProgressBarBackgroundStyle}>
                   <LinearGradient
-                    colors={[
-                      tierColor,
-                      Color(tierColor).darken(0.3).hex(),
-                    ]}
-                    style={[
-                      styles.achievementProgressFillStyle,
-                      { width: `${safeProgress}%` },
-                    ]}
+                    colors={[tierColor, Color(tierColor).darken(0.3).hex()]}
+                    style={[styles.achievementProgressFillStyle, { width: `${safeProgress}%` }]}
                     start={{ x: 0, y: 0 }}
                     end={{ x: 1, y: 0 }}
                   />
@@ -573,46 +438,25 @@ export default function ProfileScreen({ navigation }) {
                       styles.achievementProgressSparkStyle,
                       {
                         left: `${Math.min(98, safeProgress)}%`,
-                        backgroundColor: Color(tierColor)
-                          .lighten(0.5)
-                          .hex(),
+                        backgroundColor: Color(tierColor).lighten(0.5).hex(),
                       },
                     ]}
                   />
                 )}
               </View>
-              <Text
-                style={[
-                  styles.achievementProgressTextStyle,
-                  { color: tierColor },
-                ]}
-              >
+              <Text style={[styles.achievementProgressTextStyle, { color: tierColor }]}>
                 {progressText}
               </Text>
             </View>
           ) : (
-            <Text
-              style={[
-                styles.achievementCompletedTextStyle,
-                { color: tierColor },
-              ]}
-            >
+            <Text style={[styles.achievementCompletedTextStyle, { color: tierColor }]}>
               COMPLETED!{' '}
-              {completed_at
-                ? `(${new Date(
-                    completed_at
-                  ).toLocaleDateString()})`
-                : ''}
+              {completed_at ? `(${new Date(completed_at).toLocaleDateString()})` : ''}
             </Text>
           )}
 
           <View style={styles.achievementTierContainerStyle}>
-            <Text
-              style={[
-                styles.achievementCurrentTierStyle,
-                { color: tierColor, textShadowColor: tierGlow },
-              ]}
-            >
+            <Text style={[styles.achievementCurrentTierStyle, { color: tierColor, textShadowColor: tierGlow }]}>
               TIER: {current_tier}
             </Text>
             {!completed && next_tier && (
@@ -624,35 +468,18 @@ export default function ProfileScreen({ navigation }) {
         </View>
 
         {completed && (
-          <View
-            style={[
-              styles.achievementCompletedBadgeStyle,
-              { backgroundColor: tierColor },
-            ]}
-          >
-            <Ionicons
-              name="checkmark-done-outline"
-              size={18}
-              color="#080b20"
-            />
+          <View style={[styles.achievementCompletedBadgeStyle, { backgroundColor: tierColor }]}>
+            <Ionicons name="checkmark-done-outline" size={18} color="#080b20" />
           </View>
         )}
       </View>
     );
   };
 
-  // ---- Рендер ачивок ----
+  // ---- Рендер списков ----
   const renderAchievementsContent = () => {
-    if (achievementsLoading) {
-      return (
-        <View style={styles.achievementLoadingContainerStyle}>
-          <ActivityIndicator size="large" color="#4dabf7" />
-          <Text style={styles.achievementLoadingTextStyle}>
-            Accessing Achievement Records...
-          </Text>
-        </View>
-      );
-    }
+    // Данные берем из displayProfile
+    const userAchievementsData = displayProfile?.achievements || [];
 
     if (!userAchievementsData || userAchievementsData.length === 0) {
       return (
@@ -684,28 +511,33 @@ export default function ProfileScreen({ navigation }) {
     );
   };
 
-  // ---- Лоадер, пока профиль из контекста ещё не пришёл ----
-  if (!profileData) {
+  // ---- MAIN RENDER ----
+  
+  // Если данные еще грузятся (особенно для чужого профиля)
+  if (!displayProfile && loadingOtherProfile) {
     return (
       <LinearGradient
         colors={['#121539', '#080b20']}
-        style={[
-          styles.container,
-          { justifyContent: 'center', alignItems: 'center' },
-        ]}
+        style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}
       >
         <ActivityIndicator size="large" color="#4dabf7" />
-        <Text
-          style={{
-            color: '#ffffff',
-            marginTop: 20,
-            fontSize: 16,
-          }}
-        >
-          Loading Hunter Data...
-        </Text>
+        <Text style={{ color: '#ffffff', marginTop: 20 }}>Loading Profile...</Text>
       </LinearGradient>
     );
+  }
+  
+  // Если профиль не найден совсем
+  if (!displayProfile) {
+      return (
+          <LinearGradient colors={['#121539', '#080b20']} style={styles.container}>
+             <View style={{flex:1, justifyContent:'center', alignItems:'center'}}>
+                 <Text style={{color:'white'}}>Profile not found.</Text>
+                 <TouchableOpacity onPress={()=>navigation.goBack()} style={{marginTop:20}}>
+                     <Text style={{color:'#4dabf7'}}>Go Back</Text>
+                 </TouchableOpacity>
+             </View>
+          </LinearGradient>
+      );
   }
 
   return (
@@ -713,7 +545,7 @@ export default function ProfileScreen({ navigation }) {
       <StatusBar barStyle="light-content" />
       <LinearGradient colors={['#121539', '#080b20']} style={styles.background}>
         {/* Частицы */}
-        <View style={styles.particlesContainer}>
+        <View style={styles.particlesContainer} pointerEvents="none">
           {particles.map((p) => (
             <View
               key={p.key}
@@ -722,8 +554,8 @@ export default function ProfileScreen({ navigation }) {
                 {
                   left: p.left,
                   top: p.top,
-                  width: p.width,
-                  height: p.height,
+                  width: p.size,  // Берем размер из p.size
+                  height: p.size, // Берем размер из p.size
                   opacity: p.opacity,
                 },
               ]}
@@ -739,29 +571,31 @@ export default function ProfileScreen({ navigation }) {
           >
             <Ionicons name="arrow-back" size={24} color="#4dabf7" />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>HUNTER PROFILE</Text>
-          <View style={{ flexDirection: 'row' }}>
-            <TouchableOpacity
-              style={styles.settingsButton}
-              onPress={() => setIsEditing((prev) => !prev)}
-            >
-              <Ionicons
-                name="settings-outline"
-                size={24}
-                color="#4dabf7"
-              />
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.settingsButton}
-              onPress={handleLogout}
-            >
-              <Ionicons
-                name="log-out-outline"
-                size={24}
-                color="#4dabf7"
-              />
-            </TouchableOpacity>
-          </View>
+          
+          {/* Заголовок меняется */}
+          <Text style={styles.headerTitle}>
+             {isOwner ? 'MY PROFILE' : 'HUNTER PROFILE'}
+          </Text>
+          
+          {/* Кнопки настроек ТОЛЬКО для владельца */}
+          {isOwner ? (
+            <View style={{ flexDirection: 'row' }}>
+              <TouchableOpacity
+                style={styles.settingsButton}
+                onPress={() => setIsEditing((prev) => !prev)}
+              >
+                <Ionicons name="settings-outline" size={24} color="#4dabf7" />
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.settingsButton}
+                onPress={handleLogout}
+              >
+                <Ionicons name="log-out-outline" size={24} color="#4dabf7" />
+              </TouchableOpacity>
+            </View>
+          ) : (
+             <View style={{ width: 60 }} /> // Пустой блок для баланса
+          )}
         </View>
 
         <ScrollView
@@ -774,12 +608,12 @@ export default function ProfileScreen({ navigation }) {
               <View style={styles.avatarGlow}>
                 <TouchableOpacity
                   style={styles.avatar}
-                  onPress={isEditing ? pickImage : null}
+                  onPress={isEditing ? pickImage : null} // Чужие не могут кликать
                   activeOpacity={isEditing ? 0.7 : 1}
                 >
-                  {avatar ? (
+                  {profileAvatar ? (
                     <Image
-                      source={{ uri: avatar }}
+                      source={{ uri: profileAvatar }}
                       style={styles.avatarImage}
                     />
                   ) : (
@@ -789,13 +623,10 @@ export default function ProfileScreen({ navigation }) {
                         : '?'}
                     </Text>
                   )}
+                  {/* Иконка камеры только при редактировании */}
                   {isEditing && (
                     <View style={styles.editAvatarOverlay}>
-                      <Feather
-                        name="camera"
-                        size={20}
-                        color="#ffffff"
-                      />
+                      <Feather name="camera" size={20} color="#ffffff" />
                     </View>
                   )}
                 </TouchableOpacity>
@@ -811,10 +642,7 @@ export default function ProfileScreen({ navigation }) {
               {isEditing ? (
                 <>
                   <TextInput
-                    style={[
-                      styles.username,
-                      styles.usernameEditing,
-                    ]}
+                    style={[styles.username, styles.usernameEditing]}
                     value={username}
                     onChangeText={setUsername}
                     placeholder="Username..."
@@ -856,14 +684,14 @@ export default function ProfileScreen({ navigation }) {
                     </View>
                   </View>
 
-                  {/* XP / COMBAT POWER из контекста */}
+                  {/* XP / COMBAT POWER */}
                   <View style={styles.expSection}>
                     <View style={styles.expLabels}>
                       <Text style={styles.expLabel}>
                         COMBAT POWER
                       </Text>
                       <Text style={styles.expValue}>
-                        {points} / {safeTotalPoints}
+                        {points} / {totalPoints}
                       </Text>
                     </View>
                     <View style={styles.expBarContainer}>
@@ -885,23 +713,26 @@ export default function ProfileScreen({ navigation }) {
                       HUNTER STATUS
                     </Text>
                     <Text style={styles.bio}>
-                      {profileBio ||
-                        'This hunter has not yet set a status.'}
+                      {profileBio || 'This hunter has not yet set a status.'}
                     </Text>
                   </View>
-                  <TouchableOpacity
-                    style={styles.editProfileButton}
-                    onPress={() => setIsEditing(true)}
-                  >
-                    <LinearGradient
-                      colors={['#4dabf7', '#2b6ed9']}
-                      style={styles.editProfileGradient}
+                  
+                  {/* Кнопка "EDIT PROFILE" только для владельца */}
+                  {isOwner && (
+                    <TouchableOpacity
+                        style={styles.editProfileButton}
+                        onPress={() => setIsEditing(true)}
                     >
-                      <Text style={styles.editProfileText}>
-                        EDIT PROFILE
-                      </Text>
-                    </LinearGradient>
-                  </TouchableOpacity>
+                        <LinearGradient
+                        colors={['#4dabf7', '#2b6ed9']}
+                        style={styles.editProfileGradient}
+                        >
+                        <Text style={styles.editProfileText}>
+                            EDIT PROFILE
+                        </Text>
+                        </LinearGradient>
+                    </TouchableOpacity>
+                  )}
                 </>
               )}
             </View>
@@ -928,34 +759,38 @@ export default function ProfileScreen({ navigation }) {
               </Text>
             </TouchableOpacity>
 
-            <TouchableOpacity
-              style={[
-                styles.tabButton,
-                activeTab === 'history' && styles.activeTab,
-              ]}
-              onPress={() => {
-                setActiveTab('history');
-                if (!historyLoaded) {
-                  fetchCompletedTasks();
-                }
-              }}
-            >
-              <Text
+            {/* Кнопка "QUEST LOG" скрыта для чужаков */}
+            {isOwner && (
+                <TouchableOpacity
                 style={[
-                  styles.tabText,
-                  activeTab === 'history' &&
-                    styles.activeTabText,
+                    styles.tabButton,
+                    activeTab === 'history' && styles.activeTab,
                 ]}
-              >
-                QUEST LOG
-              </Text>
-            </TouchableOpacity>
+                onPress={() => {
+                    setActiveTab('history');
+                    if (!historyLoaded) {
+                       fetchCompletedTasks();
+                    }
+                }}
+                >
+                <Text
+                    style={[
+                    styles.tabText,
+                    activeTab === 'history' &&
+                        styles.activeTabText,
+                    ]}
+                >
+                    QUEST LOG
+                </Text>
+                </TouchableOpacity>
+            )}
           </View>
 
           {/* Контент вкладок */}
           {activeTab === 'achievements' && renderAchievementsContent()}
 
-          {activeTab === 'history' && (
+          {/* Вкладка истории только для владельца */}
+          {activeTab === 'history' && isOwner && (
             <View style={styles.tabContent}>
               <Text style={styles.sectionTitle}>
                 COMPLETED QUESTS
@@ -1015,7 +850,7 @@ export default function ProfileScreen({ navigation }) {
           )}
         </ScrollView>
 
-        {/* Bottom nav как у тебя */}
+        {/* Bottom nav (как в оригинале) */}
         <View style={styles.bottomNav}>
           <LinearGradient
             colors={[

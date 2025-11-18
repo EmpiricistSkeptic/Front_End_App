@@ -26,6 +26,7 @@ import {
 import MessageList from './components/MessageList';
 import MessageInput from './components/MessageInput';
 import useGroupChat from './hooks/useGroupChat';
+import GroupMembersList from './components/GroupMembersList'; // 🔹 новый импорт
 
 const { width, height } = Dimensions.get('window');
 
@@ -48,11 +49,13 @@ export default function GroupDetailsScreen({ route, navigation }) {
 
   const [group, setGroup] = useState(preGroup || null);
   const [loading, setLoading] = useState(!preGroup);
-  const [authLoading, setAuthLoading] = useState(true); // Для отслеживания загрузки auth данных
+  const [authLoading, setAuthLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [auth, setAuth] = useState({ userId: null, username: null });
 
-  // 🔹 Мемоизированные частицы — генерируются один раз, не прыгают
+  const [showMembers, setShowMembers] = useState(false); // 🔹 переключатель "участники"
+
+  // Частицы
   const particles = useMemo(
     () =>
       [...Array(20)].map((_, i) => ({
@@ -66,7 +69,7 @@ export default function GroupDetailsScreen({ route, navigation }) {
     []
   );
 
-  // поднимем userId/username из AsyncStorage
+  // auth из AsyncStorage
   useEffect(() => {
     (async () => {
       try {
@@ -77,7 +80,7 @@ export default function GroupDetailsScreen({ route, navigation }) {
         console.error('Failed to load auth data from AsyncStorage', e);
         setAuth({ userId: null, username: null });
       } finally {
-        setAuthLoading(false); // Завершаем загрузку auth в любом случае
+        setAuthLoading(false);
       }
     })();
   }, []);
@@ -108,7 +111,7 @@ export default function GroupDetailsScreen({ route, navigation }) {
     }
   }, [rnRoute.params?.__refreshAt]);
 
-  // подтягивать актуальные данные при фокусе (чтобы не видеть «старое имя» и т.п.)
+  // обновлять группу при фокусе
   useFocusEffect(
     useCallback(() => {
       let isActive = true;
@@ -124,13 +127,14 @@ export default function GroupDetailsScreen({ route, navigation }) {
     }, [groupId])
   );
 
-  // Можно ли видеть чат (участник или владелец)
   const canSeeChat = group?.is_member === true || group?.owner === auth.userId;
+  const canModerate = group?.is_owner === true || group?.is_admin === true;
+  const canEditGroup = canModerate;
 
-  // Подключаем живой чат по вебсокету, когда можно видеть чат
+  // живой чат
   const chat = useGroupChat(groupId, { enabled: canSeeChat });
 
-  // === handlers ===
+  // handlers
   const handleJoin = async () => {
     try {
       await joinGroup(groupId);
@@ -202,9 +206,6 @@ export default function GroupDetailsScreen({ route, navigation }) {
     }
   };
 
-  const canModerate = group?.is_owner === true || group?.is_admin === true;
-  const canEditGroup = canModerate;
-
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="light-content" />
@@ -212,11 +213,8 @@ export default function GroupDetailsScreen({ route, navigation }) {
         colors={[COLORS.backgroundGradientStart, COLORS.backgroundGradientEnd]}
         style={{ flex: 1 }}
       >
-        {/* 🔹 Частицы — фиксированные, не мешают тачам */}
-        <View
-          style={{ position: 'absolute', width, height }}
-          pointerEvents="none"
-        >
+        {/* Частицы */}
+        <View style={styles.particlesLayer} pointerEvents="none">
           {particles.map((p) => (
             <View
               key={p.key}
@@ -234,7 +232,7 @@ export default function GroupDetailsScreen({ route, navigation }) {
           ))}
         </View>
 
-        {/* --- ХЕДЕР --- */}
+        {/* HEADER */}
         <View style={styles.header}>
           <View style={styles.headerSide}>
             <TouchableOpacity onPress={() => navigation.goBack()}>
@@ -266,32 +264,16 @@ export default function GroupDetailsScreen({ route, navigation }) {
               )}
               {group?.is_owner ? (
                 <TouchableOpacity onPress={handleDeleteGroup}>
-                  <Text
-                    style={{
-                      color: '#ff7675',
-                      fontWeight: '800',
-                      fontSize: 16,
-                    }}
-                  >
-                    Delete
-                  </Text>
+                  <Text style={styles.deleteText}>Delete</Text>
                 </TouchableOpacity>
               ) : group?.is_member ? (
                 <TouchableOpacity onPress={handleLeave}>
-                  <Text
-                    style={{
-                      color: COLORS.accentBlue,
-                      fontWeight: '700',
-                    }}
-                  >
-                    Leave
-                  </Text>
+                  <Text style={styles.leaveText}>Leave</Text>
                 </TouchableOpacity>
               ) : null}
             </View>
           </View>
         </View>
-        {/* --- КОНЕЦ ХЕДЕРА --- */}
 
         {loading || authLoading ? (
           <View style={styles.loaderContainer}>
@@ -302,24 +284,35 @@ export default function GroupDetailsScreen({ route, navigation }) {
           </View>
         ) : (
           <>
-            <View
-              style={{
-                flex: 1,
-                paddingHorizontal: 15,
-                paddingTop: 10,
-                paddingBottom: 10,
-              }}
-            >
-              <Text
-                style={{ color: COLORS.textSecondary, marginBottom: 8 }}
-              >
-                by {group?.owner_username} • {group?.members_count} members
-              </Text>
+            <View style={styles.content}>
+              {/* by ...  + кнопка MEMBERS */}
+              <View style={styles.bylineRow}>
+                <Text style={styles.bylineText} numberOfLines={1}>
+                  by {group?.owner_username}
+                </Text>
+                <TouchableOpacity
+                  style={styles.membersChip}
+                  onPress={() => setShowMembers((prev) => !prev)}
+                >
+                  <Ionicons
+                    name="people"
+                    size={16}
+                    color={COLORS.accentBlue}
+                    style={{ marginRight: 4 }}
+                  />
+                  <Text style={styles.membersChipText}>
+                    {group?.members_count ?? 0} MEMBERS
+                  </Text>
+                </TouchableOpacity>
+              </View>
 
-              {canSeeChat ? (
+              {/* либо список участников, либо чат/приглашение */}
+              {showMembers ? (
+                <GroupMembersList groupId={groupId} navigation={navigation} />
+              ) : canSeeChat ? (
                 chat.connectionState === 'connecting' &&
                 chat.messages.length === 0 ? (
-                  <View style={{ alignItems: 'center', marginTop: 20 }}>
+                  <View style={styles.chatLoaderContainer}>
                     <ActivityIndicator
                       size="large"
                       color={COLORS.accentBlue}
@@ -335,47 +328,22 @@ export default function GroupDetailsScreen({ route, navigation }) {
                   />
                 )
               ) : (
-                <View
-                  style={{
-                    borderWidth: 1,
-                    borderColor: COLORS.borderBlue,
-                    borderRadius: 12,
-                    padding: 12,
-                  }}
-                >
-                  <Text
-                    style={{
-                      color: COLORS.textPrimary,
-                      fontSize: 15,
-                      marginBottom: 10,
-                    }}
-                  >
+                <View style={styles.joinCard}>
+                  <Text style={styles.joinCardTitle}>
                     Join this public group to view and send messages.
                   </Text>
                   <TouchableOpacity
                     onPress={handleJoin}
-                    style={{
-                      alignSelf: 'flex-start',
-                      paddingHorizontal: 16,
-                      paddingVertical: 10,
-                      borderRadius: 22,
-                      backgroundColor: COLORS.accentBlue,
-                    }}
+                    style={styles.joinButton}
                   >
-                    <Text
-                      style={{
-                        color: '#080b20',
-                        fontWeight: '700',
-                      }}
-                    >
-                      Join
-                    </Text>
+                    <Text style={styles.joinButtonText}>Join</Text>
                   </TouchableOpacity>
                 </View>
               )}
             </View>
 
-            {canSeeChat && (
+            {/* Инпут только если показываем чат и есть доступ */}
+            {!showMembers && canSeeChat && (
               <MessageInput onSend={handleSend} sending={sending} />
             )}
           </>
@@ -385,11 +353,16 @@ export default function GroupDetailsScreen({ route, navigation }) {
   );
 }
 
-// Добавляем StyleSheet для чистоты и производительности
+// Стили
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
     backgroundColor: COLORS.backgroundGradientEnd,
+  },
+  particlesLayer: {
+    position: 'absolute',
+    width,
+    height,
   },
   header: {
     height: 70,
@@ -401,11 +374,11 @@ const styles = StyleSheet.create({
     borderBottomColor: COLORS.headerBorder,
   },
   headerSide: {
-    width: 90, // Фиксированная ширина для боковых колонок
+    width: 90,
     justifyContent: 'center',
   },
   headerCenter: {
-    flex: 1, // Занимает всё оставшееся пространство
+    flex: 1,
     alignItems: 'center',
   },
   headerTitle: {
@@ -414,9 +387,79 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     letterSpacing: 1,
   },
+  deleteText: {
+    color: '#ff7675',
+    fontWeight: '800',
+    fontSize: 16,
+  },
+  leaveText: {
+    color: COLORS.accentBlue,
+    fontWeight: '700',
+  },
   loaderContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
   },
+  content: {
+    flex: 1,
+    paddingHorizontal: 15,
+    paddingTop: 10,
+    paddingBottom: 10,
+  },
+  bylineRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  bylineText: {
+    flex: 1,
+    color: COLORS.textSecondary,
+    marginRight: 8,
+  },
+  membersChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: COLORS.borderBlue,
+    backgroundColor: 'rgba(16,20,45,0.8)',
+  },
+  membersChipText: {
+    color: COLORS.accentBlue,
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  chatLoaderContainer: {
+    alignItems: 'center',
+    marginTop: 20,
+  },
+  joinCard: {
+    borderWidth: 1,
+    borderColor: COLORS.borderBlue,
+    borderRadius: 12,
+    padding: 12,
+  },
+  joinCardTitle: {
+    color: COLORS.textPrimary,
+    fontSize: 15,
+    marginBottom: 10,
+  },
+  joinButton: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 22,
+    backgroundColor: COLORS.accentBlue,
+  },
+  joinButtonText: {
+    color: '#080b20',
+    fontWeight: '700',
+  },
 });
+
+
+
+

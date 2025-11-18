@@ -18,7 +18,7 @@ export const ProfileProvider = ({ children }) => {
   const [profileData, setProfileData] = useState(null);
 
   const refreshProfile = useCallback(async () => {
-    const response = await apiService.get('profile/{pk}/');
+    const response = await apiService.get('profile/me/');
     const level = response.level || 1;
     const points = response.points || 0;
     const totalPoints = calculateXpThreshold(level);
