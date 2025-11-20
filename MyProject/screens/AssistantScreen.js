@@ -643,63 +643,6 @@ const AssistantScreen = ({ navigation }) => {
             </View>
           </KeyboardAvoidingView>
         )}
-
-        {/* Нижняя навигация */}
-        <View style={styles.bottomNav}>
-          <LinearGradient
-            colors={['rgba(16, 20, 45, 0.9)', 'rgba(16, 20, 45, 0.75)']}
-            style={styles.navBackground}
-          >
-            <TouchableOpacity
-              style={styles.navItem}
-              onPress={() => navigation.navigate('Home')}
-            >
-              <MaterialCommunityIcons
-                name="sword-cross"
-                size={24}
-                color="#4dabf7"
-              />
-              <Text style={styles.navText}>Tasks</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.navItem}
-              onPress={() => navigation.navigate('Pomodoro')}
-            >
-              <MaterialIcons name="timer" size={24} color="#4dabf7" />
-              <Text style={styles.navText}>Timer</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.navItem}
-              onPress={() => navigation.navigate('Nutrition')}
-            >
-              <MaterialCommunityIcons
-                name="food-apple"
-                size={24}
-                color="#4dabf7"
-              />
-              <Text style={styles.navText}>Calories</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.navItem}
-              onPress={() => navigation.navigate('Groups')}
-            >
-              <Ionicons name="people" size={24} color="#4dabf7" />
-              <Text style={styles.navText}>Guild</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.navItem}
-              onPress={() => navigation.navigate('Assistant')}
-            >
-              <Ionicons
-                name="hardware-chip-outline"
-                size={24}
-                color="#4dabf7"
-              />
-              <Text style={styles.navText}>AI Assistant</Text>
-            </TouchableOpacity>
-          </LinearGradient>
-        </View>
-
         {/* Модальное окно с подсказками System Protocols */}
         <Modal
           visible={helpVisible}

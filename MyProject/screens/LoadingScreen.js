@@ -32,7 +32,7 @@ const LoadingScreen = ({ navigation }) => {
 
         if (!isActive) return;
 
-        navigation.replace(authed ? 'Home' : 'Welcome');
+        navigation.replace(authed ? 'MainTabs' : 'Welcome');
       } catch (e) {
         console.error('Auth check failed:', e);
 
