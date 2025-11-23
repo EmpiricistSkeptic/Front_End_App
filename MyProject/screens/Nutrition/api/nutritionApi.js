@@ -27,3 +27,6 @@ export const getUserGoal = () => apiService.get(GOAL_URL);
 
 // PATCH (частичное обновление)
 export const updateUserGoal = (payload) => apiService.patch(GOAL_URL, payload);
+
+export const deleteNutritionLog = (id) => 
+  apiService.delete(`/consumed-calories/${id}/`);

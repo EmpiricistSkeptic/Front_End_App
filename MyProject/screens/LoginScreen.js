@@ -14,11 +14,14 @@ import {
   Platform,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useTranslation } from 'react-i18next';
 import { login as authLogin } from '../services/authService';
 
 const { width, height } = Dimensions.get('window');
 
 export default function LoginScreen({ navigation }) {
+  const { t } = useTranslation();
+
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -46,7 +49,7 @@ export default function LoginScreen({ navigation }) {
     const trimmedPassword = password.trim();
 
     if (!trimmedUsername || !trimmedPassword) {
-      setErrorMessage('Пожалуйста, введите имя пользователя и пароль');
+      setErrorMessage(t('login.errors.fillAllFields'));
       return;
     }
 
@@ -62,14 +65,14 @@ export default function LoginScreen({ navigation }) {
     } catch (error) {
       const rawMessage = error?.message || '';
 
-      let msg = 'Не удалось войти. Проверьте логин/пароль или подключение к интернету.';
+      let msg = t('login.errors.genericFail');
 
       if (rawMessage.includes('Network request failed')) {
-        msg = 'Не удалось подключиться к серверу. Проверьте интернет-соединение.';
+        msg = t('login.errors.networkFail');
       } else if (rawMessage.includes('401') || rawMessage.includes('400')) {
-        msg = 'Неверное имя пользователя или пароль.';
+        msg = t('login.errors.invalidCredentials');
       } else if (rawMessage.includes('500')) {
-        msg = 'Ошибка на сервере. Попробуйте позже.';
+        msg = t('login.errors.serverFail');
       }
 
       setErrorMessage(msg);
@@ -118,7 +121,7 @@ export default function LoginScreen({ navigation }) {
             {/* Header */}
             <View style={styles.windowHeader}>
               <View style={styles.headerDot} />
-              <Text style={styles.headerText}>SYSTEM</Text>
+              <Text style={styles.headerText}>{t('login.systemHeader')}</Text>
             </View>
 
             {/* Скролл-контент — чтобы на маленьких экранах всё было доступно */}
@@ -126,8 +129,9 @@ export default function LoginScreen({ navigation }) {
               style={styles.formScroll}
               contentContainerStyle={styles.formContainer}
               keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
             >
-              <Text style={styles.formTitle}>LOGIN</Text>
+              <Text style={styles.formTitle}>{t('login.title')}</Text>
 
               <View style={styles.divider} />
 
@@ -139,10 +143,12 @@ export default function LoginScreen({ navigation }) {
 
               <View style={styles.inputsSection}>
                 <View style={styles.inputContainer}>
-                  <Text style={styles.inputLabel}>USERNAME</Text>
+                  <Text style={styles.inputLabel}>
+                    {t('login.fields.usernameLabel')}
+                  </Text>
                   <TextInput
                     style={styles.inputField}
-                    placeholder="Enter username"
+                    placeholder={t('login.fields.usernamePlaceholder')}
                     placeholderTextColor="rgba(200, 214, 229, 0.5)"
                     value={username}
                     onChangeText={setUsername}
@@ -156,17 +162,19 @@ export default function LoginScreen({ navigation }) {
                 </View>
 
                 <View style={styles.inputContainer}>
-                  <Text style={styles.inputLabel}>PASSWORD</Text>
+                  <Text style={styles.inputLabel}>
+                    {t('login.fields.passwordLabel')}
+                  </Text>
                   <TextInput
                     ref={passwordInputRef}
                     style={styles.inputField}
-                    placeholder="Enter password"
+                    placeholder={t('login.fields.passwordPlaceholder')}
                     placeholderTextColor="rgba(200, 214, 229, 0.5)"
                     secureTextEntry
                     value={password}
                     onChangeText={setPassword}
-                    autoCapitalize="none"      // <- чтобы не было заглавной буквы
-                    autoCorrect={false}        // <- отключаем автокоррекцию
+                    autoCapitalize="none"   // чтобы пароль не начинался с заглавной
+                    autoCorrect={false}
                     textContentType="password"
                     autoComplete="password"
                     returnKeyType="go"
@@ -177,12 +185,20 @@ export default function LoginScreen({ navigation }) {
 
               <View style={styles.statsContainer}>
                 <View style={styles.statItem}>
-                  <Text style={styles.statLabel}>STATUS</Text>
-                  <Text style={styles.statValue}>VERIFICATION</Text>
+                  <Text style={styles.statLabel}>
+                    {t('login.stats.statusLabel')}
+                  </Text>
+                  <Text style={styles.statValue}>
+                    {t('login.stats.statusValue')}
+                  </Text>
                 </View>
                 <View style={styles.statItem}>
-                  <Text style={styles.statLabel}>SECURITY</Text>
-                  <Text style={styles.statValue}>LEVEL 1</Text>
+                  <Text style={styles.statLabel}>
+                    {t('login.stats.securityLabel')}
+                  </Text>
+                  <Text style={styles.statValue}>
+                    {t('login.stats.securityValue')}
+                  </Text>
                 </View>
               </View>
 
@@ -200,22 +216,27 @@ export default function LoginScreen({ navigation }) {
                   {loading ? (
                     <ActivityIndicator color="#ffffff" size="small" />
                   ) : (
-                    <Text style={styles.buttonText}>LOG IN</Text>
+                    <Text style={styles.buttonText}>
+                      {t('login.buttons.login')}
+                    </Text>
                   )}
                 </LinearGradient>
                 <View style={styles.buttonGlow} />
               </TouchableOpacity>
 
-              <TouchableOpacity style={styles.registerLink} onPress={goToRegistration}>
+              <TouchableOpacity
+                style={styles.registerLink}
+                onPress={goToRegistration}
+              >
                 <Text style={styles.registerLinkText}>
-                  Don't have an account? REGISTER
+                  {t('login.buttons.toRegistration')}
                 </Text>
               </TouchableOpacity>
             </ScrollView>
 
             {/* Footer */}
             <View style={styles.footer}>
-              <Text style={styles.footerText}>HUNTER ASSOCIATION</Text>
+              <Text style={styles.footerText}>{t('login.footer')}</Text>
             </View>
           </View>
         </KeyboardAvoidingView>
@@ -225,17 +246,15 @@ export default function LoginScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  background: {
-    flex: 1,
-  },
+  container: { flex: 1 },
+  background: { flex: 1 },
+
   keyboardAvoider: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
   },
+
   particlesContainer: {
     position: 'absolute',
     width,
@@ -246,10 +265,11 @@ const styles = StyleSheet.create({
     backgroundColor: '#4dabf7',
     borderRadius: 50,
   },
+
   statusWindow: {
-    width: width * 0.95,         // стало шире
-    height: height * 0.9,        // стало выше, почти на весь экран
-    maxHeight: height * 0.95,    // на всякий случай небольшой запас
+    width: width * 0.95,
+    height: height * 0.9,
+    maxHeight: height * 0.95,
     backgroundColor: 'rgba(16, 20, 45, 0.75)',
     borderRadius: 8,
     borderWidth: 1,
@@ -276,9 +296,8 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     letterSpacing: 1,
   },
-  formScroll: {
-    flex: 1,
-  },
+
+  formScroll: { flex: 1 },
   formContainer: {
     padding: 20,
     flexGrow: 1,
@@ -301,12 +320,9 @@ const styles = StyleSheet.create({
     marginVertical: 15,
     opacity: 0.5,
   },
-  inputsSection: {
-    marginBottom: 15,
-  },
-  inputContainer: {
-    marginBottom: 15,
-  },
+
+  inputsSection: { marginBottom: 15 },
+  inputContainer: { marginBottom: 15 },
   inputLabel: {
     color: '#c8d6e5',
     fontSize: 12,
@@ -324,6 +340,7 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     fontSize: 14,
   },
+
   statsContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -331,9 +348,7 @@ const styles = StyleSheet.create({
     marginBottom: 20,
     paddingHorizontal: 10,
   },
-  statItem: {
-    alignItems: 'center',
-  },
+  statItem: { alignItems: 'center' },
   statLabel: {
     color: '#c8d6e5',
     fontSize: 12,
@@ -344,6 +359,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
   },
+
   actionButton: {
     height: 50,
     borderRadius: 6,
@@ -351,9 +367,7 @@ const styles = StyleSheet.create({
     position: 'relative',
     marginBottom: 15,
   },
-  disabledButton: {
-    opacity: 0.7,
-  },
+  disabledButton: { opacity: 0.7 },
   buttonGradient: {
     flex: 1,
     justifyContent: 'center',
@@ -367,10 +381,7 @@ const styles = StyleSheet.create({
   },
   buttonGlow: {
     position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
+    top: 0, left: 0, right: 0, bottom: 0,
     borderRadius: 6,
     borderWidth: 1,
     borderColor: '#4dabf7',
@@ -379,14 +390,10 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     shadowOffset: { width: 0, height: 0 },
   },
-  registerLink: {
-    marginTop: 15,
-    alignItems: 'center',
-  },
-  registerLinkText: {
-    color: '#4dabf7',
-    fontSize: 14,
-  },
+
+  registerLink: { marginTop: 15, alignItems: 'center' },
+  registerLinkText: { color: '#4dabf7', fontSize: 14 },
+
   footer: {
     backgroundColor: 'rgba(16, 20, 45, 0.9)',
     padding: 10,
@@ -400,6 +407,7 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     letterSpacing: 1,
   },
+
   errorContainer: {
     backgroundColor: 'rgba(220, 53, 69, 0.2)',
     padding: 10,
@@ -414,6 +422,3 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
 });
-
-
-

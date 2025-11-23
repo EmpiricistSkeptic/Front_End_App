@@ -2,6 +2,7 @@
 import React from 'react';
 import { View, Text, TouchableOpacity } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { useTranslation } from 'react-i18next';
 
 const COLORS = {
   cardBg: 'rgba(16, 20, 45, 0.75)',
@@ -24,6 +25,8 @@ export default function GroupCard({
   onPressLeave,
   onPressDelete, // <- передай, если хочешь кнопку Delete для владельца
 }) {
+  const { t } = useTranslation();
+
   const isMember = !!item?.is_member;
   const isPublic = !!item?.is_public;
   const isAdmin  = !!item?.is_admin;
@@ -32,6 +35,9 @@ export default function GroupCard({
   const canJoin  = isPublic && !isMember;
   const canLeave = isMember && !isOwner; // владельцу не показываем Leave
   const canDelete = isOwner && typeof onPressDelete === 'function';
+
+  const membersCount = item?.members_count ?? 0;
+  const ownerName = item?.owner_username || t('groups.card.unknownOwner');
 
   return (
     <View
@@ -63,6 +69,7 @@ export default function GroupCard({
           >
             {item?.name || '—'}
           </Text>
+
           {!!item?.description && (
             <Text
               style={{ color: COLORS.textSecondary, fontSize: 13, marginTop: 4 }}
@@ -93,7 +100,9 @@ export default function GroupCard({
             color={COLORS.textSecondary}
           />
           <Text style={{ color: COLORS.textSecondary, fontSize: 11 }}>
-            {isPublic ? 'Public' : 'Private'}
+            {isPublic
+              ? t('groups.card.visibility.public')
+              : t('groups.card.visibility.private')}
           </Text>
         </View>
       </View>
@@ -115,7 +124,7 @@ export default function GroupCard({
             color={COLORS.placeholder}
           />
           <Text style={{ color: COLORS.textSecondary, fontSize: 12, marginLeft: 6 }}>
-            {item?.members_count ?? 0} members
+            {t('groups.card.members', { count: membersCount })}
           </Text>
         </View>
 
@@ -125,7 +134,7 @@ export default function GroupCard({
             style={{ color: COLORS.textSecondary, fontSize: 12, marginLeft: 6 }}
             numberOfLines={1}
           >
-            by {item?.owner_username || 'unknown'}
+            {t('groups.card.byOwner', { name: ownerName })}
           </Text>
         </View>
 
@@ -144,9 +153,12 @@ export default function GroupCard({
               marginLeft: 6,
             }}
           >
-            <Text style={{ color: COLORS.textSecondary, fontSize: 11 }}>Owner</Text>
+            <Text style={{ color: COLORS.textSecondary, fontSize: 11 }}>
+              {t('groups.card.roles.owner')}
+            </Text>
           </View>
         )}
+
         {!isOwner && isAdmin && (
           <View
             style={{
@@ -159,9 +171,12 @@ export default function GroupCard({
               marginLeft: 6,
             }}
           >
-            <Text style={{ color: COLORS.textSecondary, fontSize: 11 }}>Admin</Text>
+            <Text style={{ color: COLORS.textSecondary, fontSize: 11 }}>
+              {t('groups.card.roles.admin')}
+            </Text>
           </View>
         )}
+
         {isMember && !isOwner && !isAdmin && (
           <View
             style={{
@@ -174,7 +189,9 @@ export default function GroupCard({
               marginLeft: 6,
             }}
           >
-            <Text style={{ color: COLORS.textSecondary, fontSize: 11 }}>Member</Text>
+            <Text style={{ color: COLORS.textSecondary, fontSize: 11 }}>
+              {t('groups.card.roles.member')}
+            </Text>
           </View>
         )}
       </View>
@@ -201,7 +218,9 @@ export default function GroupCard({
             borderColor: COLORS.accentBlue,
           }}
         >
-          <Text style={{ color: COLORS.accentBlue, fontWeight: '700' }}>View</Text>
+          <Text style={{ color: COLORS.accentBlue, fontWeight: '700' }}>
+            {t('groups.actions.view')}
+          </Text>
         </TouchableOpacity>
 
         {canJoin && onPressJoin && item?.id ? (
@@ -215,7 +234,9 @@ export default function GroupCard({
               backgroundColor: COLORS.accentBlue,
             }}
           >
-            <Text style={{ color: '#080b20', fontWeight: '800' }}>Join</Text>
+            <Text style={{ color: '#080b20', fontWeight: '800' }}>
+              {t('groups.actions.join')}
+            </Text>
           </TouchableOpacity>
         ) : null}
 
@@ -231,7 +252,9 @@ export default function GroupCard({
               borderColor: COLORS.accentBlue,
             }}
           >
-            <Text style={{ color: COLORS.accentBlue, fontWeight: '700' }}>Leave</Text>
+            <Text style={{ color: COLORS.accentBlue, fontWeight: '700' }}>
+              {t('groups.actions.leave')}
+            </Text>
           </TouchableOpacity>
         ) : null}
 
@@ -248,13 +271,16 @@ export default function GroupCard({
               borderColor: COLORS.danger,
             }}
           >
-            <Text style={{ color: COLORS.danger, fontWeight: '800' }}>Delete</Text>
+            <Text style={{ color: COLORS.danger, fontWeight: '800' }}>
+              {t('groups.actions.delete')}
+            </Text>
           </TouchableOpacity>
         ) : null}
       </View>
     </View>
   );
 }
+
 
 
 

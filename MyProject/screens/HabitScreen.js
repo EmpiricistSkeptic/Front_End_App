@@ -14,16 +14,19 @@ import {
   Switch,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Ionicons, MaterialCommunityIcons, FontAwesome5 } from '@expo/vector-icons';
-import apiService from '../services/apiService'; // Убедись, что путь правильный
+import {
+  Ionicons,
+  MaterialCommunityIcons,
+  FontAwesome5,
+} from '@expo/vector-icons';
+import apiService from '../services/apiService';
 import { format, isToday, parseISO } from 'date-fns';
+import { enUS, es as esLocale } from 'date-fns/locale';
+import { useTranslation } from 'react-i18next';
 
-// Получаем размеры экрана
 const { width, height } = Dimensions.get('window');
 
-// --- Хелперы ---
-
-// Проверка, является ли дата сегодняшней
+// --- Helpers ---
 const checkIsToday = (dateString) => {
   if (!dateString) return false;
   try {
@@ -39,20 +42,23 @@ const checkIsToday = (dateString) => {
   }
 };
 
-// Безопасное форматирование даты
-const safeFormatDate = (dateString, fallback = 'Never', pattern = 'MMM d, yyyy') => {
+const safeFormatDate = (
+  dateString,
+  fallback = 'Never',
+  pattern = 'MMM d, yyyy',
+  locale = enUS
+) => {
   if (!dateString) return fallback;
   try {
     const date = parseISO(dateString);
     if (Number.isNaN(date.getTime())) return fallback;
-    return format(date, pattern);
+    return format(date, pattern, { locale });
   } catch (e) {
     console.warn('Error in safeFormatDate:', dateString, e);
     return fallback;
   }
 };
 
-// Список доступных иконок и иконка по умолчанию
 const availableIcons = [
   'dumbbell',
   'running',
@@ -71,31 +77,47 @@ const availableIcons = [
 ];
 const defaultIcon = 'list-ul';
 
-// --- Компонент Экрана ---
-
 export default function HabitScreen({ navigation }) {
-  // --- Состояния Компонента ---
-  const [habits, setHabits] = useState([]); // Список привычек
-  const [selectedHabit, setSelectedHabit] = useState(null); // Привычка для просмотра деталей
-  const [loading, setLoading] = useState(true); // Индикатор загрузки списка
-  const [trackingHabitId, setTrackingHabitId] = useState(null); // ID привычки, которая трекается
+  const { t, i18n } = useTranslation();
 
-  // Состояния для модалки создания/редактирования
-  const [createEditModalVisible, setCreateEditModalVisible] = useState(false); // Видимость модалки
-  const [isEditing, setIsEditing] = useState(false); // Режим (создание/редактирование)
+  const [habits, setHabits] = useState([]);
+  const [selectedHabit, setSelectedHabit] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [trackingHabitId, setTrackingHabitId] = useState(null);
+
+  const [createEditModalVisible, setCreateEditModalVisible] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
   const [formData, setFormData] = useState({
-    // Данные формы
     title: '',
     description: '',
-    frequency: 'Daily', // <-- значение по умолчанию
+    frequency: 'Daily',
     icon: defaultIcon,
-    notification_enabled: false, // <-- значение по умолчанию
+    notification_enabled: false,
   });
-  const [submitting, setSubmitting] = useState(false); // Индикатор отправки формы
-  const [selectedIcon, setSelectedIcon] = useState(defaultIcon); // Выбранная иконка в форме
-  const [iconSelectorVisible, setIconSelectorVisible] = useState(false); // Видимость выбора иконок
+  const [submitting, setSubmitting] = useState(false);
+  const [selectedIcon, setSelectedIcon] = useState(defaultIcon);
+  const [iconSelectorVisible, setIconSelectorVisible] = useState(false);
 
-  // --- Мемоизированные частицы фона ---
+  const dateLocale = useMemo(() => {
+    const lang = (i18n.language || 'en').toLowerCase();
+    return lang.startsWith('es') ? esLocale : enUS;
+  }, [i18n.language]);
+
+  const getFrequencyLabel = useCallback(
+    (freq) => {
+      switch (freq) {
+        case 'Weekly':
+          return t('habits.frequency.weekly');
+        case 'Monthly':
+          return t('habits.frequency.monthly');
+        case 'Daily':
+        default:
+          return t('habits.frequency.daily');
+      }
+    },
+    [t]
+  );
+
   const particles = useMemo(
     () =>
       [...Array(20)].map((_, i) => ({
@@ -109,9 +131,6 @@ export default function HabitScreen({ navigation }) {
     []
   );
 
-  // --- Логика и Эффекты ---
-
-  // Получение списка привычек с сервера
   const fetchHabits = useCallback(
     async (page = 1, { withSpinner = false } = {}) => {
       if (withSpinner) setLoading(true);
@@ -128,44 +147,49 @@ export default function HabitScreen({ navigation }) {
 
         setHabits(habitsData);
       } catch (error) {
-        console.error('Error fetching habits:', error?.response?.data || error?.message);
+        console.error(
+          'Error fetching habits:',
+          error?.response?.data || error?.message
+        );
 
         const status = error?.response?.status ?? error?.status;
 
         if (status === 401) {
-          // истекшая сессия / неавторизован
-          Alert.alert('Session expired', 'Please log in again.', [
-            {
-              text: 'OK',
-              onPress: () =>
-                navigation.reset({
-                  index: 0,
-                  routes: [{ name: 'Login' }],
-                }),
-            },
-          ]);
+          Alert.alert(
+            t('habits.alerts.sessionExpiredTitle'),
+            t('habits.alerts.sessionExpiredBody'),
+            [
+              {
+                text: t('habits.alerts.ok'),
+                onPress: () =>
+                  navigation.reset({
+                    index: 0,
+                    routes: [{ name: 'Login' }],
+                  }),
+              },
+            ]
+          );
           setHabits([]);
           return;
         }
 
         Alert.alert(
-          'Loading Error',
-          error?.response?.data?.detail || 'Could not load your habits. Please try again later.'
+          t('habits.alerts.loadingErrorTitle'),
+          error?.response?.data?.detail ||
+            t('habits.alerts.loadingErrorBody')
         );
         setHabits([]);
       } finally {
         if (withSpinner) setLoading(false);
       }
     },
-    [navigation]
+    [navigation, t]
   );
 
-  // Загрузка при монтировании с индикатором
   useEffect(() => {
     fetchHabits(1, { withSpinner: true });
   }, [fetchHabits]);
 
-  // Обновление данных при фокусе экрана (без мерцания загрузки)
   useEffect(() => {
     const unsubscribe = navigation.addListener('focus', () => {
       fetchHabits();
@@ -173,14 +197,9 @@ export default function HabitScreen({ navigation }) {
     return unsubscribe;
   }, [navigation, fetchHabits]);
 
-  // Безопасное получение имени иконки
-  const getSafeIconName = (iconName) => {
-    return iconName && availableIcons.includes(iconName) ? iconName : defaultIcon;
-  };
+  const getSafeIconName = (iconName) =>
+    iconName && availableIcons.includes(iconName) ? iconName : defaultIcon;
 
-  // --- Обработчики Действий ---
-
-  // Открыть модалку для добавления
   const handleOpenAddModal = () => {
     setIsEditing(false);
     setFormData({
@@ -195,7 +214,6 @@ export default function HabitScreen({ navigation }) {
     setCreateEditModalVisible(true);
   };
 
-  // Открыть модалку для редактирования
   const handleOpenEditModal = (habit) => {
     if (!habit) return;
     setIsEditing(true);
@@ -212,20 +230,16 @@ export default function HabitScreen({ navigation }) {
     setCreateEditModalVisible(true);
   };
 
-  // Закрыть модалку деталей
-  const handleCloseDetailsModal = () => {
-    setSelectedHabit(null);
-  };
-
-  // Закрыть модалку создания/редактирования
-  const handleCloseCreateEditModal = () => {
+  const handleCloseDetailsModal = () => setSelectedHabit(null);
+  const handleCloseCreateEditModal = () =>
     setCreateEditModalVisible(false);
-  };
 
-  // Обработчик сохранения (создание или обновление)
   const handleSaveHabit = async () => {
     if (!formData.title.trim()) {
-      Alert.alert('Missing Title', 'Please enter a title for the habit.');
+      Alert.alert(
+        t('habits.alerts.missingTitleTitle'),
+        t('habits.alerts.missingTitleBody')
+      );
       return;
     }
     setSubmitting(true);
@@ -243,19 +257,28 @@ export default function HabitScreen({ navigation }) {
         if (!selectedHabit?.id) {
           throw new Error('Cannot update habit without ID.');
         }
-        console.log(`Updating habit ${selectedHabit.id}`);
-        await apiService.patch(`habits/${selectedHabit.id}/`, payload);
-        Alert.alert('Success', 'Habit updated successfully!');
+        await apiService.patch(
+          `habits/${selectedHabit.id}/`,
+          payload
+        );
+        Alert.alert(
+          t('habits.alerts.successTitle'),
+          t('habits.alerts.updatedBody')
+        );
       } else {
-        console.log('Creating new habit');
         await apiService.post('habits/', payload);
-        Alert.alert('Success', 'Habit created successfully!');
+        Alert.alert(
+          t('habits.alerts.successTitle'),
+          t('habits.alerts.createdBody')
+        );
       }
 
       handleCloseCreateEditModal();
 
       if (isEditing && selectedHabit?.id) {
-        setSelectedHabit((prev) => (prev ? { ...prev, ...payload } : prev));
+        setSelectedHabit((prev) =>
+          prev ? { ...prev, ...payload } : prev
+        );
       }
 
       fetchHabits();
@@ -267,22 +290,31 @@ export default function HabitScreen({ navigation }) {
 
       const status = error?.response?.status ?? error?.status;
       if (status === 401) {
-        Alert.alert('Session expired', 'Please log in again.', [
-          {
-            text: 'OK',
-            onPress: () =>
-              navigation.reset({
-                index: 0,
-                routes: [{ name: 'Login' }],
-              }),
-          },
-        ]);
+        Alert.alert(
+          t('habits.alerts.sessionExpiredTitle'),
+          t('habits.alerts.sessionExpiredBody'),
+          [
+            {
+              text: t('habits.alerts.ok'),
+              onPress: () =>
+                navigation.reset({
+                  index: 0,
+                  routes: [{ name: 'Login' }],
+                }),
+            },
+          ]
+        );
       } else {
         Alert.alert(
-          'Save Error',
-          `Failed to ${isEditing ? 'update' : 'create'} habit. ${
-            error?.response?.data?.detail || 'Please try again.'
-          }`
+          t('habits.alerts.saveErrorTitle'),
+          t('habits.alerts.saveErrorBody', {
+            action: isEditing
+              ? t('habits.alerts.actionUpdate')
+              : t('habits.alerts.actionCreate'),
+            detail:
+              error?.response?.data?.detail ||
+              t('habits.alerts.tryAgain'),
+          })
         );
       }
     } finally {
@@ -290,46 +322,65 @@ export default function HabitScreen({ navigation }) {
     }
   };
 
-  // Обработчик удаления привычки
   const handleDeleteHabit = async (habitToDelete) => {
     if (!habitToDelete?.id) return;
 
     Alert.alert(
-      'Confirm Deletion',
-      `Are you sure you want to delete "${habitToDelete.title}"?`,
+      t('habits.alerts.confirmDeletionTitle'),
+      t('habits.alerts.confirmDeletionBody', {
+        title: habitToDelete.title,
+      }),
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: t('habits.alerts.cancel'), style: 'cancel' },
         {
-          text: 'Delete',
+          text: t('habits.alerts.delete'),
           style: 'destructive',
           onPress: async () => {
             try {
-              console.log(`Deleting habit ${habitToDelete.id}`);
-              await apiService.delete(`habits/${habitToDelete.id}/`);
-              Alert.alert('Deleted', `Habit "${habitToDelete.title}" deleted.`);
-              setHabits((prev) => prev.filter((h) => h.id !== habitToDelete.id));
+              await apiService.delete(
+                `habits/${habitToDelete.id}/`
+              );
+              Alert.alert(
+                t('habits.alerts.deletedTitle'),
+                t('habits.alerts.deletedBody', {
+                  title: habitToDelete.title,
+                })
+              );
+              setHabits((prev) =>
+                prev.filter((h) => h.id !== habitToDelete.id)
+              );
               handleCloseDetailsModal();
             } catch (error) {
-              console.error('Error deleting habit:', error?.response?.data || error?.message);
+              console.error(
+                'Error deleting habit:',
+                error?.response?.data || error?.message
+              );
 
-              const status = error?.response?.status ?? error?.status;
+              const status =
+                error?.response?.status ?? error?.status;
               if (status === 401) {
-                Alert.alert('Session expired', 'Please log in again.', [
-                  {
-                    text: 'OK',
-                    onPress: () =>
-                      navigation.reset({
-                        index: 0,
-                        routes: [{ name: 'Login' }],
-                      }),
-                  },
-                ]);
+                Alert.alert(
+                  t('habits.alerts.sessionExpiredTitle'),
+                  t('habits.alerts.sessionExpiredBody'),
+                  [
+                    {
+                      text: t('habits.alerts.ok'),
+                      onPress: () =>
+                        navigation.reset({
+                          index: 0,
+                          routes: [{ name: 'Login' }],
+                        }),
+                    },
+                  ]
+                );
               } else {
                 Alert.alert(
-                  'Deletion Error',
-                  `Failed to delete habit. ${
-                    error?.response?.data?.detail || 'Please try again.'
-                  }`
+                  t('habits.alerts.deletionErrorTitle'),
+                  t('habits.alerts.deletionErrorBody', {
+                    detail:
+                      error?.response?.data?.detail ||
+                      t('habits.alerts.tryAgain'),
+                  })
                 );
               }
             }
@@ -340,71 +391,88 @@ export default function HabitScreen({ navigation }) {
     );
   };
 
-  // Обработчик отметки привычки
   const handleTrackHabit = async (habitToTrack) => {
     if (!habitToTrack?.id) {
-      Alert.alert('Error', 'Cannot track habit without ID.');
+      Alert.alert(
+        t('habits.alerts.errorTitle'),
+        t('habits.alerts.noIdBody')
+      );
       return;
     }
 
-    // 🔹 Ранний выход: уже отмечено сегодня — не шлём лишний запрос
     if (checkIsToday(habitToTrack.last_tracked)) {
-      Alert.alert('Already Tracked', 'You have already marked this habit today.');
+      Alert.alert(
+        t('habits.alerts.alreadyTrackedTitle'),
+        t('habits.alerts.alreadyTrackedBody')
+      );
       return;
     }
 
     setTrackingHabitId(habitToTrack.id);
 
     try {
-      console.log(`Sending track request for habit ${habitToTrack.id}`);
-      const response = await apiService.post(`habits/${habitToTrack.id}/track/`, {});
+      const response = await apiService.post(
+        `habits/${habitToTrack.id}/track/`,
+        {}
+      );
 
-      if (response && response.streak !== undefined && response.last_tracked) {
+      if (
+        response &&
+        response.streak !== undefined &&
+        response.last_tracked
+      ) {
         const updateData = {
           streak: response.streak,
           last_tracked: response.last_tracked,
         };
         setHabits((prevHabits) =>
-          prevHabits.map((h) => (h.id === habitToTrack.id ? { ...h, ...updateData } : h))
+          prevHabits.map((h) =>
+            h.id === habitToTrack.id
+              ? { ...h, ...updateData }
+              : h
+          )
         );
         if (selectedHabit?.id === habitToTrack.id) {
-          setSelectedHabit((prev) => (prev ? { ...prev, ...updateData } : prev));
+          setSelectedHabit((prev) =>
+            prev ? { ...prev, ...updateData } : prev
+          );
         }
-        console.log(
-          `Habit ${habitToTrack.id} tracked successfully. New streak: ${response.streak}`
-        );
       } else {
-        console.warn(
-          'Unexpected successful response format from track endpoint, fetching habits again.'
-        );
         fetchHabits();
       }
     } catch (error) {
       console.error(
         'Error tracking habit:',
-        error?.response?.data || error?.message,
-        error?.response?.status
+        error?.response?.data ||
+          error?.message ||
+          error?.response?.status
       );
 
-      const status = error?.response?.status ?? error?.status;
+      const status =
+        error?.response?.status ?? error?.status;
 
       if (status === 401) {
-        Alert.alert('Session expired', 'Please log in again.', [
-          {
-            text: 'OK',
-            onPress: () =>
-              navigation.reset({
-                index: 0,
-                routes: [{ name: 'Login' }],
-              }),
-          },
-        ]);
-      } else if (status === 400) {
-        // Уже отмечено на бэке (рассинхрон)
         Alert.alert(
-          'Already Tracked',
-          error?.response?.data?.detail || 'This habit has already been tracked today.'
+          t('habits.alerts.sessionExpiredTitle'),
+          t('habits.alerts.sessionExpiredBody'),
+          [
+            {
+              text: t('habits.alerts.ok'),
+              onPress: () =>
+                navigation.reset({
+                  index: 0,
+                  routes: [{ name: 'Login' }],
+                }),
+            },
+          ]
         );
+      } else if (status === 400) {
+        Alert.alert(
+          t('habits.alerts.alreadyTrackedTitle'),
+          error?.response?.data?.detail ||
+            t('habits.alerts.alreadyTrackedBackendBody')
+        );
+
         if (
           error?.response?.data?.streak !== undefined &&
           error?.response?.data?.last_tracked
@@ -414,20 +482,33 @@ export default function HabitScreen({ navigation }) {
             last_tracked: error.response.data.last_tracked,
           };
           setHabits((prevHabits) =>
-            prevHabits.map((h) => (h.id === habitToTrack.id ? { ...h, ...updateData } : h))
+            prevHabits.map((h) =>
+              h.id === habitToTrack.id
+                ? { ...h, ...updateData }
+                : h
+            )
           );
           if (selectedHabit?.id === habitToTrack.id) {
-            setSelectedHabit((prev) => (prev ? { ...prev, ...updateData } : prev));
+            setSelectedHabit((prev) =>
+              prev ? { ...prev, ...updateData } : prev
+            );
           }
         }
       } else if (status === 404) {
-        Alert.alert('Not Found', 'Could not find the habit to track.');
-        setHabits((prev) => prev.filter((h) => h.id !== habitToTrack.id));
-        if (selectedHabit?.id === habitToTrack.id) setSelectedHabit(null);
+        Alert.alert(
+          t('habits.alerts.notFoundTitle'),
+          t('habits.alerts.notFoundBody')
+        );
+        setHabits((prev) =>
+          prev.filter((h) => h.id !== habitToTrack.id)
+        );
+        if (selectedHabit?.id === habitToTrack.id)
+          setSelectedHabit(null);
       } else {
         Alert.alert(
-          'Tracking Error',
-          error?.response?.data?.detail || 'An unexpected error occurred. Please try again.'
+          t('habits.alerts.trackingErrorTitle'),
+          error?.response?.data?.detail ||
+            t('habits.alerts.trackingErrorBody')
         );
       }
     } finally {
@@ -435,9 +516,6 @@ export default function HabitScreen({ navigation }) {
     }
   };
 
-  // --- Рендер Функции ---
-
-  // Рендер элемента списка привычек
   const renderHabitItem = (habit) => {
     const isTracked = checkIsToday(habit.last_tracked);
     const iconName = getSafeIconName(habit.icon);
@@ -446,24 +524,36 @@ export default function HabitScreen({ navigation }) {
     return (
       <TouchableOpacity
         key={habit.id}
-        style={[styles.habitItem, isTracked && styles.habitTrackedToday]}
+        style={[
+          styles.habitItem,
+          isTracked && styles.habitTrackedToday,
+        ]}
         onPress={() => setSelectedHabit(habit)}
         activeOpacity={0.7}
       >
-        {/* Левая часть: Иконка и Информация */}
         <View style={styles.habitLeft}>
           <View style={styles.habitIconContainer}>
-            <FontAwesome5 name={iconName} size={20} color="#ffffff" solid />
+            <FontAwesome5
+              name={iconName}
+              size={20}
+              color="#ffffff"
+              solid
+            />
           </View>
           <View style={styles.habitInfo}>
-            <Text style={styles.habitTitle} numberOfLines={1} ellipsizeMode="tail">
+            <Text
+              style={styles.habitTitle}
+              numberOfLines={1}
+              ellipsizeMode="tail"
+            >
               {habit.title}
             </Text>
-            <Text style={styles.habitFrequency}>{habit.frequency || 'Daily'}</Text>
+            <Text style={styles.habitFrequency}>
+              {getFrequencyLabel(habit.frequency || 'Daily')}
+            </Text>
           </View>
         </View>
 
-        {/* Правая часть: Стрик и Кнопка отметки */}
         <View style={styles.habitRight}>
           <View style={styles.streakContainer}>
             <MaterialCommunityIcons
@@ -472,22 +562,36 @@ export default function HabitScreen({ navigation }) {
               color="#ff9500"
               style={styles.streakIcon}
             />
-            <Text style={styles.streakText}>{habit.streak || 0}</Text>
+            <Text style={styles.streakText}>
+              {habit.streak || 0}
+            </Text>
           </View>
           <TouchableOpacity
-            style={[styles.trackButton, isTracked && styles.trackButtonDisabled]}
+            style={[
+              styles.trackButton,
+              isTracked && styles.trackButtonDisabled,
+            ]}
             onPress={(e) => {
               e.stopPropagation();
               handleTrackHabit(habit);
             }}
             disabled={isTrackingThis}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            hitSlop={{
+              top: 10,
+              bottom: 10,
+              left: 10,
+              right: 10,
+            }}
           >
             {isTrackingThis ? (
               <ActivityIndicator size="small" color="#4dabf7" />
             ) : (
               <Ionicons
-                name={isTracked ? 'checkmark-circle' : 'ellipse-outline'}
+                name={
+                  isTracked
+                    ? 'checkmark-circle'
+                    : 'ellipse-outline'
+                }
                 size={28}
                 color={isTracked ? '#34c759' : '#4dabf7'}
               />
@@ -498,7 +602,6 @@ export default function HabitScreen({ navigation }) {
     );
   };
 
-  // Рендер модального окна деталей
   const renderDetailsModal = () => {
     if (!selectedHabit) return null;
 
@@ -509,7 +612,7 @@ export default function HabitScreen({ navigation }) {
     return (
       <Modal
         animationType="fade"
-        transparent={true}
+        transparent
         visible={!!selectedHabit}
         onRequestClose={handleCloseDetailsModal}
       >
@@ -522,17 +625,35 @@ export default function HabitScreen({ navigation }) {
           <View style={styles.habitDetailsModal}>
             <View style={styles.modalHeader}>
               <View style={styles.modalIconContainer}>
-                <FontAwesome5 name={iconName} size={24} color="#ffffff" solid />
+                <FontAwesome5
+                  name={iconName}
+                  size={24}
+                  color="#ffffff"
+                  solid
+                />
               </View>
-              <Text style={styles.modalTitle} numberOfLines={1} ellipsizeMode="middle">
+              <Text
+                style={styles.modalTitle}
+                numberOfLines={1}
+                ellipsizeMode="middle"
+              >
                 {selectedHabit.title}
               </Text>
               <TouchableOpacity
                 style={styles.closeButton}
                 onPress={handleCloseDetailsModal}
-                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                hitSlop={{
+                  top: 10,
+                  bottom: 10,
+                  left: 10,
+                  right: 10,
+                }}
               >
-                <Ionicons name="close" size={24} color="#AEAEB2" />
+                <Ionicons
+                  name="close"
+                  size={24}
+                  color="#AEAEB2"
+                />
               </TouchableOpacity>
             </View>
 
@@ -540,37 +661,72 @@ export default function HabitScreen({ navigation }) {
               <View style={styles.modalContent}>
                 {selectedHabit.description ? (
                   <View style={styles.descriptionContainer}>
-                    <Text style={styles.descriptionLabel}>Description</Text>
-                    <Text style={styles.descriptionText}>{selectedHabit.description}</Text>
+                    <Text style={styles.descriptionLabel}>
+                      {t('habits.details.description')}
+                    </Text>
+                    <Text style={styles.descriptionText}>
+                      {selectedHabit.description}
+                    </Text>
                   </View>
                 ) : null}
 
                 <View style={styles.modalStatsRow}>
                   <View style={styles.modalStatItem}>
-                    <MaterialCommunityIcons name="fire" size={24} color="#ff9500" />
-                    <Text style={styles.modalStatValue}>{selectedHabit.streak || 0}</Text>
-                    <Text style={styles.modalStatLabel}>Streak</Text>
-                  </View>
-                  <View style={styles.modalStatItem}>
-                    <Ionicons name="calendar-outline" size={24} color="#4dabf7" />
+                    <MaterialCommunityIcons
+                      name="fire"
+                      size={24}
+                      color="#ff9500"
+                    />
                     <Text style={styles.modalStatValue}>
-                      {safeFormatDate(selectedHabit.last_tracked, 'Never', 'MMM d, yyyy')}
+                      {selectedHabit.streak || 0}
                     </Text>
-                    <Text style={styles.modalStatLabel}>Last Tracked</Text>
+                    <Text style={styles.modalStatLabel}>
+                      {t('habits.details.streak')}
+                    </Text>
                   </View>
+
                   <View style={styles.modalStatItem}>
-                    <Ionicons name="repeat" size={24} color="#8e8e93" />
+                    <Ionicons
+                      name="calendar-outline"
+                      size={24}
+                      color="#4dabf7"
+                    />
                     <Text style={styles.modalStatValue}>
-                      {selectedHabit.frequency || 'Daily'}
+                      {safeFormatDate(
+                        selectedHabit.last_tracked,
+                        t('habits.never'),
+                        'MMM d, yyyy',
+                        dateLocale
+                      )}
                     </Text>
-                    <Text style={styles.modalStatLabel}>Frequency</Text>
+                    <Text style={styles.modalStatLabel}>
+                      {t('habits.details.lastTracked')}
+                    </Text>
+                  </View>
+
+                  <View style={styles.modalStatItem}>
+                    <Ionicons
+                      name="repeat"
+                      size={24}
+                      color="#8e8e93"
+                    />
+                    <Text style={styles.modalStatValue}>
+                      {getFrequencyLabel(
+                        selectedHabit.frequency || 'Daily'
+                      )}
+                    </Text>
+                    <Text style={styles.modalStatLabel}>
+                      {t('habits.details.frequency')}
+                    </Text>
                   </View>
                 </View>
 
                 <View style={styles.editDeleteContainer}>
                   <TouchableOpacity
                     style={styles.editButton}
-                    onPress={() => handleOpenEditModal(selectedHabit)}
+                    onPress={() =>
+                      handleOpenEditModal(selectedHabit)
+                    }
                   >
                     <LinearGradient
                       colors={['#5856D6', '#4B49AF']}
@@ -584,12 +740,17 @@ export default function HabitScreen({ navigation }) {
                         color="#ffffff"
                         style={{ marginRight: 5 }}
                       />
-                      <Text style={styles.editDeleteText}>Edit</Text>
+                      <Text style={styles.editDeleteText}>
+                        {t('habits.buttons.edit')}
+                      </Text>
                     </LinearGradient>
                   </TouchableOpacity>
+
                   <TouchableOpacity
                     style={styles.deleteButton}
-                    onPress={() => handleDeleteHabit(selectedHabit)}
+                    onPress={() =>
+                      handleDeleteHabit(selectedHabit)
+                    }
                   >
                     <LinearGradient
                       colors={['#FF3B30', '#D12C22']}
@@ -603,7 +764,9 @@ export default function HabitScreen({ navigation }) {
                         color="#ffffff"
                         style={{ marginRight: 5 }}
                       />
-                      <Text style={styles.editDeleteText}>Delete</Text>
+                      <Text style={styles.editDeleteText}>
+                        {t('habits.buttons.delete')}
+                      </Text>
                     </LinearGradient>
                   </TouchableOpacity>
                 </View>
@@ -618,7 +781,11 @@ export default function HabitScreen({ navigation }) {
                   disabled={isTrackingThis}
                 >
                   <LinearGradient
-                    colors={isTracked ? ['#555', '#333'] : ['#34C759', '#28a745']}
+                    colors={
+                      isTracked
+                        ? ['#555', '#333']
+                        : ['#34C759', '#28a745']
+                    }
                     style={styles.buttonGradient}
                     start={{ x: 0, y: 0 }}
                     end={{ x: 1, y: 1 }}
@@ -626,7 +793,12 @@ export default function HabitScreen({ navigation }) {
                     {isTrackingThis ? (
                       <ActivityIndicator color="#ffffff" />
                     ) : (
-                      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                      <View
+                        style={{
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                        }}
+                      >
                         <Ionicons
                           name={
                             isTracked
@@ -638,13 +810,18 @@ export default function HabitScreen({ navigation }) {
                           style={{ marginRight: 8 }}
                         />
                         <Text style={styles.buttonText}>
-                          {isTracked ? 'COMPLETED TODAY' : 'MARK AS DONE'}
+                          {isTracked
+                            ? t('habits.buttons.completedToday')
+                            : t('habits.buttons.markDone')}
                         </Text>
                       </View>
                     )}
                   </LinearGradient>
+
                   {!isTracked && !isTrackingThis && (
-                    <View style={[styles.buttonGlow, styles.trackButtonGlow]} />
+                    <View
+                      style={[styles.buttonGlow, styles.trackButtonGlow]}
+                    />
                   )}
                 </TouchableOpacity>
               </View>
@@ -655,12 +832,17 @@ export default function HabitScreen({ navigation }) {
     );
   };
 
-  // Рендер модального окна создания/редактирования
   const renderCreateEditModal = () => {
+    const frequencyOptions = [
+      { value: 'Daily', label: t('habits.frequency.daily') },
+      { value: 'Weekly', label: t('habits.frequency.weekly') },
+      { value: 'Monthly', label: t('habits.frequency.monthly') },
+    ];
+
     return (
       <Modal
         animationType="slide"
-        transparent={true}
+        transparent
         visible={createEditModalVisible}
         onRequestClose={handleCloseCreateEditModal}
       >
@@ -673,14 +855,25 @@ export default function HabitScreen({ navigation }) {
           <View style={styles.createEditModal}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>
-                {isEditing ? 'Edit Habit' : 'Create New Habit'}
+                {isEditing
+                  ? t('habits.form.editTitle')
+                  : t('habits.form.createTitle')}
               </Text>
               <TouchableOpacity
                 style={styles.closeButton}
                 onPress={handleCloseCreateEditModal}
-                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                hitSlop={{
+                  top: 10,
+                  bottom: 10,
+                  left: 10,
+                  right: 10,
+                }}
               >
-                <Ionicons name="close" size={24} color="#AEAEB2" />
+                <Ionicons
+                  name="close"
+                  size={24}
+                  color="#AEAEB2"
+                />
               </TouchableOpacity>
             </View>
 
@@ -690,21 +883,38 @@ export default function HabitScreen({ navigation }) {
             >
               <View style={styles.formContent}>
                 <View style={styles.formField}>
-                  <Text style={styles.formLabel}>Icon</Text>
+                  <Text style={styles.formLabel}>
+                    {t('habits.form.icon')}
+                  </Text>
+
                   <TouchableOpacity
                     style={styles.iconSelector}
-                    onPress={() => setIconSelectorVisible(!iconSelectorVisible)}
+                    onPress={() =>
+                      setIconSelectorVisible(!iconSelectorVisible)
+                    }
                   >
                     <View style={styles.selectedIconContainer}>
-                      <FontAwesome5 name={selectedIcon} size={24} color="#ffffff" solid />
+                      <FontAwesome5
+                        name={selectedIcon}
+                        size={24}
+                        color="#ffffff"
+                        solid
+                      />
                     </View>
-                    <Text style={styles.iconSelectorText}>Change Icon</Text>
+                    <Text style={styles.iconSelectorText}>
+                      {t('habits.form.changeIcon')}
+                    </Text>
                     <Ionicons
-                      name={iconSelectorVisible ? 'chevron-up' : 'chevron-down'}
+                      name={
+                        iconSelectorVisible
+                          ? 'chevron-up'
+                          : 'chevron-down'
+                      }
                       size={20}
                       color="#ffffff"
                     />
                   </TouchableOpacity>
+
                   {iconSelectorVisible && (
                     <View style={styles.iconsGrid}>
                       {availableIcons.map((icon) => (
@@ -712,7 +922,8 @@ export default function HabitScreen({ navigation }) {
                           key={icon}
                           style={[
                             styles.iconOption,
-                            selectedIcon === icon && styles.selectedIconOption,
+                            selectedIcon === icon &&
+                              styles.selectedIconOption,
                           ]}
                           onPress={() => {
                             setSelectedIcon(icon);
@@ -722,7 +933,11 @@ export default function HabitScreen({ navigation }) {
                           <FontAwesome5
                             name={icon}
                             size={24}
-                            color={selectedIcon === icon ? '#000000' : '#ffffff'}
+                            color={
+                              selectedIcon === icon
+                                ? '#000000'
+                                : '#ffffff'
+                            }
                             solid
                           />
                         </TouchableOpacity>
@@ -732,64 +947,91 @@ export default function HabitScreen({ navigation }) {
                 </View>
 
                 <View style={styles.formField}>
-                  <Text style={styles.formLabel}>Title *</Text>
+                  <Text style={styles.formLabel}>
+                    {t('habits.form.titleLabel')}
+                  </Text>
                   <TextInput
                     style={styles.textInput}
                     value={formData.title}
                     onChangeText={(text) =>
-                      setFormData((prev) => ({ ...prev, title: text }))
+                      setFormData((prev) => ({
+                        ...prev,
+                        title: text,
+                      }))
                     }
-                    placeholder="E.g., Drink Water, Read a Book"
+                    placeholder={t('habits.form.titlePlaceholder')}
                     placeholderTextColor="#8e8e93"
                     autoCapitalize="sentences"
                   />
                 </View>
 
                 <View style={styles.formField}>
-                  <Text style={styles.formLabel}>Description (optional)</Text>
+                  <Text style={styles.formLabel}>
+                    {t('habits.form.descriptionLabel')}
+                  </Text>
                   <TextInput
-                    style={[styles.textInput, styles.textareaInput]}
+                    style={[
+                      styles.textInput,
+                      styles.textareaInput,
+                    ]}
                     value={formData.description}
                     onChangeText={(text) =>
-                      setFormData((prev) => ({ ...prev, description: text }))
+                      setFormData((prev) => ({
+                        ...prev,
+                        description: text,
+                      }))
                     }
-                    placeholder="Add details or motivation"
+                    placeholder={t('habits.form.descriptionPlaceholder')}
                     placeholderTextColor="#8e8e93"
-                    multiline={true}
+                    multiline
                     numberOfLines={3}
                     textAlignVertical="top"
                   />
                 </View>
 
                 <View style={styles.formField}>
-                  <Text style={styles.formLabel}>Frequency</Text>
+                  <Text style={styles.formLabel}>
+                    {t('habits.form.frequency')}
+                  </Text>
                   <View style={styles.frequencySelector}>
-                    {['Daily', 'Weekly', 'Monthly'].map((freq) => (
+                    {frequencyOptions.map((opt) => (
                       <TouchableOpacity
-                        key={freq}
+                        key={opt.value}
                         style={[
                           styles.frequencyOption,
-                          formData.frequency === freq && styles.frequencySelected,
+                          formData.frequency === opt.value &&
+                            styles.frequencySelected,
                         ]}
                         onPress={() =>
-                          setFormData((prev) => ({ ...prev, frequency: freq }))
+                          setFormData((prev) => ({
+                            ...prev,
+                            frequency: opt.value,
+                          }))
                         }
                       >
                         <Text
                           style={[
                             styles.frequencyText,
-                            formData.frequency === freq && styles.frequencyTextSelected,
+                            formData.frequency === opt.value &&
+                              styles.frequencyTextSelected,
                           ]}
                         >
-                          {freq}
+                          {opt.label}
                         </Text>
                       </TouchableOpacity>
                     ))}
                   </View>
                 </View>
 
-                <View style={[styles.formField, styles.notificationToggle]}>
-                  <Text style={styles.formLabel}>Notifications</Text>
+                <View
+                  style={[
+                    styles.formField,
+                    styles.notificationToggle,
+                  ]}
+                >
+                  <Text style={styles.formLabel}>
+                    {t('habits.form.notifications')}
+                  </Text>
                   <Switch
                     value={formData.notification_enabled}
                     onValueChange={(value) =>
@@ -798,12 +1040,20 @@ export default function HabitScreen({ navigation }) {
                         notification_enabled: value,
                       }))
                     }
-                    trackColor={{ false: '#767577', true: '#3250b4' }}
-                    thumbColor={formData.notification_enabled ? '#4dabf7' : '#f4f3f4'}
+                    trackColor={{
+                      false: '#767577',
+                      true: '#3250b4',
+                    }}
+                    thumbColor={
+                      formData.notification_enabled
+                        ? '#4dabf7'
+                        : '#f4f3f4'
+                    }
                   />
                 </View>
+
                 <Text style={styles.notificationText}>
-                  Enable reminders for this habit (feature coming soon).
+                  {t('habits.form.notificationsHint')}
                 </Text>
 
                 <View style={styles.formActions}>
@@ -825,12 +1075,20 @@ export default function HabitScreen({ navigation }) {
                         <ActivityIndicator color="#ffffff" />
                       ) : (
                         <Text style={styles.buttonText}>
-                          {isEditing ? 'SAVE CHANGES' : 'CREATE HABIT'}
+                          {isEditing
+                            ? t('habits.form.saveChanges')
+                            : t('habits.form.createHabit')}
                         </Text>
                       )}
                     </LinearGradient>
+
                     {!submitting && (
-                      <View style={[styles.buttonGlow, styles.createButtonGlow]} />
+                      <View
+                        style={[
+                          styles.buttonGlow,
+                          styles.createButtonGlow,
+                        ]}
+                      />
                     )}
                   </TouchableOpacity>
 
@@ -849,7 +1107,9 @@ export default function HabitScreen({ navigation }) {
                       start={{ x: 0, y: 0 }}
                       end={{ x: 1, y: 1 }}
                     >
-                      <Text style={styles.buttonText}>CANCEL</Text>
+                      <Text style={styles.buttonText}>
+                        {t('habits.form.cancel')}
+                      </Text>
                     </LinearGradient>
                   </TouchableOpacity>
                 </View>
@@ -861,13 +1121,17 @@ export default function HabitScreen({ navigation }) {
     );
   };
 
-  // --- Основной Рендер Компонента ---
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" />
-      <LinearGradient colors={['#121539', '#080b20']} style={styles.background}>
-        {/* Частицы на фоне (мемоизированы, не прыгают) */}
-        <View style={styles.particlesContainer} pointerEvents="none">
+      <LinearGradient
+        colors={['#121539', '#080b20']}
+        style={styles.background}
+      >
+        <View
+          style={styles.particlesContainer}
+          pointerEvents="none"
+        >
           {particles.map((p) => (
             <View
               key={p.key}
@@ -887,8 +1151,13 @@ export default function HabitScreen({ navigation }) {
 
         <View style={styles.mainContent}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>ACTIVE HABITS</Text>
-            <TouchableOpacity style={styles.addButton} onPress={handleOpenAddModal}>
+            <Text style={styles.sectionTitle}>
+              {t('habits.sectionTitle')}
+            </Text>
+            <TouchableOpacity
+              style={styles.addButton}
+              onPress={handleOpenAddModal}
+            >
               <Ionicons name="add" size={24} color="#ffffff" />
             </TouchableOpacity>
           </View>
@@ -904,10 +1173,12 @@ export default function HabitScreen({ navigation }) {
                 style={{ marginTop: 50 }}
               />
             ) : habits.length === 0 ? (
-              <View className="noHabitsContainer" style={styles.noHabitsContainer}>
-                <Text style={styles.noHabitsText}>No active habits yet.</Text>
+              <View style={styles.noHabitsContainer}>
+                <Text style={styles.noHabitsText}>
+                  {t('habits.empty.title')}
+                </Text>
                 <Text style={styles.noHabitsSubText}>
-                  Tap the '+' button to add your first habit!
+                  {t('habits.empty.subtitle')}
                 </Text>
               </View>
             ) : (
@@ -923,14 +1194,11 @@ export default function HabitScreen({ navigation }) {
   );
 }
 
-// --- Стили ---
+// --- Styles ---
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  background: {
-    flex: 1,
-  },
+  container: { flex: 1 },
+  background: { flex: 1 },
+
   particlesContainer: {
     ...StyleSheet.absoluteFillObject,
     zIndex: 0,
@@ -940,13 +1208,17 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255, 255, 255, 0.3)',
     borderRadius: 5,
   },
+
   mainContent: {
     flex: 1,
-    paddingTop: StatusBar.currentHeight ? StatusBar.currentHeight + -30 : 60,
+    paddingTop: StatusBar.currentHeight
+      ? StatusBar.currentHeight + -30
+      : 60,
     paddingHorizontal: 15,
     paddingBottom: 10,
     zIndex: 1,
   },
+
   sectionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -966,12 +1238,10 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255, 255, 255, 0.1)',
     borderRadius: 50,
   },
-  habitsContainer: {
-    flex: 1,
-  },
-  habitsScrollContent: {
-    paddingBottom: 20,
-  },
+
+  habitsContainer: { flex: 1 },
+  habitsScrollContent: { paddingBottom: 20 },
+
   noHabitsContainer: {
     flexGrow: 1,
     justifyContent: 'center',
@@ -990,6 +1260,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     paddingHorizontal: 20,
   },
+
   habitItem: {
     backgroundColor: 'rgba(255, 255, 255, 0.08)',
     borderRadius: 12,
@@ -1004,6 +1275,7 @@ const styles = StyleSheet.create({
   habitTrackedToday: {
     backgroundColor: 'rgba(52, 199, 89, 0.15)',
   },
+
   habitLeft: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1019,9 +1291,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginRight: 12,
   },
-  habitInfo: {
-    flex: 1,
-  },
+  habitInfo: { flex: 1 },
   habitTitle: {
     fontSize: 16,
     fontWeight: '600',
@@ -1032,10 +1302,12 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#AEAEB2',
   },
+
   habitRight: {
     flexDirection: 'row',
     alignItems: 'center',
   },
+
   streakContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1052,19 +1324,16 @@ const styles = StyleSheet.create({
     marginRight: 3,
   },
   streakIcon: {},
-  trackButton: {
-    padding: 5,
-  },
+
+  trackButton: { padding: 5 },
   trackButtonDisabled: {},
+
   modalOverlay: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
+    top: 0, left: 0, right: 0, bottom: 0,
     zIndex: 1000,
   },
   modalBackground: {
@@ -1072,12 +1341,12 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 0, 0, 0.7)',
     zIndex: 1,
   },
+
   habitDetailsModal: {
     width: width * 0.9,
     maxHeight: height * 0.75,
     backgroundColor: '#1C1C1E',
     borderRadius: 20,
-    padding: 0,
     overflow: 'hidden',
     zIndex: 2,
     borderWidth: 1,
@@ -1088,6 +1357,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 15,
   },
+
   modalHeader: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1097,6 +1367,7 @@ const styles = StyleSheet.create({
     borderBottomColor: 'rgba(255, 255, 255, 0.1)',
     backgroundColor: 'rgba(255, 255, 255, 0.05)',
   },
+
   modalIconContainer: {
     width: 40,
     height: 40,
@@ -1106,6 +1377,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginRight: 12,
   },
+
   modalTitle: {
     fontSize: 18,
     fontWeight: 'bold',
@@ -1113,15 +1385,15 @@ const styles = StyleSheet.create({
     flex: 1,
     marginRight: 10,
   },
+
   closeButton: {
     padding: 8,
     borderRadius: 15,
     backgroundColor: 'rgba(255, 255, 255, 0.1)',
   },
-  modalContentScrollView: {},
-  modalContent: {
-    padding: 20,
-  },
+
+  modalContent: { padding: 20 },
+
   descriptionContainer: {
     marginBottom: 20,
     padding: 15,
@@ -1140,11 +1412,13 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     lineHeight: 21,
   },
+
   modalStatsRow: {
     flexDirection: 'row',
     justifyContent: 'space-around',
     marginBottom: 25,
   },
+
   modalStatItem: {
     alignItems: 'center',
     flex: 1,
@@ -1164,6 +1438,7 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     textAlign: 'center',
   },
+
   editDeleteContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -1193,15 +1468,14 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     textAlign: 'center',
   },
-  modalTrackButton: {
-    marginTop: 10,
-  },
+
+  modalTrackButton: { marginTop: 10 },
+
   createEditModal: {
     width: width * 0.9,
     maxHeight: height * 0.85,
     backgroundColor: '#1C1C1E',
     borderRadius: 20,
-    padding: 0,
     overflow: 'hidden',
     zIndex: 2,
     borderWidth: 1,
@@ -1212,13 +1486,11 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 15,
   },
-  formScrollView: {},
-  formContent: {
-    padding: 20,
-  },
-  formField: {
-    marginBottom: 20,
-  },
+
+  formContent: { padding: 20 },
+
+  formField: { marginBottom: 20 },
+
   formLabel: {
     fontSize: 14,
     fontWeight: '600',
@@ -1226,6 +1498,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     textTransform: 'uppercase',
   },
+
   textInput: {
     backgroundColor: 'rgba(255, 255, 255, 0.1)',
     borderRadius: 8,
@@ -1237,11 +1510,13 @@ const styles = StyleSheet.create({
     minHeight: 50,
     paddingVertical: 12,
   },
+
   textareaInput: {
     minHeight: 90,
     paddingVertical: 15,
     textAlignVertical: 'top',
   },
+
   iconSelector: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1252,6 +1527,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.2)',
   },
+
   selectedIconContainer: {
     width: 36,
     height: 36,
@@ -1261,11 +1537,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginRight: 10,
   },
+
   iconSelectorText: {
     flex: 1,
     fontSize: 16,
     color: '#ffffff',
   },
+
   iconsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -1275,6 +1553,7 @@ const styles = StyleSheet.create({
     padding: 10,
     justifyContent: 'center',
   },
+
   iconOption: {
     width: (width * 0.9 - 40 - 20 - 12) / 6,
     aspectRatio: 1,
@@ -1286,13 +1565,14 @@ const styles = StyleSheet.create({
     borderColor: 'transparent',
     backgroundColor: 'rgba(255, 255, 255, 0.1)',
   },
+
   selectedIconOption: {
     backgroundColor: '#4dabf7',
     borderColor: '#ffffff',
   },
-  frequencySelector: {
-    flexDirection: 'row',
-  },
+
+  frequencySelector: { flexDirection: 'row' },
+
   frequencyOption: {
     flex: 1,
     paddingVertical: 12,
@@ -1303,23 +1583,26 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     marginHorizontal: 3,
   },
+
   frequencySelected: {
     backgroundColor: '#4dabf7',
     borderColor: '#4dabf7',
   },
+
   frequencyText: {
     fontSize: 14,
     color: '#ffffff',
     fontWeight: '500',
   },
-  frequencyTextSelected: {
-    fontWeight: 'bold',
-  },
+
+  frequencyTextSelected: { fontWeight: 'bold' },
+
   notificationToggle: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
+
   notificationText: {
     fontSize: 13,
     color: '#AEAEB2',
@@ -1327,9 +1610,9 @@ const styles = StyleSheet.create({
     marginBottom: 15,
     paddingLeft: 5,
   },
-  formActions: {
-    marginTop: 10,
-  },
+
+  formActions: { marginTop: 10 },
+
   actionButton: {
     borderRadius: 12,
     marginBottom: 15,
@@ -1338,15 +1621,16 @@ const styles = StyleSheet.create({
     minHeight: 50,
     justifyContent: 'center',
   },
-  actionButtonDisabled: {
-    opacity: 0.6,
-  },
+
+  actionButtonDisabled: { opacity: 0.6 },
+
   buttonGradient: {
     paddingVertical: 16,
     justifyContent: 'center',
     alignItems: 'center',
     flexDirection: 'row',
   },
+
   buttonText: {
     color: '#ffffff',
     fontSize: 16,
@@ -1354,6 +1638,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     letterSpacing: 0.5,
   },
+
   buttonGlow: {
     position: 'absolute',
     bottom: -5,
@@ -1364,11 +1649,8 @@ const styles = StyleSheet.create({
     opacity: 0.4,
     zIndex: -1,
   },
-  trackButtonGlow: {
-    backgroundColor: '#34c759',
-  },
-  createButtonGlow: {
-    backgroundColor: '#4dabf7',
-  },
+
+  trackButtonGlow: { backgroundColor: '#34c759' },
+  createButtonGlow: { backgroundColor: '#4dabf7' },
   cancelButton: {},
 });

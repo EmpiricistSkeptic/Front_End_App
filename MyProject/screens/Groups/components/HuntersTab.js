@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import apiService from '../../../services/apiService';
+import { useTranslation } from 'react-i18next';
 
 const COLORS = {
   cardBg: 'rgba(16, 20, 45, 0.9)',
@@ -33,6 +34,8 @@ function getRankFromLevel(level) {
 }
 
 export default function HuntersTab({ search, navigation, refreshKey }) {
+  const { t } = useTranslation();
+
   const [hunters, setHunters] = useState([]);
   const [loading, setLoading] = useState(false);
   const [errorText, setErrorText] = useState(null);
@@ -40,7 +43,7 @@ export default function HuntersTab({ search, navigation, refreshKey }) {
   // 'level_desc' | 'level_asc' | 'points_desc' | 'points_asc'
   const [sortMode, setSortMode] = useState('level_desc');
 
-  // --- Загрузка с бэка, сортировка ТОЛЬКО на сервере ---
+  // --- Load from backend, sorting only on server ---
   useEffect(() => {
     let isActive = true;
 
@@ -48,18 +51,16 @@ export default function HuntersTab({ search, navigation, refreshKey }) {
       setLoading(true);
       setErrorText(null);
       try {
-        let orderingParam = '-level'; // дефолт — топ по уровню
+        let orderingParam = '-level'; // default: top by level
 
         if (sortMode === 'level_asc') orderingParam = 'level';
         if (sortMode === 'points_desc') orderingParam = '-points';
         if (sortMode === 'points_asc') orderingParam = 'points';
 
-        // дергаем список профилей с ordering из DRF
         const response = await apiService.get(
           `profile/?ordering=${orderingParam}`
         );
 
-        // поддерживаем оба варианта: массив или пагинированный { results: [...] }
         const data = Array.isArray(response)
           ? response
           : Array.isArray(response?.results)
@@ -72,7 +73,7 @@ export default function HuntersTab({ search, navigation, refreshKey }) {
       } catch (err) {
         console.error('Error loading hunters:', err);
         if (isActive) {
-          setErrorText('Failed to load hunters.');
+          setErrorText(t('groups.huntersTab.errors.loadFailed'));
           setHunters([]);
         }
       } finally {
@@ -84,9 +85,9 @@ export default function HuntersTab({ search, navigation, refreshKey }) {
     return () => {
       isActive = false;
     };
-  }, [refreshKey, sortMode]); // ⬅ при смене sortMode пробиваем новый запрос
+  }, [refreshKey, sortMode, t]);
 
-  // только фильтрация по поиску, БЕЗ сортировки на клиенте
+  // filter by search only, no client sorting
   const filteredHunters = useMemo(() => {
     const q = search.trim().toLowerCase();
     if (!q) return hunters;
@@ -121,7 +122,7 @@ export default function HuntersTab({ search, navigation, refreshKey }) {
         }}
         activeOpacity={0.9}
       >
-        {/* Аватар + уровень */}
+        {/* Avatar + level */}
         <View style={{ marginRight: 12 }}>
           <View
             style={{
@@ -156,7 +157,7 @@ export default function HuntersTab({ search, navigation, refreshKey }) {
             )}
           </View>
 
-          {/* Бейдж уровня */}
+          {/* Level badge */}
           <View
             style={{
               position: 'absolute',
@@ -184,7 +185,7 @@ export default function HuntersTab({ search, navigation, refreshKey }) {
           </View>
         </View>
 
-        {/* Основная инфа */}
+        {/* Main info */}
         <View style={{ flex: 1 }}>
           <View
             style={{
@@ -221,12 +222,12 @@ export default function HuntersTab({ search, navigation, refreshKey }) {
                   fontWeight: '700',
                 }}
               >
-                RANK {rank}
+                {t('groups.huntersTab.labels.rank', { rank })}
               </Text>
             </View>
           </View>
 
-          {/* CP / Power */}
+          {/* Combat Power */}
           <View
             style={{
               flexDirection: 'row',
@@ -246,19 +247,11 @@ export default function HuntersTab({ search, navigation, refreshKey }) {
                 fontSize: 12,
               }}
             >
-              Combat Power:{' '}
-              <Text
-                style={{
-                  color: COLORS.accentBlue,
-                  fontWeight: '700',
-                }}
-              >
-                {points}
-              </Text>
+              {t('groups.huntersTab.labels.combatPower', { points })}
             </Text>
           </View>
 
-          {/* мини-индикатор “активности” чисто визуальный */}
+          {/* Elite hint */}
           <View
             style={{
               flexDirection: 'row',
@@ -278,7 +271,7 @@ export default function HuntersTab({ search, navigation, refreshKey }) {
               }}
               numberOfLines={1}
             >
-              Elite hunter of the guild
+              {t('groups.huntersTab.labels.eliteHint')}
             </Text>
           </View>
         </View>
@@ -286,7 +279,7 @@ export default function HuntersTab({ search, navigation, refreshKey }) {
     );
   };
 
-  // --- Состояния загрузки / ошибки / пустого результата ---
+  // --- Loading / error / empty states ---
 
   if (loading) {
     return (
@@ -304,7 +297,7 @@ export default function HuntersTab({ search, navigation, refreshKey }) {
             marginTop: 12,
           }}
         >
-          Scanning hunters...
+          {t('groups.huntersTab.loading')}
         </Text>
       </View>
     );
@@ -360,7 +353,7 @@ export default function HuntersTab({ search, navigation, refreshKey }) {
             textAlign: 'center',
           }}
         >
-          No hunters found
+          {t('groups.huntersTab.empty.title')}
         </Text>
         <Text
           style={{
@@ -370,17 +363,31 @@ export default function HuntersTab({ search, navigation, refreshKey }) {
             textAlign: 'center',
           }}
         >
-          Try another name or clear the search.
+          {t('groups.huntersTab.empty.subtitle')}
         </Text>
       </View>
     );
   }
 
-  // --- Основной рендер со списком и кнопками сортировки ---
+  // --- Main render with sort buttons ---
+
+  const levelArrow =
+    sortMode === 'level_desc'
+      ? t('groups.huntersTab.sort.desc')
+      : sortMode === 'level_asc'
+      ? t('groups.huntersTab.sort.asc')
+      : '';
+
+  const powerArrow =
+    sortMode === 'points_desc'
+      ? t('groups.huntersTab.sort.desc')
+      : sortMode === 'points_asc'
+      ? t('groups.huntersTab.sort.asc')
+      : '';
 
   return (
     <View style={{ flex: 1 }}>
-      {/* Панель сортировки */}
+      {/* Sort panel */}
       <View
         style={{
           flexDirection: 'row',
@@ -411,16 +418,11 @@ export default function HuntersTab({ search, navigation, refreshKey }) {
               fontWeight: '600',
             }}
           >
-            Level{' '}
-            {sortMode === 'level_desc'
-              ? '↓'
-              : sortMode === 'level_asc'
-              ? '↑'
-              : ''}
+            {t('groups.huntersTab.sort.level')} {levelArrow}
           </Text>
         </TouchableOpacity>
 
-        {/* Sort by Power (points) */}
+        {/* Sort by Power */}
         <TouchableOpacity
           onPress={() =>
             setSortMode((prev) =>
@@ -443,12 +445,7 @@ export default function HuntersTab({ search, navigation, refreshKey }) {
               fontWeight: '600',
             }}
           >
-            Power{' '}
-            {sortMode === 'points_desc'
-              ? '↓'
-              : sortMode === 'points_asc'
-              ? '↑'
-              : ''}
+            {t('groups.huntersTab.sort.power')} {powerArrow}
           </Text>
         </TouchableOpacity>
       </View>

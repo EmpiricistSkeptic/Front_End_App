@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo } from 'react';
+import React, { useCallback, useMemo, useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -9,13 +9,16 @@ import {
   Image,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Ionicons, MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
 import { createMaterialTopTabNavigator } from '@react-navigation/material-top-tabs';
 import { useFocusEffect } from '@react-navigation/native';
+import { useTranslation } from 'react-i18next';
+// 👇 Импорт локального хранилища
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import TaskScreen from './TaskScreen';
 import AIQuestListScreen from './AIQuestListScreen';
 import HabitScreen from './HabitScreen';
+import LevelUpModal from '../components/LevelUpModal';
 
 import { useProfile } from '../context/ProfileContext';
 
@@ -33,15 +36,67 @@ function getRankFromLevel(level) {
 }
 
 export default function HomeScreen({ navigation }) {
+  const { t } = useTranslation();
+
   // Достаём данные профиля из глобального контекста
   const { profileData, totalPoints, expPercentage, refreshProfile } = useProfile();
 
-  // Безопасные значения, пока профиль ещё не успел загрузиться
+  // Безопасные значения
   const level = profileData?.level ?? 1;
   const points = profileData?.points ?? 0;
   const username = profileData?.username ?? '';
   const avatar = profileData?.avatar ?? null;
+  const userId = profileData?.id; // ❗ Нужен ID для сохранения прогресса
   const safeTotalPoints = totalPoints || 1000;
+  
+  const [showLevelUp, setShowLevelUp] = useState(false);
+
+  // --- ЛОГИКА ПРОВЕРКИ УРОВНЯ (AsyncStorage) ---
+  useEffect(() => {
+    const checkLevelStatus = async () => {
+      // Ждем загрузки профиля, чтобы знать ID юзера
+      if (!userId) return;
+
+      const storageKey = `last_seen_level_${userId}`;
+      try {
+        const storedLevel = await AsyncStorage.getItem(storageKey);
+        
+        if (storedLevel === null) {
+          // Сценарий 1: Первый запуск на устройстве.
+          // Просто сохраняем текущий уровень, чтобы не спамить уведомлением при входе.
+          await AsyncStorage.setItem(storageKey, level.toString());
+        } else {
+          // Сценарий 2: Уровень уже был сохранен. Сравниваем.
+          const lastLevel = parseInt(storedLevel, 10);
+          
+          if (level > lastLevel) {
+            // Уровень вырос! Показываем модалку
+            setShowLevelUp(true);
+          }
+        }
+      } catch (e) {
+        console.error('Failed to check level ups', e);
+      }
+    };
+
+    checkLevelStatus();
+  }, [level, userId]); // Запускаем проверку при изменении уровня или загрузке ID
+
+  // --- ФУНКЦИЯ ЗАКРЫТИЯ И СОХРАНЕНИЯ ---
+  const handleCloseLevelUp = async () => {
+    // 1. Скрываем модалку
+    setShowLevelUp(false);
+    
+    // 2. Сохраняем новый уровень как "просмотренный"
+    if (userId) {
+      try {
+        await AsyncStorage.setItem(`last_seen_level_${userId}`, level.toString());
+      } catch (e) {
+        console.error('Failed to save level confirmation', e);
+      }
+    }
+  };
+
   const safeExpPercentage =
     Number.isFinite(expPercentage) && expPercentage >= 0
       ? Math.min(100, expPercentage)
@@ -61,7 +116,7 @@ export default function HomeScreen({ navigation }) {
     []
   );
 
-  // Обновляем профиль при фокусе (и при первом открытии экрана)
+  // Обновляем профиль при фокусе
   useFocusEffect(
     useCallback(() => {
       let isActive = true;
@@ -89,9 +144,22 @@ export default function HomeScreen({ navigation }) {
     }, [refreshProfile, navigation])
   );
 
+  const rankLetter = getRankFromLevel(level);
+
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" />
+      
+      {/* 
+          Модалка получает visible из стейта, 
+          а при закрытии вызывает нашу новую функцию handleCloseLevelUp 
+      */}
+      <LevelUpModal 
+        visible={showLevelUp} 
+        level={level} 
+        onClose={handleCloseLevelUp} 
+      />
+
       <LinearGradient colors={['#121539', '#080b20']} style={styles.background}>
         {/* Particle effects background */}
         <View style={styles.particlesContainer}>
@@ -116,23 +184,32 @@ export default function HomeScreen({ navigation }) {
         <View style={styles.header}>
           <View style={styles.headerLeft}>
             <View style={styles.levelContainer}>
-              <Text style={styles.levelLabel}>HUNTER RANK</Text>
-              <Text style={styles.levelText}>LVL {level}</Text>
+              <Text style={styles.levelLabel}>{t('home.hunterRankLabel')}</Text>
+              <Text style={styles.levelText}>
+                {t('home.levelText', { level })}
+              </Text>
               <View style={styles.rankDecoration}>
-                <Text style={styles.rankText}>RANK {getRankFromLevel(level)}</Text>
+                <Text style={styles.rankText}>
+                  {t('home.rankText', { rank: rankLetter })}
+                </Text>
               </View>
             </View>
 
             <View style={styles.pointsBarOuterContainer}>
-              <Text style={styles.pointsLabel}>COMBAT POWER</Text>
+              <Text style={styles.pointsLabel}>{t('home.combatPowerLabel')}</Text>
               <View style={styles.pointsBarContainer}>
                 <View style={[styles.pointsBar, { width: `${safeExpPercentage}%` }]} />
                 <View style={styles.pointsBarGlow} />
                 <Text style={styles.pointsText}>
-                  {points} / {safeTotalPoints}
+                  {t('home.expFraction', {
+                    points,
+                    total: safeTotalPoints,
+                  })}
                 </Text>
               </View>
-              <Text style={styles.expPercentage}>{Math.round(safeExpPercentage)}%</Text>
+              <Text style={styles.expPercentage}>
+                {t('home.expPercent', { percent: Math.round(safeExpPercentage) })}
+              </Text>
             </View>
           </View>
 
@@ -186,9 +263,22 @@ export default function HomeScreen({ navigation }) {
             tabBarPressColor: 'rgba(77, 171, 247, 0.1)',
           }}
         >
-          <Tab.Screen name="Tasks" component={TaskScreen} />
-          <Tab.Screen name="Quests" component={AIQuestListScreen} />
-          <Tab.Screen name="Habits" component={HabitScreen} />
+          {/* Имена роутов не меняем — меняем только label */}
+          <Tab.Screen
+            name="Tasks"
+            component={TaskScreen}
+            options={{ tabBarLabel: t('home.tabs.tasks') }}
+          />
+          <Tab.Screen
+            name="Quests"
+            component={AIQuestListScreen}
+            options={{ tabBarLabel: t('home.tabs.quests') }}
+          />
+          <Tab.Screen
+            name="Habits"
+            component={HabitScreen}
+            options={{ tabBarLabel: t('home.tabs.habits') }}
+          />
         </Tab.Navigator>
       </LinearGradient>
     </View>
@@ -418,5 +508,3 @@ const styles = StyleSheet.create({
     marginTop: 5,
   },
 });
-
-

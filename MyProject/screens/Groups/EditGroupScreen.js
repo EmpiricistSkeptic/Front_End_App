@@ -1,5 +1,5 @@
 // src/screens/Groups/EditGroupScreen.js
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import {
   View, Text, SafeAreaView, StatusBar, Platform, Dimensions,
   TouchableOpacity, TextInput, Switch, Alert, ActivityIndicator
@@ -7,6 +7,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { getGroup, updateGroup } from './api/groupsApi';
+import { useTranslation } from 'react-i18next';
 
 const { width, height } = Dimensions.get('window');
 
@@ -24,7 +25,9 @@ const COLORS = {
 };
 
 export default function EditGroupScreen({ route, navigation }) {
+  const { t } = useTranslation();
   const { groupId, preGroup } = route.params || {};
+
   const [loading, setLoading] = useState(!preGroup);
   const [saving, setSaving] = useState(false);
 
@@ -32,43 +35,51 @@ export default function EditGroupScreen({ route, navigation }) {
   const [desc, setDesc] = useState(preGroup?.description || '');
   const [isPublic, setIsPublic] = useState(Boolean(preGroup?.is_public));
 
+  // ✅ частицы мемоизированы — не дергаются на каждом рендере
+  const particles = useMemo(
+    () =>
+      [...Array(20)].map((_, i) => ({
+        key: i,
+        left: Math.random() * width,
+        top: Math.random() * height,
+        size: Math.random() * 4 + 1,
+        opacity: Math.random() * 0.5 + 0.3,
+      })),
+    []
+  );
+
   useEffect(() => {
     if (preGroup) return;
+    let active = true;
+
     (async () => {
       setLoading(true);
       try {
         const g = await getGroup(groupId);
+        if (!active) return;
         setName(g?.name || '');
         setDesc(g?.description || '');
         setIsPublic(Boolean(g?.is_public));
       } catch (e) {
-        Alert.alert('Error', 'Group not found');
+        Alert.alert(t('groups.edit.alerts.errorTitle'), t('groups.edit.alerts.groupNotFound'));
         navigation.goBack();
       } finally {
-        setLoading(false);
+        active && setLoading(false);
       }
     })();
-  }, [groupId]);
 
-  const renderParticles = () => (
-    <View style={{ position:'absolute', width, height }} pointerEvents="none">
-      {[...Array(20)].map((_, i) => (
-        <View key={i} style={{
-          position:'absolute',
-          left: Math.random()*width, top: Math.random()*height,
-          width: Math.random()*4+1, height: Math.random()*4+1,
-          opacity: Math.random()*0.5+0.3, backgroundColor: COLORS.particle, borderRadius: 50,
-        }} />
-      ))}
-    </View>
-  );
+    return () => {
+      active = false;
+    };
+  }, [groupId, preGroup, navigation, t]);
 
-  const handleSave = async () => {
+  const handleSave = useCallback(async () => {
     const nm = name.trim();
     if (!nm) {
-      Alert.alert('Validation', 'Name is required');
+      Alert.alert(t('groups.edit.alerts.validationTitle'), t('groups.edit.alerts.nameRequired'));
       return;
     }
+
     setSaving(true);
     try {
       const updated = await updateGroup(groupId, {
@@ -77,30 +88,55 @@ export default function EditGroupScreen({ route, navigation }) {
         is_public: Boolean(isPublic),
       });
 
-      // ВАЖНО: не replace! Обновляем ПАРАМЕТРЫ существующего GroupDetails и возвращаемся.
+      // обновляем параметры GroupDetails и возвращаемся
       navigation.navigate({
         name: 'GroupDetails',
         params: {
           groupId: updated.id,
           preGroup: updated,
-          __refreshAt: Date.now(), // специальный маркер для эффекта на детальном экране
+          __refreshAt: Date.now(),
         },
         merge: true,
       });
+
       navigation.goBack();
     } catch (e) {
-      const msg = e?.response?.data?.detail || e?.message || 'Failed to update';
-      Alert.alert('Error', msg);
+      const msg =
+        e?.response?.data?.detail ||
+        e?.message ||
+        t('groups.edit.alerts.updateFail');
+
+      Alert.alert(t('groups.edit.alerts.errorTitle'), msg);
     } finally {
       setSaving(false);
     }
-  };
+  }, [name, desc, isPublic, groupId, navigation, t]);
 
   return (
     <SafeAreaView style={{ flex:1, backgroundColor: COLORS.backgroundGradientEnd }}>
       <StatusBar barStyle="light-content" />
-      <LinearGradient colors={[COLORS.backgroundGradientStart, COLORS.backgroundGradientEnd]} style={{ flex:1 }}>
-        {renderParticles()}
+      <LinearGradient
+        colors={[COLORS.backgroundGradientStart, COLORS.backgroundGradientEnd]}
+        style={{ flex:1 }}
+      >
+        {/* Particles */}
+        <View style={{ position:'absolute', width, height }} pointerEvents="none">
+          {particles.map((p) => (
+            <View
+              key={p.key}
+              style={{
+                position:'absolute',
+                left: p.left,
+                top: p.top,
+                width: p.size,
+                height: p.size,
+                opacity: p.opacity,
+                backgroundColor: COLORS.particle,
+                borderRadius: 50,
+              }}
+            />
+          ))}
+        </View>
 
         {/* Header */}
         <View style={{
@@ -109,9 +145,13 @@ export default function EditGroupScreen({ route, navigation }) {
           borderBottomWidth:1, borderBottomColor: COLORS.headerBorder
         }}>
           <Text style={{ color: COLORS.textPrimary, fontSize:18, fontWeight:'bold', letterSpacing:1 }}>
-            EDIT GROUP
+            {t('groups.edit.header.title')}
           </Text>
-          <TouchableOpacity onPress={() => navigation.goBack()} style={{ position:'absolute', left:15, top: 18 }}>
+
+          <TouchableOpacity
+            onPress={() => navigation.goBack()}
+            style={{ position:'absolute', left:15, top: 18 }}
+          >
             <Ionicons name="chevron-back" size={24} color={COLORS.textSecondary} />
           </TouchableOpacity>
         </View>
@@ -119,31 +159,46 @@ export default function EditGroupScreen({ route, navigation }) {
         {loading ? (
           <View style={{ flex:1, justifyContent:'center', alignItems:'center' }}>
             <ActivityIndicator size="large" color={COLORS.accentBlue} />
-            <Text style={{ color: COLORS.textSecondary, marginTop: 10 }}>Loading...</Text>
+            <Text style={{ color: COLORS.textSecondary, marginTop: 10 }}>
+              {t('common.loading')}
+            </Text>
           </View>
         ) : (
           <View style={{ flex:1, padding: 15 }}>
-            <Text style={{ color: COLORS.textSecondary, fontSize: 12, marginBottom: 6 }}>Name</Text>
+            <Text style={{ color: COLORS.textSecondary, fontSize: 12, marginBottom: 6 }}>
+              {t('groups.edit.fields.name')}
+            </Text>
             <TextInput
               style={{
                 backgroundColor: COLORS.inputBackground,
-                borderRadius: 12, borderWidth: 1, borderColor: COLORS.borderBlue,
-                color: COLORS.textPrimary, paddingHorizontal: 12, paddingVertical: 10
+                borderRadius: 12,
+                borderWidth: 1,
+                borderColor: COLORS.borderBlue,
+                color: COLORS.textPrimary,
+                paddingHorizontal: 12,
+                paddingVertical: 10
               }}
-              placeholder="Group name"
+              placeholder={t('groups.edit.placeholders.name')}
               placeholderTextColor={COLORS.placeholder}
               value={name}
               onChangeText={setName}
             />
 
-            <Text style={{ color: COLORS.textSecondary, fontSize: 12, marginBottom: 6, marginTop: 12 }}>Description</Text>
+            <Text style={{ color: COLORS.textSecondary, fontSize: 12, marginBottom: 6, marginTop: 12 }}>
+              {t('groups.edit.fields.description')}
+            </Text>
             <TextInput
               style={{
                 backgroundColor: COLORS.inputBackground,
-                borderRadius: 12, borderWidth: 1, borderColor: COLORS.borderBlue,
-                color: COLORS.textPrimary, paddingHorizontal: 12, paddingVertical: 10, minHeight: 90
+                borderRadius: 12,
+                borderWidth: 1,
+                borderColor: COLORS.borderBlue,
+                color: COLORS.textPrimary,
+                paddingHorizontal: 12,
+                paddingVertical: 10,
+                minHeight: 90
               }}
-              placeholder="Optional"
+              placeholder={t('groups.edit.placeholders.description')}
               placeholderTextColor={COLORS.placeholder}
               value={desc}
               onChangeText={setDesc}
@@ -151,7 +206,9 @@ export default function EditGroupScreen({ route, navigation }) {
             />
 
             <View style={{ flexDirection:'row', alignItems:'center', marginTop: 12 }}>
-              <Text style={{ color: COLORS.textSecondary, marginRight: 10 }}>Public</Text>
+              <Text style={{ color: COLORS.textSecondary, marginRight: 10 }}>
+                {t('groups.edit.fields.public')}
+              </Text>
               <Switch value={isPublic} onValueChange={setIsPublic} />
             </View>
 
@@ -161,12 +218,15 @@ export default function EditGroupScreen({ route, navigation }) {
               style={{
                 marginTop: 18,
                 alignSelf:'flex-start',
-                paddingHorizontal: 16, paddingVertical: 10,
+                paddingHorizontal: 16,
+                paddingVertical: 10,
                 borderRadius: 22,
                 backgroundColor: saving ? '#5f7191' : COLORS.accentBlue
               }}
             >
-              <Text style={{ color: '#080b20', fontWeight: '700' }}>{saving ? 'Saving...' : 'Save'}</Text>
+              <Text style={{ color: '#080b20', fontWeight: '700' }}>
+                {saving ? t('groups.edit.buttons.saving') : t('common.save')}
+              </Text>
             </TouchableOpacity>
           </View>
         )}

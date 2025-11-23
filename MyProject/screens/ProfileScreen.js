@@ -36,13 +36,12 @@ import apiService from '../services/apiService';
 import { useProfile } from '../context/ProfileContext';
 import { useFocusEffect } from '@react-navigation/native';
 import { logout as authLogout } from '../services/authService';
+import { useTranslation } from 'react-i18next';
 
 const { width, height } = Dimensions.get('window');
 const BASE_URL_MEDIA = 'http://192.168.0.102:8000';
 
 // ---- Вспомогательные функции ----
-
-// Формула расчета порога опыта (для чужих профилей)
 function calculateXpThreshold(level) {
   return Math.floor(1000 * Math.pow(1.5, level - 1));
 }
@@ -57,79 +56,68 @@ function getRankFromLevel(level) {
 }
 
 export default function ProfileScreen({ navigation, route }) {
-  // 1. Получаем ID из параметров навигации (если перешли к другу)
+  const { t } = useTranslation();
+
   const { userId } = route.params || {};
 
-  // 2. Контекст (ТОЛЬКО для текущего юзера)
   const {
     profileData: myProfileData,
     refreshProfile,
   } = useProfile();
 
-  // 3. Определяем владельца
-  // Если userId нет ИЛИ он совпадает с моим ID -> это мой профиль
   const isOwner = !userId || (myProfileData && userId === myProfileData.id);
 
-  // 4. Локальный стейт для ЧУЖОГО профиля
   const [otherUserProfile, setOtherUserProfile] = useState(null);
   const [loadingOtherProfile, setLoadingOtherProfile] = useState(false);
 
-  // Локальные стейты UI
   const [isEditing, setIsEditing] = useState(false);
   const [username, setUsername] = useState('');
   const [bio, setBio] = useState('');
   const [avatar, setAvatar] = useState(null);
   const [avatarChanged, setAvatarChanged] = useState(false);
   const [activeTab, setActiveTab] = useState('achievements');
-  const [isLoading, setIsLoading] = useState(false); // Для сохранения изменений
+  const [isLoading, setIsLoading] = useState(false);
 
-  // История (только для владельца)
   const [completedTasks, setCompletedTasks] = useState([]);
   const [historyLoaded, setHistoryLoaded] = useState(false);
 
-  // ---- Единый объект профиля для отображения ----
   const displayProfile = isOwner ? myProfileData : otherUserProfile;
 
-  // Безопасные значения для рендера
   const level = displayProfile?.level ?? 1;
   const points = displayProfile?.points ?? 0;
-  
-  // Считаем математику на лету (чтобы работало и для Context, и для API данных)
+
   const totalPoints = calculateXpThreshold(level);
   const expPercentage = totalPoints > 0 ? (points / totalPoints) * 100 : 0;
   const safeExpPercentage = Math.min(100, Math.max(0, expPercentage));
 
   const profileUsername = displayProfile?.username ?? '';
   const profileBio = displayProfile?.bio ?? '';
-  // Если редактируем - показываем локальный аватар, иначе - из профиля
-  const profileAvatar = (isEditing && avatar) ? avatar : (displayProfile?.avatar_url || displayProfile?.avatar);
+  const profileAvatar =
+    (isEditing && avatar)
+      ? avatar
+      : (displayProfile?.avatar_url || displayProfile?.avatar);
 
-  // ---- Частицы ----
   const particles = useMemo(
     () =>
-      [...Array(20)].map((_, i) => ({ // Ставим 20 штук, как в логине
+      [...Array(20)].map((_, i) => ({
         key: `p-${i}`,
         left: Math.random() * width,
         top: Math.random() * height,
-        size: Math.random() * 4 + 1, // Используем size вместо width/height
+        size: Math.random() * 4 + 1,
         opacity: Math.random() * 0.5 + 0.3,
       })),
     []
   );
 
-  // ---- Эффекты ----
-
-  // Синхронизация полей редактирования (Только если владелец)
   useEffect(() => {
     if (isOwner && displayProfile) {
       setUsername(profileUsername);
       setBio(profileBio);
-      setAvatar(null); // Сбрасфываем локальный выбор при обновлении данных
+      setAvatar(null);
       setAvatarChanged(false);
     }
   }, [displayProfile, isOwner, profileUsername, profileBio]);
 
-  // Загрузка данных (Главный эффект)
   useFocusEffect(
     useCallback(() => {
       let isActive = true;
@@ -137,10 +125,8 @@ export default function ProfileScreen({ navigation, route }) {
       const loadData = async () => {
         try {
           if (isOwner) {
-            // Если я хозяин - обновляем контекст
             await refreshProfile();
           } else {
-            // Если чужой - грузим по ID
             setLoadingOtherProfile(true);
             const response = await apiService.get(`profile/${userId}/`);
             if (isActive) {
@@ -148,7 +134,6 @@ export default function ProfileScreen({ navigation, route }) {
             }
           }
 
-          // Историю грузим только если это мой профиль и вкладка активна
           if (isOwner && activeTab === 'history') {
             await fetchCompletedTasks();
           }
@@ -156,8 +141,11 @@ export default function ProfileScreen({ navigation, route }) {
           if (!isActive) return;
           console.error('Error loading profile:', err);
           if (err?.response?.status === 404) {
-             Alert.alert('Error', 'User not found');
-             navigation.goBack();
+            Alert.alert(
+              t('profile.alerts.errorTitle'),
+              t('profile.alerts.userNotFound')
+            );
+            navigation.goBack();
           }
         } finally {
           if (isActive) setLoadingOtherProfile(false);
@@ -166,12 +154,11 @@ export default function ProfileScreen({ navigation, route }) {
 
       loadData();
       return () => { isActive = false; };
-    }, [userId, isOwner, refreshProfile, activeTab])
+    }, [userId, isOwner, refreshProfile, activeTab, t, navigation])
   );
 
-  // Загрузка истории (отдельно, если переключили вкладку)
   const fetchCompletedTasks = async () => {
-    if (!isOwner) return; // Чужую историю не грузим
+    if (!isOwner) return;
     try {
       const responseData = await apiService.get('tasks/completed/');
       if (responseData && Array.isArray(responseData.results)) {
@@ -186,14 +173,13 @@ export default function ProfileScreen({ navigation, route }) {
     }
   };
 
-  // Выбор картинки (Только владелец)
   useEffect(() => {
     (async () => {
       if (Platform.OS !== 'web' && isOwner) {
         const { status } =
           await ImagePicker.requestMediaLibraryPermissionsAsync();
         if (status !== 'granted') {
-           // Можно показать алерт, но не блокировать
+          // optional: no blocking
         }
       }
     })();
@@ -215,11 +201,13 @@ export default function ProfileScreen({ navigation, route }) {
         setAvatarChanged(true);
       }
     } catch (error) {
-      Alert.alert('Error', 'Could not select image');
+      Alert.alert(
+        t('profile.alerts.errorTitle'),
+        t('profile.alerts.imagePickFail')
+      );
     }
   };
 
-  // Обновление профиля (Только владелец)
   const updateProfile = async () => {
     if (!isOwner) return;
     setIsLoading(true);
@@ -229,33 +217,37 @@ export default function ProfileScreen({ navigation, route }) {
       formData.append('bio', bio || '');
 
       if (avatarChanged && avatar) {
-          let fileType = 'jpeg';
-          const uriParts = avatar.split('.');
-          const extension = uriParts[uriParts.length - 1].toLowerCase();
-          if (['jpg', 'jpeg', 'png'].includes(extension)) {
-            fileType = extension === 'jpg' ? 'jpeg' : extension;
-          }
+        let fileType = 'jpeg';
+        const uriParts = avatar.split('.');
+        const extension = uriParts[uriParts.length - 1].toLowerCase();
+        if (['jpg', 'jpeg', 'png'].includes(extension)) {
+          fileType = extension === 'jpg' ? 'jpeg' : extension;
+        }
 
-          formData.append('avatar', {
-            uri: avatar,
-            name: `avatar.${fileType}`,
-            type: `image/${fileType}`,
-          });
+        formData.append('avatar', {
+          uri: avatar,
+          name: `avatar.${fileType}`,
+          type: `image/${fileType}`,
+        });
       } else if (avatar === null && avatarChanged) {
-          // Логика удаления аватара, если нужно
-          formData.append('avatar_clear', 'true');
+        formData.append('avatar_clear', 'true');
       }
 
-      // Используем ID из контекста для надежности
       await apiService.patchFormData('profile/me/', formData);
 
       await refreshProfile();
       setAvatarChanged(false);
       setIsEditing(false);
-      Alert.alert('Success', 'Profile updated successfully!');
+      Alert.alert(
+        t('profile.alerts.successTitle'),
+        t('profile.alerts.profileUpdated')
+      );
     } catch (error) {
       console.error('Profile update error:', error);
-      Alert.alert('Error', 'Failed to update profile.');
+      Alert.alert(
+        t('profile.alerts.errorTitle'),
+        t('profile.alerts.profileUpdateFail')
+      );
     } finally {
       setIsLoading(false);
     }
@@ -265,13 +257,12 @@ export default function ProfileScreen({ navigation, route }) {
     try {
       await authLogout();
     } catch (error) {
-      console.error('Ошибка логаута:', error);
+      console.error('Logout error:', error);
     } finally {
       navigation.reset({ index: 0, routes: [{ name: 'Welcome' }] });
     }
   };
 
-  // ---- Цвета (Helper functions) ----
   const getDifficultyColor = (difficulty) => {
     switch (difficulty) {
       case 'S': return '#ff2d55';
@@ -305,13 +296,11 @@ export default function ProfileScreen({ navigation, route }) {
     }
   };
 
-  // ---- Компонент Иконки ----
   const RenderAchievementIcon = ({ achievementData, currentTier }) => {
     const iconSize = 28;
     const activeColor = getAchievementTierColor(currentTier);
 
-    // ВАЖНО: Данные теперь вложены в .achievement
-    const staticData = achievementData.achievement || {}; 
+    const staticData = achievementData.achievement || {};
 
     if (staticData.icon && typeof staticData.icon === 'string') {
       let iconUrl = staticData.icon;
@@ -347,9 +336,7 @@ export default function ProfileScreen({ navigation, route }) {
     return <AntDesign name="trophy" size={iconSize} color={activeColor} />;
   };
 
-  // ---- Элемент Достижения ----
   const AchievementDisplayItem = ({ userAchievement }) => {
-    // ВАЖНО: Распаковка с учетом вложенности
     const {
       id,
       current_progress,
@@ -361,7 +348,6 @@ export default function ProfileScreen({ navigation, route }) {
       completed_at,
     } = userAchievement;
 
-    // Статические данные из вложенного объекта
     const { name, description, unit_type } = userAchievement.achievement || {};
 
     const tierColor = getAchievementTierColor(current_tier);
@@ -408,7 +394,7 @@ export default function ProfileScreen({ navigation, route }) {
           ]}
         >
           <RenderAchievementIcon
-            achievementData={userAchievement} // Передаем весь объект, внутри разберемся
+            achievementData={userAchievement}
             currentTier={current_tier}
           />
         </View>
@@ -450,18 +436,21 @@ export default function ProfileScreen({ navigation, route }) {
             </View>
           ) : (
             <Text style={[styles.achievementCompletedTextStyle, { color: tierColor }]}>
-              COMPLETED!{' '}
-              {completed_at ? `(${new Date(completed_at).toLocaleDateString()})` : ''}
+              {t('profile.achievements.completed')}
+              {' '}
+              {completed_at
+                ? `(${new Date(completed_at).toLocaleDateString()})`
+                : ''}
             </Text>
           )}
 
           <View style={styles.achievementTierContainerStyle}>
             <Text style={[styles.achievementCurrentTierStyle, { color: tierColor, textShadowColor: tierGlow }]}>
-              TIER: {current_tier}
+              {t('profile.achievements.tierLabel', { tier: current_tier })}
             </Text>
             {!completed && next_tier && (
               <Text style={styles.achievementNextTierStyle}>
-                Next: {next_tier}
+                {t('profile.achievements.nextTierLabel', { tier: next_tier })}
               </Text>
             )}
           </View>
@@ -476,9 +465,7 @@ export default function ProfileScreen({ navigation, route }) {
     );
   };
 
-  // ---- Рендер списков ----
   const renderAchievementsContent = () => {
-    // Данные берем из displayProfile
     const userAchievementsData = displayProfile?.achievements || [];
 
     if (!userAchievementsData || userAchievementsData.length === 0) {
@@ -490,10 +477,10 @@ export default function ProfileScreen({ navigation, route }) {
             color="rgba(255, 255, 255, 0.3)"
           />
           <Text style={styles.achievementEmptyTextStyle}>
-            No Trophies Unlocked Yet.
+            {t('profile.achievements.emptyTitle')}
           </Text>
           <Text style={styles.achievementEmptySubTextStyle}>
-            Embark on new quests to claim your glory!
+            {t('profile.achievements.emptySubtitle')}
           </Text>
         </View>
       );
@@ -511,9 +498,6 @@ export default function ProfileScreen({ navigation, route }) {
     );
   };
 
-  // ---- MAIN RENDER ----
-  
-  // Если данные еще грузятся (особенно для чужого профиля)
   if (!displayProfile && loadingOtherProfile) {
     return (
       <LinearGradient
@@ -521,30 +505,34 @@ export default function ProfileScreen({ navigation, route }) {
         style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}
       >
         <ActivityIndicator size="large" color="#4dabf7" />
-        <Text style={{ color: '#ffffff', marginTop: 20 }}>Loading Profile...</Text>
+        <Text style={{ color: '#ffffff', marginTop: 20 }}>
+          {t('profile.loading')}
+        </Text>
       </LinearGradient>
     );
   }
-  
-  // Если профиль не найден совсем
+
   if (!displayProfile) {
-      return (
-          <LinearGradient colors={['#121539', '#080b20']} style={styles.container}>
-             <View style={{flex:1, justifyContent:'center', alignItems:'center'}}>
-                 <Text style={{color:'white'}}>Profile not found.</Text>
-                 <TouchableOpacity onPress={()=>navigation.goBack()} style={{marginTop:20}}>
-                     <Text style={{color:'#4dabf7'}}>Go Back</Text>
-                 </TouchableOpacity>
-             </View>
-          </LinearGradient>
-      );
+    return (
+      <LinearGradient colors={['#121539', '#080b20']} style={styles.container}>
+        <View style={{flex:1, justifyContent:'center', alignItems:'center'}}>
+          <Text style={{color:'white'}}>
+            {t('profile.notFound')}
+          </Text>
+          <TouchableOpacity onPress={()=>navigation.goBack()} style={{marginTop:20}}>
+            <Text style={{color:'#4dabf7'}}>
+              {t('profile.goBack')}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </LinearGradient>
+    );
   }
 
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" />
       <LinearGradient colors={['#121539', '#080b20']} style={styles.background}>
-        {/* Частицы */}
         <View style={styles.particlesContainer} pointerEvents="none">
           {particles.map((p) => (
             <View
@@ -554,8 +542,8 @@ export default function ProfileScreen({ navigation, route }) {
                 {
                   left: p.left,
                   top: p.top,
-                  width: p.size,  // Берем размер из p.size
-                  height: p.size, // Берем размер из p.size
+                  width: p.size,
+                  height: p.size,
                   opacity: p.opacity,
                 },
               ]}
@@ -563,7 +551,6 @@ export default function ProfileScreen({ navigation, route }) {
           ))}
         </View>
 
-        {/* Header */}
         <View style={styles.header}>
           <TouchableOpacity
             style={styles.backButton}
@@ -571,13 +558,13 @@ export default function ProfileScreen({ navigation, route }) {
           >
             <Ionicons name="arrow-back" size={24} color="#4dabf7" />
           </TouchableOpacity>
-          
-          {/* Заголовок меняется */}
+
           <Text style={styles.headerTitle}>
-             {isOwner ? 'MY PROFILE' : 'HUNTER PROFILE'}
+            {isOwner
+              ? t('profile.header.myProfile')
+              : t('profile.header.hunterProfile')}
           </Text>
-          
-          {/* Кнопки настроек ТОЛЬКО для владельца */}
+
           {isOwner ? (
             <View style={{ flexDirection: 'row' }}>
               <TouchableOpacity
@@ -594,7 +581,7 @@ export default function ProfileScreen({ navigation, route }) {
               </TouchableOpacity>
             </View>
           ) : (
-             <View style={{ width: 60 }} /> // Пустой блок для баланса
+            <View style={{ width: 60 }} />
           )}
         </View>
 
@@ -602,13 +589,12 @@ export default function ProfileScreen({ navigation, route }) {
           style={styles.mainContent}
           contentContainerStyle={{ paddingBottom: 80 }}
         >
-          {/* Верхний блок профиля */}
           <View style={styles.profileHeader}>
             <View style={styles.avatarContainer}>
               <View style={styles.avatarGlow}>
                 <TouchableOpacity
                   style={styles.avatar}
-                  onPress={isEditing ? pickImage : null} // Чужие не могут кликать
+                  onPress={isEditing ? pickImage : null}
                   activeOpacity={isEditing ? 0.7 : 1}
                 >
                   {profileAvatar ? (
@@ -623,7 +609,6 @@ export default function ProfileScreen({ navigation, route }) {
                         : '?'}
                     </Text>
                   )}
-                  {/* Иконка камеры только при редактировании */}
                   {isEditing && (
                     <View style={styles.editAvatarOverlay}>
                       <Feather name="camera" size={20} color="#ffffff" />
@@ -645,7 +630,7 @@ export default function ProfileScreen({ navigation, route }) {
                     style={[styles.username, styles.usernameEditing]}
                     value={username}
                     onChangeText={setUsername}
-                    placeholder="Username..."
+                    placeholder={t('profile.placeholders.username')}
                     placeholderTextColor="#777"
                   />
                   <TextInput
@@ -653,7 +638,7 @@ export default function ProfileScreen({ navigation, route }) {
                     value={bio}
                     onChangeText={setBio}
                     multiline
-                    placeholder="Hunter Status..."
+                    placeholder={t('profile.placeholders.status')}
                     placeholderTextColor="#777"
                   />
                   <TouchableOpacity
@@ -666,7 +651,9 @@ export default function ProfileScreen({ navigation, route }) {
                       style={styles.editProfileGradient}
                     >
                       <Text style={styles.editProfileText}>
-                        {isLoading ? 'SAVING...' : 'SAVE CHANGES'}
+                        {isLoading
+                          ? t('profile.buttons.saving')
+                          : t('profile.buttons.saveChanges')}
                       </Text>
                     </LinearGradient>
                   </TouchableOpacity>
@@ -679,16 +666,15 @@ export default function ProfileScreen({ navigation, route }) {
                     </Text>
                     <View style={styles.rankDecoration}>
                       <Text style={styles.rankText}>
-                        RANK {getRankFromLevel(level)}
+                        {t('profile.rankLabel', { rank: getRankFromLevel(level) })}
                       </Text>
                     </View>
                   </View>
 
-                  {/* XP / COMBAT POWER */}
                   <View style={styles.expSection}>
                     <View style={styles.expLabels}>
                       <Text style={styles.expLabel}>
-                        COMBAT POWER
+                        {t('profile.combatPower')}
                       </Text>
                       <Text style={styles.expValue}>
                         {points} / {totalPoints}
@@ -710,27 +696,26 @@ export default function ProfileScreen({ navigation, route }) {
 
                   <View style={styles.bioContainer}>
                     <Text style={styles.bioTitle}>
-                      HUNTER STATUS
+                      {t('profile.statusTitle')}
                     </Text>
                     <Text style={styles.bio}>
-                      {profileBio || 'This hunter has not yet set a status.'}
+                      {profileBio || t('profile.statusEmpty')}
                     </Text>
                   </View>
-                  
-                  {/* Кнопка "EDIT PROFILE" только для владельца */}
+
                   {isOwner && (
                     <TouchableOpacity
-                        style={styles.editProfileButton}
-                        onPress={() => setIsEditing(true)}
+                      style={styles.editProfileButton}
+                      onPress={() => setIsEditing(true)}
                     >
-                        <LinearGradient
+                      <LinearGradient
                         colors={['#4dabf7', '#2b6ed9']}
                         style={styles.editProfileGradient}
-                        >
+                      >
                         <Text style={styles.editProfileText}>
-                            EDIT PROFILE
+                          {t('profile.buttons.editProfile')}
                         </Text>
-                        </LinearGradient>
+                      </LinearGradient>
                     </TouchableOpacity>
                   )}
                 </>
@@ -738,62 +723,55 @@ export default function ProfileScreen({ navigation, route }) {
             </View>
           </View>
 
-          {/* Tabs */}
           <View style={styles.tabContainer}>
             <TouchableOpacity
               style={[
                 styles.tabButton,
-                activeTab === 'achievements' &&
-                  styles.activeTab,
+                activeTab === 'achievements' && styles.activeTab,
               ]}
               onPress={() => setActiveTab('achievements')}
             >
               <Text
                 style={[
                   styles.tabText,
-                  activeTab === 'achievements' &&
-                    styles.activeTabText,
+                  activeTab === 'achievements' && styles.activeTabText,
                 ]}
               >
-                TROPHIES
+                {t('profile.tabs.trophies')}
               </Text>
             </TouchableOpacity>
 
-            {/* Кнопка "QUEST LOG" скрыта для чужаков */}
             {isOwner && (
-                <TouchableOpacity
+              <TouchableOpacity
                 style={[
-                    styles.tabButton,
-                    activeTab === 'history' && styles.activeTab,
+                  styles.tabButton,
+                  activeTab === 'history' && styles.activeTab,
                 ]}
                 onPress={() => {
-                    setActiveTab('history');
-                    if (!historyLoaded) {
-                       fetchCompletedTasks();
-                    }
+                  setActiveTab('history');
+                  if (!historyLoaded) {
+                    fetchCompletedTasks();
+                  }
                 }}
-                >
+              >
                 <Text
-                    style={[
+                  style={[
                     styles.tabText,
-                    activeTab === 'history' &&
-                        styles.activeTabText,
-                    ]}
+                    activeTab === 'history' && styles.activeTabText,
+                  ]}
                 >
-                    QUEST LOG
+                  {t('profile.tabs.questLog')}
                 </Text>
-                </TouchableOpacity>
+              </TouchableOpacity>
             )}
           </View>
 
-          {/* Контент вкладок */}
           {activeTab === 'achievements' && renderAchievementsContent()}
 
-          {/* Вкладка истории только для владельца */}
           {activeTab === 'history' && isOwner && (
             <View style={styles.tabContent}>
               <Text style={styles.sectionTitle}>
-                COMPLETED QUESTS
+                {t('profile.history.title')}
               </Text>
               {completedTasks.length === 0 ? (
                 <Text
@@ -803,7 +781,7 @@ export default function ProfileScreen({ navigation, route }) {
                     marginTop: 20,
                   }}
                 >
-                  Quest Log is empty.
+                  {t('profile.history.empty')}
                 </Text>
               ) : (
                 completedTasks.map((task) => (
@@ -828,19 +806,17 @@ export default function ProfileScreen({ navigation, route }) {
                     <View style={styles.historyItemContent}>
                       <View style={styles.historyItemLeft}>
                         <Text style={styles.historyItemTitle}>
-                          {task.title || 'Unnamed Quest'}
+                          {task.title || t('profile.history.unnamedQuest')}
                         </Text>
                         <Text style={styles.historyItemDate}>
-                          Completed:{' '}
+                          {t('profile.history.completedLabel')}{' '}
                           {task.completed_at
-                            ? new Date(
-                                task.completed_at
-                              ).toLocaleDateString()
-                            : 'Recently'}
+                            ? new Date(task.completed_at).toLocaleDateString()
+                            : t('profile.history.recently')}
                         </Text>
                       </View>
                       <Text style={styles.historyItemPoints}>
-                        +{task.points || 0} CP
+                        +{task.points || 0} {t('profile.history.cp')}
                       </Text>
                     </View>
                   </View>
@@ -853,7 +829,6 @@ export default function ProfileScreen({ navigation, route }) {
     </View>
   );
 }
-
 /* ---- СТИЛИ — оставил твои, только слегка ослабил тени у ачивок ---- */
 const styles = StyleSheet.create({
   container: {

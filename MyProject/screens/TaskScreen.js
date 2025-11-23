@@ -12,13 +12,16 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
+import { useTranslation } from 'react-i18next';
 
 import apiService from '../services/apiService';
 import { useProfile } from '../context/ProfileContext';
 
 const { width, height } = Dimensions.get('window');
 
-export default function TasksScreen({ navigation, route }) {
+export default function TasksScreen({ navigation }) {
+  const { t, i18n } = useTranslation();
+
   const [tasks, setTasks] = useState([]);
   const [selectedTask, setSelectedTask] = useState(null);
   const [totalCount, setTotalCount] = useState(0);
@@ -64,7 +67,6 @@ export default function TasksScreen({ navigation, route }) {
       setLoading(true);
       try {
         const response = await apiService.get(`tasks/?page=${page}`);
-        console.log('tasksResponse =', response);
 
         if (response && typeof response === 'object' && response.results) {
           const tasksData = response.results;
@@ -87,13 +89,13 @@ export default function TasksScreen({ navigation, route }) {
           handleSessionError(err);
         } else {
           console.error('Error fetching tasks:', err);
-          Alert.alert('Error', 'Не удалось загрузить задачи.');
+          Alert.alert(t('tasks.alerts.errorTitle'), t('tasks.alerts.loadError'));
         }
       } finally {
         setLoading(false);
       }
     },
-    [handleSessionError]
+    [handleSessionError, t]
   );
 
   // один источник загрузки: при фокусе экрана
@@ -117,8 +119,6 @@ export default function TasksScreen({ navigation, route }) {
   };
 
   const handleAddTask = () => {
-    // если где-то используешь onGoBack — он всё ещё будет работать, но
-    // в большинстве случаев useFocusEffect уже всё обновит при возврате
     navigation.navigate('CreateTask', { onGoBack: fetchTasks });
   };
 
@@ -131,10 +131,9 @@ export default function TasksScreen({ navigation, route }) {
     try {
       await apiService.delete(`tasks/${task.id}/`);
       setTasks((prev) => prev.filter((t) => t.id !== task.id));
-      Alert.alert('Success', 'Task deleted successfully');
+      Alert.alert(t('tasks.alerts.successTitle'), t('tasks.alerts.deleteSuccess'));
       setSelectedTask(null);
 
-      // если удалили последнюю задачу на странице и есть предыдущая страница — откатываемся назад
       if (tasks.length === 1 && hasPrevPage) {
         fetchTasks(currentPage - 1);
       } else {
@@ -146,36 +145,36 @@ export default function TasksScreen({ navigation, route }) {
         return handleSessionError(err);
       }
       console.error('Error deleting task', err);
-      const errorMessage = err.message || 'Failed to delete task. Please try again.';
-      Alert.alert('Error', errorMessage);
+      Alert.alert(
+        t('tasks.alerts.errorTitle'),
+        err.message || t('tasks.alerts.deleteError')
+      );
     }
   };
 
   const handleCompleteTask = async (task) => {
     try {
-      // бэк сам помечает задачу completed и обновляет профиль
       const updatedTask = await apiService.put(`tasks/${task.id}/complete/`, {});
 
-      // обновляем список задач локально
       setTasks((prev) =>
         prev.map((t) => (t.id === task.id ? updatedTask : t))
       );
 
-      // обновляем выбранную задачу в модалке
       if (selectedTask?.id === task.id) {
         setSelectedTask(updatedTask);
       }
 
-      // подтягиваем свежий профиль (новые points/level) из контекста
       await refreshProfile();
 
-      Alert.alert('Success', `Task completed! Gained ${task.points} POINTS!`);
+      Alert.alert(
+        t('tasks.alerts.successTitle'),
+        t('tasks.alerts.completeSuccess', { points: task.points })
+      );
     } catch (err) {
       const status = err?.response?.status ?? err?.status;
       const data = err?.response?.data;
 
       if (status === 400 && data?.detail === 'Task is already completed.') {
-        // бэк говорит, что задача уже завершена — мягко синхронизируемся
         setTasks((prev) =>
           prev.map((t) =>
             t.id === task.id ? { ...t, completed: true } : t
@@ -184,7 +183,10 @@ export default function TasksScreen({ navigation, route }) {
         if (selectedTask?.id === task.id) {
           setSelectedTask((prev) => prev && { ...prev, completed: true });
         }
-        Alert.alert('Info', 'This task is already completed.');
+        Alert.alert(
+          t('tasks.alerts.infoTitle'),
+          t('tasks.alerts.alreadyCompleted')
+        );
         return;
       }
 
@@ -193,8 +195,7 @@ export default function TasksScreen({ navigation, route }) {
       }
 
       console.error('Error completing task', err);
-      Alert.alert('Error', 'Failed to complete task. Please try again.');
-      // на всякий случай освежаем список
+      Alert.alert(t('tasks.alerts.errorTitle'), t('tasks.alerts.completeError'));
       fetchTasks(currentPage);
     }
   };
@@ -221,19 +222,19 @@ export default function TasksScreen({ navigation, route }) {
   const getDifficultyName = (difficulty) => {
     switch (difficulty) {
       case 'S':
-        return 'Supreme';
+        return t('tasks.difficultyNames.S');
       case 'A':
-        return 'Advanced';
+        return t('tasks.difficultyNames.A');
       case 'B':
-        return 'Beginner';
+        return t('tasks.difficultyNames.B');
       case 'C':
-        return 'Casual';
+        return t('tasks.difficultyNames.C');
       case 'D':
-        return 'Daily';
+        return t('tasks.difficultyNames.D');
       case 'E':
-        return 'Easy';
+        return t('tasks.difficultyNames.E');
       default:
-        return 'Unknown';
+        return t('tasks.difficultyNames.unknown');
     }
   };
 
@@ -241,11 +242,19 @@ export default function TasksScreen({ navigation, route }) {
     setSelectedTask(null);
   };
 
-  // форматирование дедлайна
+  // форматирование дедлайна под текущий язык приложения
   const formatDeadline = (dateString) => {
     try {
       const date = new Date(dateString);
-      return date.toLocaleDateString('ru-RU', {
+
+      // нормализуем "en"/"es" → "en-US"/"es-ES"
+      const lang = (i18n.language || 'en').toLowerCase();
+      const locale =
+        lang.startsWith('es') ? 'es-ES' :
+        lang.startsWith('ru') ? 'ru-RU' :
+        'en-US';
+
+      return date.toLocaleString(locale, {
         day: '2-digit',
         month: '2-digit',
         year: 'numeric',
@@ -283,10 +292,15 @@ export default function TasksScreen({ navigation, route }) {
         {/* Main Content */}
         <View style={styles.mainContent}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>ACTIVE TASKS</Text>
+            <Text style={styles.sectionTitle}>
+              {t('tasks.activeTasksTitle')}
+            </Text>
+
             <View style={styles.headerRight}>
               {totalCount > 0 && (
-                <Text style={styles.totalCountText}>Total: {totalCount}</Text>
+                <Text style={styles.totalCountText}>
+                  {t('tasks.totalLabel', { count: totalCount })}
+                </Text>
               )}
               <TouchableOpacity style={styles.addButton} onPress={handleAddTask}>
                 <Ionicons name="add" size={24} color="#ffffff" />
@@ -296,9 +310,13 @@ export default function TasksScreen({ navigation, route }) {
 
           <ScrollView style={styles.tasksContainer}>
             {loading ? (
-              <Text style={styles.loadingText}>Loading tasks...</Text>
+              <Text style={styles.loadingText}>
+                {t('tasks.loadingTasks')}
+              </Text>
             ) : tasks.length === 0 ? (
-              <Text style={styles.noTasksText}>No active tasks. Add a new one!</Text>
+              <Text style={styles.noTasksText}>
+                {t('tasks.noTasks')}
+              </Text>
             ) : (
               tasks.map((task) => (
                 <TouchableOpacity
@@ -320,6 +338,7 @@ export default function TasksScreen({ navigation, route }) {
                         {task.difficulty}
                       </Text>
                     </View>
+
                     <View style={styles.taskInfo}>
                       <Text style={styles.taskTitle}>{task.title}</Text>
                       <Text style={styles.taskDeadline}>
@@ -332,10 +351,12 @@ export default function TasksScreen({ navigation, route }) {
                       )}
                     </View>
                   </View>
+
                   <View style={styles.taskRight}>
                     <Text style={styles.pointsReward}>
-                      +{task.points} POINTS
+                      {t('tasks.pointsReward', { points: task.points })}
                     </Text>
+
                     {task.unit_type && task.unit_amount > 0 && (
                       <Text style={styles.unitInfo}>
                         {task.unit_amount}{' '}
@@ -348,7 +369,7 @@ export default function TasksScreen({ navigation, route }) {
             )}
           </ScrollView>
 
-          {/* Пагинация */}
+          {/* Pagination */}
           {(hasNextPage || hasPrevPage) && (
             <View style={styles.paginationContainer}>
               <TouchableOpacity
@@ -370,11 +391,13 @@ export default function TasksScreen({ navigation, route }) {
                     !hasPrevPage && styles.paginationTextDisabled,
                   ]}
                 >
-                  Previous
+                  {t('tasks.previous')}
                 </Text>
               </TouchableOpacity>
 
-              <Text style={styles.pageInfo}>Page {currentPage}</Text>
+              <Text style={styles.pageInfo}>
+                {t('tasks.pageLabel', { page: currentPage })}
+              </Text>
 
               <TouchableOpacity
                 style={[
@@ -390,7 +413,7 @@ export default function TasksScreen({ navigation, route }) {
                     !hasNextPage && styles.paginationTextDisabled,
                   ]}
                 >
-                  Next
+                  {t('tasks.next')}
                 </Text>
                 <Ionicons
                   name="chevron-forward"
@@ -421,12 +444,14 @@ export default function TasksScreen({ navigation, route }) {
                     {selectedTask.difficulty}
                   </Text>
                 </View>
+
                 <View style={styles.modalTitleContainer}>
                   <Text style={styles.modalTitle}>{selectedTask.title}</Text>
                   <Text style={styles.modalDifficultyName}>
                     {getDifficultyName(selectedTask.difficulty)}
                   </Text>
                 </View>
+
                 <TouchableOpacity
                   style={styles.closeButton}
                   onPress={closeTaskDetails}
@@ -435,24 +460,30 @@ export default function TasksScreen({ navigation, route }) {
                 </TouchableOpacity>
               </View>
 
-              <ScrollView style={styles.modalContent}>
+              <ScrollView style={styles.modalContent} contentContainerStyle={{ paddingBottom: 60 }}>
                 <View style={styles.modalInfoRow}>
-                  <Text style={styles.modalInfoLabel}>Deadline:</Text>
+                  <Text style={styles.modalInfoLabel}>
+                    {t('tasks.modal.deadline')}
+                  </Text>
                   <Text style={styles.modalInfoValue}>
                     {formatDeadline(selectedTask.deadline)}
                   </Text>
                 </View>
 
                 <View style={styles.modalInfoRow}>
-                  <Text style={styles.modalInfoLabel}>Points Reward:</Text>
+                  <Text style={styles.modalInfoLabel}>
+                    {t('tasks.modal.pointsReward')}
+                  </Text>
                   <Text style={styles.modalInfoValue}>
-                    {selectedTask.points} POINTS
+                    {t('tasks.pointsReward', { points: selectedTask.points })}
                   </Text>
                 </View>
 
                 {selectedTask.category && (
                   <View style={styles.modalInfoRow}>
-                    <Text style={styles.modalInfoLabel}>Category:</Text>
+                    <Text style={styles.modalInfoLabel}>
+                      {t('tasks.modal.category')}
+                    </Text>
                     <Text style={styles.modalInfoValue}>
                       {selectedTask.category.name || selectedTask.category}
                     </Text>
@@ -461,7 +492,9 @@ export default function TasksScreen({ navigation, route }) {
 
                 {selectedTask.unit_type && (
                   <View style={styles.modalInfoRow}>
-                    <Text style={styles.modalInfoLabel}>Target Amount:</Text>
+                    <Text style={styles.modalInfoLabel}>
+                      {t('tasks.modal.targetAmount')}
+                    </Text>
                     <Text style={styles.modalInfoValue}>
                       {selectedTask.unit_amount}{' '}
                       {selectedTask.unit_type.name || selectedTask.unit_type}
@@ -470,24 +503,28 @@ export default function TasksScreen({ navigation, route }) {
                 )}
 
                 <View style={styles.modalInfoRow}>
-                  <Text style={styles.modalInfoLabel}>Status:</Text>
+                  <Text style={styles.modalInfoLabel}>
+                    {t('tasks.modal.status')}
+                  </Text>
                   <Text
                     style={[
                       styles.modalInfoValue,
                       {
-                        color: selectedTask.completed
-                          ? '#34c759'
-                          : '#ff9500',
+                        color: selectedTask.completed ? '#34c759' : '#ff9500',
                       },
                     ]}
                   >
-                    {selectedTask.completed ? 'COMPLETED' : 'IN PROGRESS'}
+                    {selectedTask.completed
+                      ? t('tasks.modal.completed')
+                      : t('tasks.modal.inProgress')}
                   </Text>
                 </View>
 
                 {selectedTask.updated && (
                   <View style={styles.modalInfoRow}>
-                    <Text style={styles.modalInfoLabel}>Last Updated:</Text>
+                    <Text style={styles.modalInfoLabel}>
+                      {t('tasks.modal.lastUpdated')}
+                    </Text>
                     <Text style={styles.modalInfoValue}>
                       {formatDeadline(selectedTask.updated)}
                     </Text>
@@ -496,7 +533,9 @@ export default function TasksScreen({ navigation, route }) {
 
                 {selectedTask.description && (
                   <View style={styles.descriptionContainer}>
-                    <Text style={styles.descriptionLabel}>Description:</Text>
+                    <Text style={styles.descriptionLabel}>
+                      {t('tasks.modal.description')}
+                    </Text>
                     <Text style={styles.descriptionText}>
                       {selectedTask.description}
                     </Text>
@@ -515,9 +554,12 @@ export default function TasksScreen({ navigation, route }) {
                       start={{ x: 0, y: 0 }}
                       end={{ x: 1, y: 1 }}
                     >
-                      <Text style={styles.editDeleteText}>Edit</Text>
+                      <Text style={styles.editDeleteText}>
+                        {t('tasks.modal.edit')}
+                      </Text>
                     </LinearGradient>
                   </TouchableOpacity>
+
                   <TouchableOpacity
                     style={styles.deleteButton}
                     onPress={() => handleDeleteTask(selectedTask)}
@@ -528,7 +570,9 @@ export default function TasksScreen({ navigation, route }) {
                       start={{ x: 0, y: 0 }}
                       end={{ x: 1, y: 1 }}
                     >
-                      <Text style={styles.editDeleteText}>Delete</Text>
+                      <Text style={styles.editDeleteText}>
+                        {t('tasks.modal.delete')}
+                      </Text>
                     </LinearGradient>
                   </TouchableOpacity>
                 </View>
@@ -544,7 +588,9 @@ export default function TasksScreen({ navigation, route }) {
                       start={{ x: 0, y: 0 }}
                       end={{ x: 1, y: 1 }}
                     >
-                      <Text style={styles.buttonText}>COMPLETE TASK</Text>
+                      <Text style={styles.buttonText}>
+                        {t('tasks.modal.completeTask')}
+                      </Text>
                     </LinearGradient>
                     <View style={styles.buttonGlow} />
                   </TouchableOpacity>
@@ -559,12 +605,9 @@ export default function TasksScreen({ navigation, route }) {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  background: {
-    flex: 1,
-  },
+  container: { flex: 1 },
+  background: { flex: 1 },
+
   particlesContainer: {
     position: 'absolute',
     width: width,
@@ -575,6 +618,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#4dabf7',
     borderRadius: 50,
   },
+
   mainContent: {
     flex: 1,
     paddingHorizontal: 20,
@@ -592,10 +636,7 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     letterSpacing: 1,
   },
-  headerRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
+  headerRight: { flexDirection: 'row', alignItems: 'center' },
   totalCountText: {
     color: '#c8d6e5',
     fontSize: 12,
@@ -609,9 +650,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  tasksContainer: {
-    flex: 1,
-  },
+
+  tasksContainer: { flex: 1 },
   loadingText: {
     color: '#ffffff',
     textAlign: 'center',
@@ -624,6 +664,7 @@ const styles = StyleSheet.create({
     marginTop: 20,
     fontSize: 16,
   },
+
   taskItem: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -639,11 +680,8 @@ const styles = StyleSheet.create({
     opacity: 0.6,
     borderColor: '#34c759',
   },
-  taskLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-  },
+  taskLeft: { flexDirection: 'row', alignItems: 'center', flex: 1 },
+
   difficultyBadge: {
     width: 24,
     height: 24,
@@ -659,9 +697,8 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: 'bold',
   },
-  taskInfo: {
-    flex: 1,
-  },
+
+  taskInfo: { flex: 1 },
   taskTitle: {
     color: '#ffffff',
     fontSize: 14,
@@ -678,19 +715,16 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontStyle: 'italic',
   },
-  taskRight: {
-    alignItems: 'flex-end',
-  },
+
+  taskRight: { alignItems: 'flex-end' },
   pointsReward: {
     color: '#4dabf7',
     fontSize: 14,
     fontWeight: 'bold',
     marginBottom: 2,
   },
-  unitInfo: {
-    color: '#c8d6e5',
-    fontSize: 11,
-  },
+  unitInfo: { color: '#c8d6e5', fontSize: 11 },
+
   paginationContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -718,31 +752,25 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginHorizontal: 5,
   },
-  paginationTextDisabled: {
-    color: '#636366',
-  },
+  paginationTextDisabled: { color: '#636366' },
   pageInfo: {
     color: '#ffffff',
     fontSize: 14,
     fontWeight: '600',
   },
+
   modalOverlay: {
     position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingVertical: 40,
+    top: 0, left: 0, right: 0, bottom: 0,
+    justifyContent: 'flex-start', // Прижимаем содержимое к верху
+    alignItems: 'center', 
+    paddingTop: 0,              // Отступ сверху (чем меньше число, тем выше окно)
+    paddingBottom: 80,     
     paddingHorizontal: 20,
   },
   modalBackground: {
     position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
+    top: 0, left: 0, right: 0, bottom: 0,
     backgroundColor: 'rgba(0, 0, 0, 0.7)',
   },
   taskDetailsModal: {
@@ -773,9 +801,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.3)',
   },
-  modalTitleContainer: {
-    flex: 1,
-  },
+  modalTitleContainer: { flex: 1 },
   modalTitle: {
     color: '#ffffff',
     fontSize: 15,
@@ -787,13 +813,9 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontStyle: 'italic',
   },
-  closeButton: {
-    padding: 5,
-  },
-  modalContent: {
-    padding: 15,
-    maxHeight: height * 0.6,
-  },
+  closeButton: { padding: 5 },
+
+  modalContent: { padding: 15, maxHeight: height * 0.6 },
   modalInfoRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -802,11 +824,7 @@ const styles = StyleSheet.create({
     borderBottomColor: 'rgba(77, 171, 247, 0.2)',
     paddingBottom: 6,
   },
-  modalInfoLabel: {
-    color: '#c8d6e5',
-    fontSize: 13,
-    flex: 1,
-  },
+  modalInfoLabel: { color: '#c8d6e5', fontSize: 13, flex: 1 },
   modalInfoValue: {
     color: '#ffffff',
     fontSize: 13,
@@ -814,10 +832,8 @@ const styles = StyleSheet.create({
     flex: 2,
     textAlign: 'right',
   },
-  descriptionContainer: {
-    marginBottom: 15,
-    marginTop: 8,
-  },
+
+  descriptionContainer: { marginBottom: 15, marginTop: 8 },
   descriptionLabel: {
     color: '#c8d6e5',
     fontSize: 13,
@@ -835,19 +851,15 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(77, 171, 247, 0.2)',
     maxHeight: 80,
   },
+
   editDeleteContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     marginTop: 12,
     marginBottom: 12,
   },
-  editButton: {
-    flex: 1,
-    marginRight: 8,
-  },
-  deleteButton: {
-    flex: 1,
-  },
+  editButton: { flex: 1, marginRight: 8 },
+  deleteButton: { flex: 1 },
   editDeleteGradient: {
     paddingVertical: 10,
     borderRadius: 8,
@@ -859,6 +871,7 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: 'bold',
   },
+
   actionButton: {
     height: 45,
     borderRadius: 8,
@@ -867,11 +880,7 @@ const styles = StyleSheet.create({
     marginTop: 8,
     marginBottom: 5,
   },
-  buttonGradient: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
+  buttonGradient: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   buttonText: {
     color: '#ffffff',
     fontSize: 15,
@@ -880,17 +889,14 @@ const styles = StyleSheet.create({
   },
   buttonGlow: {
     position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
+    top: 0, left: 0, right: 0, bottom: 0,
     borderRadius: 8,
     borderWidth: 1,
     borderColor: '#34c759',
-    // чуть облегчил тень, чтобы не жрала FPS
     shadowColor: '#34c759',
     shadowOpacity: 0.4,
     shadowRadius: 2,
     shadowOffset: { width: 0, height: 0 },
   },
 });
+

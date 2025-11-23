@@ -1,15 +1,15 @@
-// src/screens/Nutrition/components/FoodSearchSection.js
 import React from 'react';
 import {
   View,
   Text,
   TextInput,
-  ScrollView,
+  ScrollView, // Вернули обычный ScrollView
   TouchableOpacity,
   ActivityIndicator,
   Keyboard,
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { useTranslation } from 'react-i18next';
 
 const COLORS = {
   textPrimary: '#ffffff',
@@ -35,10 +35,14 @@ export default function FoodSearchSection({
   disabledAdd,
   selectedFood,
   onClearSelected,
-  onForceCloseDropdown, // опционально из родителя
+  onForceCloseDropdown,
+  onToggleParentScroll, // Проп для управления родителем
 }) {
+  const { t } = useTranslation();
+
   const isDisabled = adding || disabledAdd || !weight.trim();
 
+  // Рендер элемента списка
   const renderResultItem = (item) => (
     <TouchableOpacity
       key={item.fdc_id}
@@ -70,17 +74,20 @@ export default function FoodSearchSection({
         />
         <Text style={{ color: COLORS.textSecondary, fontSize: 11 }}>
           {item.calories_per_100g != null
-            ? `${Math.round(item.calories_per_100g)} kcal / 100 г`
-            : 'Нет данных по калориям'}
+            ? `${Math.round(item.calories_per_100g)} ${t('nutrition.units.kcal')} / 100 ${t('nutrition.units.grams')}`
+            : t('nutrition.foodSearch.noCaloriesData')}
         </Text>
       </View>
     </TouchableOpacity>
   );
 
-  // показывать «ничего не найдено» — только если НЕТ выбранного варианта
-  const showNoResults = !!query && query.trim().length >= 3 && !searching && results.length === 0 && !selectedFood;
+  const showNoResults =
+    !!query &&
+    query.trim().length >= 3 &&
+    !searching &&
+    results.length === 0 &&
+    !selectedFood;
 
-  // Показываем дропдаун только если НЕ выбран продукт
   const showDropdown = !selectedFood && (results.length > 0 || showNoResults);
 
   return (
@@ -97,10 +104,10 @@ export default function FoodSearchSection({
       }}
     >
       <Text style={{ color: COLORS.textPrimary, fontSize: 16, fontWeight: '600' }}>
-        Добавить приём пищи
+        {t('nutrition.foodSearch.title')}
       </Text>
 
-      {/* Выбранный продукт (бейдж) */}
+      {/* Выбранный продукт */}
       {selectedFood ? (
         <View
           style={{
@@ -117,8 +124,16 @@ export default function FoodSearchSection({
             paddingVertical: 6,
           }}
         >
-          <Ionicons name="pricetag-outline" size={14} color={COLORS.accentBlue} style={{ marginRight: 6 }} />
-          <Text style={{ color: COLORS.textSecondary, fontSize: 12, maxWidth: 220 }} numberOfLines={1}>
+          <Ionicons
+            name="pricetag-outline"
+            size={14}
+            color={COLORS.accentBlue}
+            style={{ marginRight: 6 }}
+          />
+          <Text
+            style={{ color: COLORS.textSecondary, fontSize: 12, maxWidth: 220 }}
+            numberOfLines={1}
+          >
             {selectedFood.description}
           </Text>
           <TouchableOpacity
@@ -133,10 +148,11 @@ export default function FoodSearchSection({
         </View>
       ) : null}
 
-      {/* Поле поиска */}
+      {/* Поле ввода поиска */}
       <Text style={{ color: COLORS.textSecondary, fontSize: 13, marginTop: 8, marginBottom: 4 }}>
-        Продукт
+        {t('nutrition.foodSearch.productLabel')}
       </Text>
+
       <View
         style={{
           flexDirection: 'row',
@@ -153,13 +169,12 @@ export default function FoodSearchSection({
         <TextInput
           style={{ flex: 1, color: COLORS.textPrimary, fontSize: 14 }}
           value={query}
-          onChangeText={(t) => {
-            // если есть выбранный — любое ручное редактирование сбрасывает выбор
+          onChangeText={(t2) => {
             if (selectedFood) onClearSelected();
-            setQuery(t);
-            if (!t || t.trim().length < 3) setResults([]);
+            setQuery(t2);
+            if (!t2 || t2.trim().length < 3) setResults([]);
           }}
-          placeholder="Например, chicken breast cooked"
+          placeholder={t('nutrition.foodSearch.productPlaceholder')}
           placeholderTextColor={COLORS.placeholder}
           autoCapitalize="none"
           returnKeyType="search"
@@ -170,10 +185,16 @@ export default function FoodSearchSection({
         ) : null}
       </View>
 
-      {/* Выпадающий список результатов — показываем только если НЕ выбран продукт */}
+      {/* ВЫПАДАЮЩИЙ СПИСОК (DROPDOWN) */}
       {showDropdown && (
         <View
-          onStartShouldSetResponder={() => true}
+          // ЛОГИКА БЛОКИРОВКИ:
+          // Как только палец касается области списка -> Родительский скролл отключается (false)
+          onTouchStart={() => onToggleParentScroll && onToggleParentScroll(false)}
+          // Как только палец убран -> Скролл включается (true)
+          onTouchEnd={() => onToggleParentScroll && onToggleParentScroll(true)}
+          onTouchCancel={() => onToggleParentScroll && onToggleParentScroll(true)}
+          
           style={{
             position: 'absolute',
             left: 14,
@@ -194,23 +215,35 @@ export default function FoodSearchSection({
           }}
         >
           {results.length > 0 ? (
-            <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingVertical: 4 }}>
+            <ScrollView
+              nestedScrollEnabled={true} // Обязательно для Android
+              keyboardShouldPersistTaps="handled"
+              style={{ maxHeight: 260 }}
+              contentContainerStyle={{ paddingVertical: 4 }}
+              showsVerticalScrollIndicator={true}
+              indicatorStyle="white"
+              // Дублируем события и на самом скролле для надежности
+              onTouchStart={() => onToggleParentScroll && onToggleParentScroll(false)}
+              onTouchEnd={() => onToggleParentScroll && onToggleParentScroll(true)}
+              onMomentumScrollEnd={() => onToggleParentScroll && onToggleParentScroll(true)}
+            >
               {results.map(renderResultItem)}
             </ScrollView>
           ) : (
             <View style={{ padding: 12 }}>
               <Text style={{ color: COLORS.placeholder, fontSize: 13 }}>
-                Ничего не найдено. Попробуйте другую формулировку (например, “chicken breast roasted”).
+                {t('nutrition.foodSearch.noResults')}
               </Text>
             </View>
           )}
         </View>
       )}
 
-      {/* Вес и кнопка Добавить */}
+      {/* Вес и Кнопка добавить */}
       <Text style={{ color: COLORS.textSecondary, fontSize: 13, marginTop: 10, marginBottom: 4 }}>
-        Вес (г)
+        {t('nutrition.foodSearch.weightLabel')}
       </Text>
+
       <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
         <TextInput
           style={{
@@ -228,11 +261,12 @@ export default function FoodSearchSection({
           value={weight}
           onChangeText={setWeight}
           keyboardType="numeric"
-          placeholder="Например, 300"
+          placeholder={t('nutrition.foodSearch.weightPlaceholder')}
           placeholderTextColor={COLORS.placeholder}
           returnKeyType="done"
           onFocus={() => onForceCloseDropdown?.(false)}
         />
+
         <TouchableOpacity
           onPress={onAdd}
           disabled={isDisabled}
@@ -253,18 +287,18 @@ export default function FoodSearchSection({
           {adding ? (
             <ActivityIndicator size="small" color={COLORS.btnText} />
           ) : (
-            <Text style={{ color: COLORS.btnText, fontSize: 14, fontWeight: '600' }}>Добавить</Text>
+            <Text style={{ color: COLORS.btnText, fontSize: 14, fontWeight: '600' }}>
+              {t('nutrition.foodSearch.addButton')}
+            </Text>
           )}
         </TouchableOpacity>
       </View>
 
       <View style={{ marginTop: 8 }}>
         <Text style={{ color: COLORS.placeholder, fontSize: 11 }}>
-          1) Введите продукт → выберите из списка → 2) Укажите граммы → 3) Нажмите «Добавить».
+          {t('nutrition.foodSearch.hint')}
         </Text>
       </View>
     </View>
   );
 }
-
-

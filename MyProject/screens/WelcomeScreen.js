@@ -1,4 +1,3 @@
-// WelcomeScreen.js
 import React, { useMemo } from 'react';
 import {
   View,
@@ -11,10 +10,13 @@ import {
   ScrollView,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useTranslation } from 'react-i18next';
 
 const { width, height } = Dimensions.get('window');
 
 export default function WelcomeScreen({ navigation }) {
+  const { t } = useTranslation();
+
   // Мемоизированные частицы, чтобы не прыгали на каждый рендер
   const particles = useMemo(
     () =>
@@ -60,30 +62,30 @@ export default function WelcomeScreen({ navigation }) {
         >
           <View style={styles.statusWindow}>
             {/* Header окна */}
-            <View className="window-header" style={styles.windowHeader}>
+            <View style={styles.windowHeader}>
               <View style={styles.headerDot} />
-              <Text style={styles.headerText}>SYSTEM</Text>
+              <Text style={styles.headerText}>{t('welcome.systemLabel')}</Text>
             </View>
 
             {/* Content */}
             <View style={styles.windowContent}>
-              <Text style={styles.appTitle}>LEVEL UP</Text>
+              <Text style={styles.appTitle}>{t('welcome.appTitle')}</Text>
 
               <View style={styles.divider} />
 
-              <Text style={styles.welcomeText}>WELCOME, HUNTER</Text>
+              <Text style={styles.welcomeText}>{t('welcome.welcomeTitle')}</Text>
               <Text style={styles.subtitleText}>
-                Please log in or register to continue
+                {t('welcome.subtitle')}
               </Text>
 
               <View style={styles.statsContainer}>
                 <View style={styles.statItem}>
-                  <Text style={styles.statLabel}>STATUS</Text>
-                  <Text style={styles.statValue}>STANDBY</Text>
+                  <Text style={styles.statLabel}>{t('welcome.stats.statusLabel')}</Text>
+                  <Text style={styles.statValue}>{t('welcome.stats.statusValue')}</Text>
                 </View>
                 <View style={styles.statItem}>
-                  <Text style={styles.statLabel}>ACCESS</Text>
-                  <Text style={styles.statValue}>PENDING</Text>
+                  <Text style={styles.statLabel}>{t('welcome.stats.accessLabel')}</Text>
+                  <Text style={styles.statValue}>{t('welcome.stats.accessValue')}</Text>
                 </View>
               </View>
 
@@ -98,7 +100,7 @@ export default function WelcomeScreen({ navigation }) {
                     start={{ x: 0, y: 0 }}
                     end={{ x: 1, y: 1 }}
                   >
-                    <Text style={styles.buttonText}>LOG IN</Text>
+                    <Text style={styles.buttonText}>{t('welcome.buttons.login')}</Text>
                   </LinearGradient>
                   <View style={styles.buttonGlow} />
                 </TouchableOpacity>
@@ -113,7 +115,7 @@ export default function WelcomeScreen({ navigation }) {
                     start={{ x: 0, y: 0 }}
                     end={{ x: 1, y: 1 }}
                   >
-                    <Text style={styles.buttonText}>REGISTER</Text>
+                    <Text style={styles.buttonText}>{t('welcome.buttons.register')}</Text>
                   </LinearGradient>
                   <View style={styles.buttonGlow} />
                 </TouchableOpacity>
@@ -122,7 +124,7 @@ export default function WelcomeScreen({ navigation }) {
 
             {/* Footer */}
             <View style={styles.footer}>
-              <Text style={styles.footerText}>HUNTER ASSOCIATION</Text>
+              <Text style={styles.footerText}>{t('welcome.footer')}</Text>
             </View>
           </View>
         </ScrollView>
@@ -290,6 +292,3 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
   },
 });
-
-
-

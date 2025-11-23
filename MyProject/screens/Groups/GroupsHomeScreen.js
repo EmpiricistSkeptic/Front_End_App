@@ -10,12 +10,9 @@ import {
   TouchableOpacity,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import {
-  Ionicons,
-  MaterialCommunityIcons,
-  MaterialIcons,
-} from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
+import { useTranslation } from 'react-i18next';
 
 import DiscoverTab from './components/DiscoverTab';
 import MyTab from './components/MyTab';
@@ -38,18 +35,20 @@ const COLORS = {
 };
 
 export default function GroupsHomeScreen({ navigation }) {
+  const { t, i18n } = useTranslation();
+
   const [tab, setTab] = useState('discover'); // 'discover' | 'mine' | 'hunters'
   const [search, setSearch] = useState('');
-  const [refreshTick, setRefreshTick] = useState(0); // ключ рефреша
+  const [refreshTick, setRefreshTick] = useState(0);
 
-  // каждый раз при возврате на экран (получении фокуса) — инкремент ключа
+  // при каждом фокусе экрана — обновляем ключ, чтобы табы могли рефрешиться
   useFocusEffect(
     useCallback(() => {
-      setRefreshTick((t) => t + 1);
+      setRefreshTick((x) => x + 1);
     }, [])
   );
 
-  // 🔹 Мемоизированные частицы — генерируются один раз
+  // 🔹 мемоизированные частицы
   const particles = useMemo(
     () =>
       [...Array(20)].map((_, i) => ({
@@ -66,19 +65,14 @@ export default function GroupsHomeScreen({ navigation }) {
   const activeTab = tab;
 
   return (
-    <SafeAreaView
-      style={{ flex: 1, backgroundColor: COLORS.backgroundGradientEnd }}
-    >
+    <SafeAreaView style={{ flex: 1, backgroundColor: COLORS.backgroundGradientEnd }}>
       <StatusBar barStyle="light-content" />
       <LinearGradient
         colors={[COLORS.backgroundGradientStart, COLORS.backgroundGradientEnd]}
         style={{ flex: 1 }}
       >
-        {/* 🔹 Частицы: больше не дергаются, pointerEvents отключены */}
-        <View
-          style={{ position: 'absolute', width, height }}
-          pointerEvents="none"
-        >
+        {/* 🔹 Частицы */}
+        <View style={{ position: 'absolute', width, height }} pointerEvents="none">
           {particles.map((p) => (
             <View
               key={p.key}
@@ -115,7 +109,7 @@ export default function GroupsHomeScreen({ navigation }) {
               letterSpacing: 1,
             }}
           >
-            GROUPS
+            {t('groups.header.title')}
           </Text>
         </View>
 
@@ -146,7 +140,7 @@ export default function GroupsHomeScreen({ navigation }) {
                 fontSize: 15,
                 paddingVertical: 4,
               }}
-              placeholder="Search groups..."
+              placeholder={t('groups.search.placeholder')}
               placeholderTextColor={COLORS.placeholder}
               value={search}
               onChangeText={setSearch}
@@ -154,11 +148,7 @@ export default function GroupsHomeScreen({ navigation }) {
             />
             {search.length > 0 && (
               <TouchableOpacity onPress={() => setSearch('')}>
-                <Ionicons
-                  name="close-circle"
-                  size={18}
-                  color={COLORS.placeholder}
-                />
+                <Ionicons name="close-circle" size={18} color={COLORS.placeholder} />
               </TouchableOpacity>
             )}
           </View>
@@ -203,7 +193,7 @@ export default function GroupsHomeScreen({ navigation }) {
                   fontWeight: '700',
                 }}
               >
-                Discover
+                {t('groups.tabs.discover')}
               </Text>
             </TouchableOpacity>
 
@@ -233,7 +223,7 @@ export default function GroupsHomeScreen({ navigation }) {
                   fontWeight: '700',
                 }}
               >
-                My
+                {t('groups.tabs.mine')}
               </Text>
             </TouchableOpacity>
 
@@ -265,7 +255,7 @@ export default function GroupsHomeScreen({ navigation }) {
                   fontWeight: '700',
                 }}
               >
-                Hunters
+                {t('groups.tabs.hunters')}
               </Text>
             </TouchableOpacity>
           </View>
@@ -307,7 +297,7 @@ export default function GroupsHomeScreen({ navigation }) {
           style={{
             position: 'absolute',
             right: 20,
-            bottom: 90,
+            bottom: 110,
             width: 54,
             height: 54,
             borderRadius: 27,
@@ -326,4 +316,3 @@ export default function GroupsHomeScreen({ navigation }) {
     </SafeAreaView>
   );
 }
-

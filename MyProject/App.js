@@ -1,4 +1,6 @@
 import * as React from 'react';
+import './i18n/i18n';
+
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
@@ -15,9 +17,6 @@ import CreateGroupScreen from './screens/Groups/CreateGroupScreen';
 import EditGroupScreen from './screens/Groups/EditGroupScreen';
 import CreateTaskScreen from './screens/CreateTaskScreen';
 import EditTaskScreen from './screens/EditTaskScreen';
-import TaskScreen from './screens/TaskScreen';
-import AIQuestListScreen from './screens/AIQuestListScreen';
-import HabitScreen from './screens/HabitScreen';
 
 // Импортируем наш НОВЫЙ навигатор табов
 import TabNavigator from './navigation/TabNavigator';
@@ -62,6 +61,10 @@ export default function App() {
           />
 
           {/* Экраны, которые открываются поверх меню (без меню внизу) */}
+          <Stack.Screen name="GroupDetails" component={GroupDetailsScreen} />
+          <Stack.Screen name="Profile" component={ProfileScreen} />
+          <Stack.Screen name="CreateGroup" component={CreateGroupScreen} />
+          <Stack.Screen name="EditGroup" component={EditGroupScreen} />
           <Stack.Screen
             name="CreateTask"
             component={CreateTaskScreen}

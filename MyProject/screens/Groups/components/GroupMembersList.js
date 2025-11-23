@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { getGroupMembers } from '../api/groupsApi';
+import { useTranslation } from 'react-i18next';
 
 const COLORS = {
   textPrimary: '#ffffff',
@@ -30,7 +31,9 @@ function getRankFromLevel(level) {
   return 'S';
 }
 
-export default function GroupMembersList({ groupId, navigation }) {
+export default function GroupMembersList({ groupId, navigation, onMemberPress }) {
+  const { t } = useTranslation();
+
   const [members, setMembers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [errorText, setErrorText] = useState(null);
@@ -55,7 +58,9 @@ export default function GroupMembersList({ groupId, navigation }) {
       } catch (e) {
         console.error('Failed to load group members', e);
         if (isActive) {
-          setErrorText(e?.response?.data?.detail || 'Failed to load members');
+          setErrorText(
+            e?.response?.data?.detail || t('groups.membersList.errors.loadFailed')
+          );
           setMembers([]);
         }
       } finally {
@@ -67,24 +72,32 @@ export default function GroupMembersList({ groupId, navigation }) {
     return () => {
       isActive = false;
     };
-  }, [groupId]);
+  }, [groupId, t]);
 
   const renderItem = ({ item }) => {
     const level = item.level ?? 1;
     const points = item.points ?? 0;
     const rank = getRankFromLevel(level);
 
-    let roleLabel = 'Member';
-    if (item.is_owner) roleLabel = 'Owner';
-    else if (item.is_admin) roleLabel = 'Officer';
+    let roleKey = 'member';
+    if (item.is_owner) roleKey = 'owner';
+    else if (item.is_admin) roleKey = 'officer';
 
     return (
       <TouchableOpacity
         activeOpacity={0.9}
-        onPress={() => navigation.navigate('Profile', { userId: item.id })}
+        // 👇 2. ЗАМЕНИ onPress ВОТ НА ЭТО:
+        onPress={() => {
+          if (onMemberPress) {
+            onMemberPress(item.id); // Вызываем функцию из родителя
+          } else {
+            // Запасной вариант (fallback), если забыли передать проп
+            navigation.navigate('Profile', { userId: item.id });
+          }
+        }}
         style={styles.memberCard}
       >
-        {/* Аватар + уровень */}
+        {/* Avatar + level */}
         <View style={styles.memberAvatarWrap}>
           <View style={styles.memberAvatarInner}>
             {item.avatar_url ? (
@@ -103,14 +116,17 @@ export default function GroupMembersList({ groupId, navigation }) {
           </View>
         </View>
 
-        {/* Информация */}
+        {/* Info */}
         <View style={styles.memberInfo}>
           <View style={styles.memberNameRow}>
             <Text style={styles.memberName} numberOfLines={1}>
               {item.username}
             </Text>
+
             <View style={styles.memberRankPill}>
-              <Text style={styles.memberRankText}>RANK {rank}</Text>
+              <Text style={styles.memberRankText}>
+                {t('groups.membersList.labels.rank', { rank })}
+              </Text>
             </View>
           </View>
 
@@ -122,10 +138,7 @@ export default function GroupMembersList({ groupId, navigation }) {
               style={{ marginRight: 4 }}
             />
             <Text style={styles.memberPointsText}>
-              CP:{' '}
-              <Text style={{ color: COLORS.accentBlue, fontWeight: '700' }}>
-                {points}
-              </Text>
+              {t('groups.membersList.labels.cp', { points })}
             </Text>
           </View>
 
@@ -136,7 +149,9 @@ export default function GroupMembersList({ groupId, navigation }) {
               color={COLORS.accentBlue}
               style={{ marginRight: 4 }}
             />
-            <Text style={styles.memberRoleText}>{roleLabel}</Text>
+            <Text style={styles.memberRoleText}>
+              {t(`groups.membersList.roles.${roleKey}`)}
+            </Text>
           </View>
         </View>
       </TouchableOpacity>
@@ -147,7 +162,9 @@ export default function GroupMembersList({ groupId, navigation }) {
     return (
       <View style={styles.centerWrapper}>
         <ActivityIndicator size="large" color={COLORS.accentBlue} />
-        <Text style={styles.centerText}>Loading hunters...</Text>
+        <Text style={styles.centerText}>
+          {t('groups.membersList.loading')}
+        </Text>
       </View>
     );
   }
@@ -163,7 +180,9 @@ export default function GroupMembersList({ groupId, navigation }) {
   if (members.length === 0) {
     return (
       <View style={styles.centerWrapper}>
-        <Text style={styles.centerText}>No hunters in this group yet.</Text>
+        <Text style={styles.centerText}>
+          {t('groups.membersList.empty')}
+        </Text>
       </View>
     );
   }

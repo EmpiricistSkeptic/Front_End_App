@@ -4,6 +4,7 @@ import {
   ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView, Keyboard,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useTranslation } from 'react-i18next';
 import { getUserGoal, updateUserGoal } from '../api/nutritionApi';
 
 const COLORS = {
@@ -16,10 +17,12 @@ const COLORS = {
   danger: '#ff4d4d',
 };
 
-// 1. Компонент Field вынесен за пределы GoalsModal
+// Field вынесен за пределы GoalsModal
 const Field = memo(({ label, value, onChangeText, autoFocus }) => (
   <View style={{ marginBottom: 10 }}>
-    <Text style={{ color: COLORS.textSecondary, fontSize: 12, marginBottom: 6 }}>{label}</Text>
+    <Text style={{ color: COLORS.textSecondary, fontSize: 12, marginBottom: 6 }}>
+      {label}
+    </Text>
     <TextInput
       style={{
         backgroundColor: COLORS.inputBg,
@@ -43,6 +46,8 @@ const Field = memo(({ label, value, onChangeText, autoFocus }) => (
 ));
 
 function GoalsModal({ visible, onClose, onSaved, seed }) {
+  const { t } = useTranslation();
+
   const [form, setForm] = useState({
     calories_goal: String(seed?.calories ?? 2000),
     proteins_goal: String(seed?.proteins ?? 50),
@@ -65,10 +70,11 @@ function GoalsModal({ visible, onClose, onSaved, seed }) {
     const p  = toNumber(form.proteins_goal);
     const f  = toNumber(form.fats_goal);
     const cb = toNumber(form.carbs_goal);
-    if (c <= 0 || c > 10000) return 'Калории: 1–10000.';
-    if (p < 0 || p > 1000)   return 'Белки: 0–1000 г.';
-    if (f < 0 || f > 1000)   return 'Жиры: 0–1000 г.';
-    if (cb < 0 || cb > 1500) return 'Углеводы: 0–1500 г.';
+
+    if (c <= 0 || c > 10000) return t('nutrition.goals.errors.caloriesRange');
+    if (p < 0 || p > 1000)   return t('nutrition.goals.errors.proteinsRange');
+    if (f < 0 || f > 1000)   return t('nutrition.goals.errors.fatsRange');
+    if (cb < 0 || cb > 1500) return t('nutrition.goals.errors.carbsRange');
     return null;
   };
 
@@ -82,6 +88,7 @@ function GoalsModal({ visible, onClose, onSaved, seed }) {
     if (err) return setError(err);
     setSaving(true); setError(null);
     Keyboard.dismiss();
+
     try {
       await updateUserGoal({
         calories_goal: toNumber(form.calories_goal),
@@ -97,7 +104,7 @@ function GoalsModal({ visible, onClose, onSaved, seed }) {
           ? Object.entries(e.response.data)
               .map(([k, v]) => `${k}: ${Array.isArray(v) ? v.join(', ') : v}`)
               .join('\n')
-          : 'Не удалось сохранить цель.';
+          : t('nutrition.goals.errors.saveFailed');
       setError(msg);
     } finally {
       setSaving(false);
@@ -159,7 +166,9 @@ function GoalsModal({ visible, onClose, onSaved, seed }) {
         }}>
           {/* Header */}
           <View style={{ flexDirection:'row', justifyContent:'space-between', alignItems:'center' }}>
-            <Text style={{ color: COLORS.textPrimary, fontSize: 16, fontWeight: '700' }}>Редактировать цель</Text>
+            <Text style={{ color: COLORS.textPrimary, fontSize: 16, fontWeight: '700' }}>
+              {t('nutrition.goals.title')}
+            </Text>
             <TouchableOpacity onPress={onClose} style={{ padding: 6 }}>
               <Ionicons name="close" size={20} color={COLORS.textSecondary} />
             </TouchableOpacity>
@@ -168,7 +177,9 @@ function GoalsModal({ visible, onClose, onSaved, seed }) {
           {loading ? (
             <View style={{ alignItems:'center', paddingVertical: 20 }}>
               <ActivityIndicator size="small" color={COLORS.accentBlue} />
-              <Text style={{ color: COLORS.textSecondary, marginTop: 8 }}>Загрузка…</Text>
+              <Text style={{ color: COLORS.textSecondary, marginTop: 8 }}>
+                {t('nutrition.goals.loading')}
+              </Text>
             </View>
           ) : (
             <ScrollView
@@ -176,29 +187,31 @@ function GoalsModal({ visible, onClose, onSaved, seed }) {
               contentContainerStyle={{ paddingTop: 12, paddingBottom: 8 }}
             >
               <Field
-                label="Калории (kcal)"
+                label={t('nutrition.goals.fields.calories')}
                 value={form.calories_goal}
-                onChangeText={(t) => handleChange('calories_goal', t)}
+                onChangeText={(t2) => handleChange('calories_goal', t2)}
                 autoFocus
               />
               <Field
-                label="Белки (г)"
+                label={t('nutrition.goals.fields.proteins')}
                 value={form.proteins_goal}
-                onChangeText={(t) => handleChange('proteins_goal', t)}
+                onChangeText={(t2) => handleChange('proteins_goal', t2)}
               />
               <Field
-                label="Жиры (г)"
+                label={t('nutrition.goals.fields.fats')}
                 value={form.fats_goal}
-                onChangeText={(t) => handleChange('fats_goal',t)}
+                onChangeText={(t2) => handleChange('fats_goal', t2)}
               />
               <Field
-                label="Углеводы (г)"
+                label={t('nutrition.goals.fields.carbs')}
                 value={form.carbs_goal}
-                onChangeText={(t) => handleChange('carbs_goal', t)}
+                onChangeText={(t2) => handleChange('carbs_goal', t2)}
               />
 
               {error ? (
-                <Text style={{ color: COLORS.danger, marginTop: 6, fontSize: 12, lineHeight: 16 }}>{error}</Text>
+                <Text style={{ color: COLORS.danger, marginTop: 6, fontSize: 12, lineHeight: 16 }}>
+                  {error}
+                </Text>
               ) : null}
 
               <View style={{ flexDirection:'row', justifyContent:'flex-end', marginTop: 12 }}>
@@ -206,8 +219,11 @@ function GoalsModal({ visible, onClose, onSaved, seed }) {
                   paddingHorizontal: 14, paddingVertical: 10, borderRadius: 22,
                   borderWidth: 1, borderColor: COLORS.borderBlue, marginRight: 8,
                 }}>
-                  <Text style={{ color: COLORS.textSecondary, fontSize: 14 }}>Отмена</Text>
+                  <Text style={{ color: COLORS.textSecondary, fontSize: 14 }}>
+                    {t('common.cancel')}
+                  </Text>
                 </TouchableOpacity>
+
                 <TouchableOpacity onPress={handleSave} disabled={saving} style={{
                   paddingHorizontal: 16, paddingVertical: 10, borderRadius: 22,
                   backgroundColor: saving ? '#5f7191' : COLORS.accentBlue,
@@ -216,7 +232,9 @@ function GoalsModal({ visible, onClose, onSaved, seed }) {
                   {saving ? (
                     <ActivityIndicator size="small" color="#080b20" />
                   ) : (
-                    <Text style={{ color: '#080b20', fontSize: 14, fontWeight: '700' }}>Сохранить</Text>
+                    <Text style={{ color: '#080b20', fontSize: 14, fontWeight: '700' }}>
+                      {t('common.save')}
+                    </Text>
                   )}
                 </TouchableOpacity>
               </View>

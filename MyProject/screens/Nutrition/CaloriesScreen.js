@@ -1,16 +1,28 @@
 import React, { useEffect, useRef, useState, useMemo, useCallback } from 'react';
 import {
-  View, Text, SafeAreaView, StatusBar, Platform, Dimensions, ScrollView,
-  TouchableOpacity, ActivityIndicator,
+  View,
+  Text,
+  SafeAreaView,
+  StatusBar,
+  Platform,
+  Dimensions,
+  ScrollView,
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  TouchableOpacity,
+  Alert,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Ionicons, MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons';
 
-import { getSummary, getByDays, searchFood, postCalories } from './api/nutritionApi';
+// Импортируй свои API и компоненты корректно относительно структуры папок
+import { getSummary, getByDays, searchFood, postCalories, deleteNutritionLog } from './api/nutritionApi';
 import NutritionSummary from './components/NutritionSummary';
 import HistorySection from './components/HistorySection';
 import FoodSearchSection from './components/FoodSearchSection';
 import GoalsModal from './components/GoalsModal';
+
+import { useTranslation } from 'react-i18next';
 
 const { width, height } = Dimensions.get('window');
 
@@ -27,6 +39,13 @@ const COLORS = {
 };
 
 export default function CaloriesScreen({ navigation }) {
+  const { t } = useTranslation();
+
+  // Стейт для управления прокруткой всего экрана
+  // true = экран можно скроллить
+  // false = экран заморожен (когда палец на выпадающем списке)
+  const [isScrollEnabled, setIsScrollEnabled] = useState(true);
+
   const [summary, setSummary] = useState(null);
   const [summaryLoading, setSummaryLoading] = useState(true);
 
@@ -48,7 +67,6 @@ export default function CaloriesScreen({ navigation }) {
 
   const searchTimer = useRef(null);
 
-  // 🔹 Мемоизированные частицы — один раз на маунт, не прыгают
   const particles = useMemo(
     () =>
       [...Array(20)].map((_, i) => ({
@@ -105,11 +123,6 @@ export default function CaloriesScreen({ navigation }) {
         const data = await searchFood(q);
         setResults(Array.isArray(data) ? data : []);
       } catch (e) {
-        console.log(
-          'searchFood error:',
-          e?.response?.status,
-          e?.response?.data || e?.message
-        );
         setResults([]);
       } finally {
         setSearching(false);
@@ -173,57 +186,72 @@ export default function CaloriesScreen({ navigation }) {
       fats: summary?.fats_goal,
       carbs: summary?.carbs_goal,
     }),
-    [
-      summary?.calories_goal,
-      summary?.proteins_goal,
-      summary?.fats_goal,
-      summary?.carbs_goal,
-    ]
+    [summary]
   );
 
+  const handleDeleteMeal = useCallback((item) => {
+    Alert.alert(
+      t('nutrition.alerts.deleteConfirmTitle'), // "Delete Meal"
+      t('nutrition.alerts.deleteConfirmBody'),
+      [
+        { text: t('common.cancel'), style: 'cancel' },
+        {
+          text: t('nutrition.alerts.delete'),
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              // Вызываем API удаления (предполагаем, что item.id — это ID записи)
+              await deleteNutritionLog(item.id);
+              
+              // Обязательно обновляем сводку, чтобы пересчитать калории
+              await loadSummary();
+              
+              Alert.alert(t('common.success'), t('nutrition.alerts.deleteSuccess'));
+            } catch (error) {
+              console.error(error);
+              Alert.alert(t('common.error'), t('nutrition.alerts.deleteError'));
+            }
+          },
+        },
+      ]
+    );
+  }, [t, loadSummary]);
+
   const renderMealsToday = () => {
-    const meals = mealsToday;
-    const COLORS_LOCAL = {
-      textPrimary: '#ffffff',
-      textSecondary: '#c8d6e5',
-      placeholder: '#5f7191',
-      borderBlue: '#3250b4',
-      innerBg: 'rgba(26, 30, 60, 0.85)',
-      accentBlue: '#4dabf7',
-    };
     const formatTime = (iso) => {
       if (!iso) return '';
       const d = new Date(iso);
       if (isNaN(d.getTime())) return '';
       return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     };
+
     return (
       <View
         style={{
-          backgroundColor: COLORS_LOCAL.innerBg,
+          backgroundColor: 'rgba(26, 30, 60, 0.85)',
           borderRadius: 12,
           padding: 12,
           borderWidth: 1,
-          borderColor: COLORS_LOCAL.borderBlue,
+          borderColor: COLORS.borderBlue,
           marginBottom: 16,
         }}
       >
         <Text
           style={{
-            color: COLORS_LOCAL.textPrimary,
+            color: COLORS.textPrimary,
             fontSize: 16,
             fontWeight: '600',
             marginBottom: 6,
           }}
         >
-          Сегодняшние приёмы пищи
+          {t('nutrition.mealsToday.title')}
         </Text>
-        {meals.length === 0 ? (
-          <Text style={{ color: COLORS_LOCAL.placeholder, fontSize: 13 }}>
-            Ещё ничего не съедено сегодня.
+        {mealsToday.length === 0 ? (
+          <Text style={{ color: COLORS.placeholder, fontSize: 13 }}>
+            {t('nutrition.mealsToday.empty')}
           </Text>
         ) : (
-          meals.map((item) => (
+          mealsToday.map((item) => (
             <View
               key={item.id}
               style={{
@@ -232,6 +260,7 @@ export default function CaloriesScreen({ navigation }) {
                 borderBottomColor: 'rgba(77,171,247,0.2)',
               }}
             >
+              {/* Верхняя строка: Название --- Калории + Кнопка удаления */}
               <View
                 style={{
                   flexDirection: 'row',
@@ -242,7 +271,7 @@ export default function CaloriesScreen({ navigation }) {
                 <Text
                   style={{
                     flex: 1,
-                    color: COLORS_LOCAL.textPrimary,
+                    color: COLORS.textPrimary,
                     fontSize: 14,
                     marginRight: 8,
                   }}
@@ -250,16 +279,31 @@ export default function CaloriesScreen({ navigation }) {
                 >
                   {item.product_name}
                 </Text>
-                <Text
-                  style={{
-                    color: COLORS_LOCAL.accentBlue,
-                    fontSize: 14,
-                    fontWeight: '600',
-                  }}
-                >
-                  {Math.round(item.calories)} kcal
-                </Text>
+
+                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                  <Text
+                    style={{
+                      color: COLORS.accentBlue,
+                      fontSize: 14,
+                      fontWeight: '600',
+                      marginRight: 10, // Отступ до мусорки
+                    }}
+                  >
+                    {Math.round(item.calories)} kcal
+                  </Text>
+                  
+                  {/* КНОПКА УДАЛЕНИЯ */}
+                  <TouchableOpacity 
+                    onPress={() => handleDeleteMeal(item)}
+                    style={{ padding: 4 }} // Увеличиваем область нажатия
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                  >
+                    <Ionicons name="trash-outline" size={18} color="#ff2d55" />
+                  </TouchableOpacity>
+                </View>
               </View>
+
+              {/* Нижняя строка: Вес, БЖУ, Время */}
               <View
                 style={{
                   flexDirection: 'row',
@@ -267,29 +311,14 @@ export default function CaloriesScreen({ navigation }) {
                   marginTop: 4,
                 }}
               >
-                <Text
-                  style={{
-                    color: COLORS_LOCAL.textSecondary,
-                    fontSize: 11,
-                  }}
-                >
+                <Text style={{ color: COLORS.textSecondary, fontSize: 11 }}>
                   {item.weight} g
                 </Text>
-                <Text
-                  style={{
-                    color: COLORS_LOCAL.textSecondary,
-                    fontSize: 11,
-                  }}
-                >
+                <Text style={{ color: COLORS.textSecondary, fontSize: 11 }}>
                   P {Math.round(item.proteins)} · F {Math.round(item.fats)} · C{' '}
                   {Math.round(item.carbs)}
                 </Text>
-                <Text
-                  style={{
-                    color: COLORS_LOCAL.placeholder,
-                    fontSize: 11,
-                  }}
-                >
+                <Text style={{ color: COLORS.placeholder, fontSize: 11 }}>
                   {formatTime(item.consumed_at)}
                 </Text>
               </View>
@@ -299,21 +328,15 @@ export default function CaloriesScreen({ navigation }) {
       </View>
     );
   };
-
   return (
-    <SafeAreaView
-      style={{ flex: 1, backgroundColor: COLORS.backgroundGradientEnd }}
-    >
+    <SafeAreaView style={{ flex: 1, backgroundColor: COLORS.backgroundGradientEnd }}>
       <StatusBar barStyle="light-content" />
       <LinearGradient
         colors={[COLORS.backgroundGradientStart, COLORS.backgroundGradientEnd]}
         style={{ flex: 1 }}
       >
-        {/* 🔹 Частицы — теперь мемоизированные */}
-        <View
-          style={{ position: 'absolute', width, height }}
-          pointerEvents="none"
-        >
+        {/* Particles */}
+        <View style={{ position: 'absolute', width, height }} pointerEvents="none">
           {particles.map((p) => (
             <View
               key={p.key}
@@ -337,89 +360,74 @@ export default function CaloriesScreen({ navigation }) {
             height: 60,
             justifyContent: 'center',
             alignItems: 'center',
-            paddingTop:
-              Platform.OS === 'android' ? StatusBar.currentHeight : 0,
+            paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0,
             borderBottomWidth: 1,
             borderBottomColor: COLORS.headerBorder,
           }}
         >
-          <Text
-            style={{
-              color: COLORS.textPrimary,
-              fontSize: 18,
-              fontWeight: 'bold',
-              letterSpacing: 1,
-            }}
-          >
-            NUTRITION
+          <Text style={{ color: COLORS.textPrimary, fontSize: 18, fontWeight: 'bold', letterSpacing: 1 }}>
+            {t('nutrition.header.title')}
           </Text>
         </View>
 
         {/* Content */}
         <View style={{ flex: 1 }}>
           {summaryLoading && !summary ? (
-            <View
-              style={{
-                flex: 1,
-                justifyContent: 'center',
-                alignItems: 'center',
-              }}
-            >
+            <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
               <ActivityIndicator size="large" color={COLORS.accentBlue} />
-              <Text
-                style={{
-                  color: COLORS.textSecondary,
-                  marginTop: 15,
-                }}
-              >
-                Загрузка данных...
-              </Text>
             </View>
           ) : (
-            <ScrollView
-              style={{ flex: 1, paddingHorizontal: 15 }}
-              contentContainerStyle={{
-                paddingVertical: 15,
-                paddingBottom: 30,
-              }}
-              keyboardShouldPersistTaps="always"
-              nestedScrollEnabled
+            <KeyboardAvoidingView
+              style={{ flex: 1 }}
+              behavior={Platform.OS === 'ios' ? 'padding' : undefined}
             >
-              {/* сводка + кнопка "Редактировать" */}
-              <NutritionSummary summary={summary} onOpenGoals={openGoals} />
+              <ScrollView
+                // УПРАВЛЕНИЕ СКРОЛЛОМ РОДИТЕЛЯ
+                scrollEnabled={isScrollEnabled} 
+                style={{ flex: 1, paddingHorizontal: 15 }}
+                contentContainerStyle={{
+                  paddingVertical: 15,
+                  // БОЛЬШОЙ ОТСТУП СНИЗУ (чтобы контент не прятался за навигацией)
+                  paddingBottom: 120,
+                }}
+                keyboardShouldPersistTaps="always"
+                nestedScrollEnabled={true}
+                showsVerticalScrollIndicator={false}
+              >
+                <NutritionSummary summary={summary} onOpenGoals={openGoals} />
 
-              {/* история */}
-              <HistorySection
-                period={period}
-                onChangePeriod={handleChangePeriod}
-                data={byDays}
-                loading={byDaysLoading}
-              />
+                <HistorySection
+                  period={period}
+                  onChangePeriod={handleChangePeriod}
+                  data={byDays}
+                  loading={byDaysLoading}
+                />
 
-              {/* поиск + добавление */}
-              <FoodSearchSection
-                query={query}
-                setQuery={setQuery}
-                results={results}
-                setResults={setResults}
-                searching={searching}
-                weight={weight}
-                setWeight={setWeight}
-                onSelectFood={handleSelectFood}
-                onAdd={handleAdd}
-                adding={adding}
-                disabledAdd={!query.trim() && !selectedFood}
-                selectedFood={selectedFood}
-                onClearSelected={handleClearSelected}
-                onForceCloseDropdown={closeDropdown}
-              />
+                {/* Передаем функцию блокировки в FoodSearchSection */}
+                <FoodSearchSection
+                  query={query}
+                  setQuery={setQuery}
+                  results={results}
+                  setResults={setResults}
+                  searching={searching}
+                  weight={weight}
+                  setWeight={setWeight}
+                  onSelectFood={handleSelectFood}
+                  onAdd={handleAdd}
+                  adding={adding}
+                  disabledAdd={!query.trim() && !selectedFood}
+                  selectedFood={selectedFood}
+                  onClearSelected={handleClearSelected}
+                  onForceCloseDropdown={closeDropdown}
+                  onToggleParentScroll={setIsScrollEnabled} 
+                />
 
-              {/* сегодняшние приёмы пищи */}
-              {renderMealsToday()}
-            </ScrollView>
+                {renderMealsToday()}
+              </ScrollView>
+            </KeyboardAvoidingView>
           )}
         </View>
-        {/* модалка целей — стабильные пропсы */}
+
         <GoalsModal
           visible={goalsVisible}
           onClose={closeGoals}

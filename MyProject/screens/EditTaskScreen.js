@@ -17,10 +17,13 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import apiService from '../services/apiService';
+import { useTranslation } from 'react-i18next';
 
 const { width } = Dimensions.get('window');
 
 export default function EditTaskScreen({ navigation, route }) {
+  const { t, i18n } = useTranslation();
+
   const taskId = route?.params?.taskId;
 
   // Основные поля задачи
@@ -64,9 +67,11 @@ export default function EditTaskScreen({ navigation, route }) {
 
     const loadData = async () => {
       if (!taskId) {
-        Alert.alert('Error', 'Task ID is missing. Please try again.', [
-          { text: 'OK', onPress: () => navigation.goBack() },
-        ]);
+        Alert.alert(
+          t('editTask.alerts.errorTitle'),
+          t('editTask.alerts.missingTaskId'),
+          [{ text: t('common.ok'), onPress: () => navigation.goBack() }]
+        );
         return;
       }
 
@@ -123,9 +128,12 @@ export default function EditTaskScreen({ navigation, route }) {
           error?.response?.data || error?.message || error
         );
         if (!isMounted) return;
-        Alert.alert('Error', 'Failed to load task data. Please try again.', [
-          { text: 'OK', onPress: () => navigation.goBack() },
-        ]);
+
+        Alert.alert(
+          t('editTask.alerts.errorTitle'),
+          t('editTask.alerts.loadFail'),
+          [{ text: t('common.ok'), onPress: () => navigation.goBack() }]
+        );
       } finally {
         if (isMounted) {
           setInitialLoading(false);
@@ -138,42 +146,45 @@ export default function EditTaskScreen({ navigation, route }) {
     return () => {
       isMounted = false;
     };
-  }, [taskId, navigation]);
+  }, [taskId, navigation, t]);
 
   // Имя выбранной категории — вычисляем, не храним отдельно
   const selectedCategoryName = useMemo(() => {
-    if (!selectedCategory) return 'Select category';
+    if (!selectedCategory) return t('editTask.placeholders.selectCategory');
     const cat = categories.find((c) => c.id === selectedCategory);
-    return cat ? cat.name : 'Select category';
-  }, [selectedCategory, categories]);
+    return cat ? cat.name : t('editTask.placeholders.selectCategory');
+  }, [selectedCategory, categories, t]);
 
   // Имя выбранного типа единиц — тоже вычисляем
   const selectedUnitTypeName = useMemo(() => {
-    if (!selectedUnitType) return 'Select unit type';
+    if (!selectedUnitType) return t('editTask.placeholders.selectUnitType');
     const ut = unitTypes.find((u) => u.id === selectedUnitType);
-    return ut ? `${ut.name} (${ut.symbol})` : 'Select unit type';
-  }, [selectedUnitType, unitTypes]);
+    return ut ? `${ut.name} (${ut.symbol})` : t('editTask.placeholders.selectUnitType');
+  }, [selectedUnitType, unitTypes, t]);
 
   // Форматированная дата дедлайна
   const formattedDeadline = useMemo(() => {
     if (!deadlineDate || Number.isNaN(deadlineDate.getTime())) {
-      return 'No date selected';
+      return t('editTask.deadline.noDateSelected');
     }
-    const dateStr = deadlineDate.toLocaleDateString('en-US', {
+
+    const locale = i18n.language || 'en-US';
+
+    const dateStr = deadlineDate.toLocaleDateString(locale, {
       year: 'numeric',
       month: 'short',
       day: 'numeric',
     });
-    const timeStr = deadlineDate.toLocaleTimeString('en-US', {
+    const timeStr = deadlineDate.toLocaleTimeString(locale, {
       hour: '2-digit',
       minute: '2-digit',
       hour12: true,
     });
-    return `${dateStr} at ${timeStr}`;
-  }, [deadlineDate]);
+
+    return t('editTask.deadline.formatted', { date: dateStr, time: timeStr });
+  }, [deadlineDate, i18n.language, t]);
 
   // Минимальная дата для выбора в DateTimePicker:
-  // не даём уйти раньше самого раннего из (текущий дедлайн, сейчас)
   const deadlineMinDate = useMemo(() => {
     const now = new Date();
     if (!deadlineDate || Number.isNaN(deadlineDate.getTime())) return now;
@@ -184,7 +195,6 @@ export default function EditTaskScreen({ navigation, route }) {
     setDifficulty(value);
   };
 
-  // Показываем выбор даты/времени
   const showDateTimePicker = (mode) => {
     setDateTimePickerMode(mode);
     if (mode === 'date') {
@@ -194,7 +204,6 @@ export default function EditTaskScreen({ navigation, route }) {
     }
   };
 
-  // Обработка выбора даты / времени
   const handleDateChange = (event, selectedDate) => {
     const currentDate = selectedDate || deadlineDate;
 
@@ -208,26 +217,22 @@ export default function EditTaskScreen({ navigation, route }) {
     }
 
     if (dateTimePickerMode === 'date') {
-      // Обновляем дату, сохраняя текущее время
       const newDate = new Date(currentDate);
       newDate.setHours(deadlineDate.getHours(), deadlineDate.getMinutes());
       setDeadlineDate(newDate);
 
-      // На Android сразу после выбора даты открываем время
       if (event.type === 'set' && Platform.OS === 'android') {
         setTimeout(() => {
           showDateTimePicker('time');
         }, 300);
       }
     } else {
-      // Обновляем время, сохраняя дату
       const newDate = new Date(deadlineDate);
       newDate.setHours(currentDate.getHours(), currentDate.getMinutes());
       setDeadlineDate(newDate);
     }
   };
 
-  // Проверки валидности формы
   const isDeadlineValid =
     deadlineDate && !Number.isNaN(deadlineDate.getTime());
 
@@ -241,34 +246,34 @@ export default function EditTaskScreen({ navigation, route }) {
 
   const handleUpdateTask = async () => {
     if (!title.trim()) {
-      Alert.alert('Error', 'Title is required');
+      Alert.alert(t('editTask.alerts.errorTitle'), t('editTask.alerts.titleRequired'));
       return;
     }
 
     if (!selectedCategory) {
-      Alert.alert('Error', 'Please select a category');
+      Alert.alert(t('editTask.alerts.errorTitle'), t('editTask.alerts.categoryRequired'));
       return;
     }
 
     if (!selectedUnitType) {
-      Alert.alert('Error', 'Please select a unit type');
+      Alert.alert(t('editTask.alerts.errorTitle'), t('editTask.alerts.unitTypeRequired'));
       return;
     }
 
     if (!isDeadlineValid) {
-      Alert.alert('Error', 'Invalid deadline date');
+      Alert.alert(t('editTask.alerts.errorTitle'), t('editTask.alerts.invalidDeadline'));
       return;
     }
 
     const pointsNumber = parseInt(points, 10);
     if (Number.isNaN(pointsNumber) || pointsNumber < 0) {
-      Alert.alert('Error', 'Points must be a non-negative integer');
+      Alert.alert(t('editTask.alerts.errorTitle'), t('editTask.alerts.pointsNonNegative'));
       return;
     }
 
     const unitAmountNumber = parseInt(unitAmount, 10);
     if (Number.isNaN(unitAmountNumber) || unitAmountNumber < 0) {
-      Alert.alert('Error', 'Unit amount must be a non-negative integer');
+      Alert.alert(t('editTask.alerts.errorTitle'), t('editTask.alerts.unitAmountNonNegative'));
       return;
     }
 
@@ -289,21 +294,20 @@ export default function EditTaskScreen({ navigation, route }) {
       console.log('Updating task with data:', payload);
       await apiService.put(`tasks/${taskId}/`, payload);
 
-      Alert.alert('Success', 'Task updated successfully!');
-      navigation.navigate('Home', { taskUpdated: true });
+      Alert.alert(t('editTask.alerts.successTitle'), t('editTask.alerts.updateSuccess'));
+      navigation.goBack();
     } catch (error) {
       console.error(
         'Error updating task',
         error?.response?.data || error?.message || error
       );
 
-      // Если бэк не поддерживает PUT, пробуем PATCH по твоей логике
       if (error?.response?.status === 405) {
         try {
           console.log('PUT failed with 405, trying PATCH instead');
           await apiService.patch(`tasks/${taskId}/update/`, payload);
 
-          Alert.alert('Success', 'Task updated successfully!');
+          Alert.alert(t('editTask.alerts.successTitle'), t('editTask.alerts.updateSuccess'));
           navigation.navigate('Home', { taskUpdated: true });
         } catch (patchError) {
           console.error(
@@ -311,16 +315,18 @@ export default function EditTaskScreen({ navigation, route }) {
             patchError?.response?.data || patchError?.message || patchError
           );
           Alert.alert(
-            'Error',
-            `Failed to update task with PATCH: ${
-              patchError?.message || 'Unknown error'
-            }`
+            t('editTask.alerts.errorTitle'),
+            t('editTask.alerts.patchFail', {
+              msg: patchError?.message || t('common.unknownError'),
+            })
           );
         }
       } else {
         Alert.alert(
-          'Error',
-          `Failed to update task: ${error?.message || 'Unknown error'}`
+          t('editTask.alerts.errorTitle'),
+          t('editTask.alerts.updateFail', {
+            msg: error?.message || t('common.unknownError'),
+          })
         );
       }
     } finally {
@@ -328,14 +334,14 @@ export default function EditTaskScreen({ navigation, route }) {
     }
   };
 
-  // === Рендер ===
-
   if (initialLoading) {
     return (
       <View style={[styles.container, styles.loadingContainer]}>
         <LinearGradient colors={['#121539', '#080b20']} style={styles.background}>
           <ActivityIndicator size="large" color="#4dabf7" />
-          <Text style={styles.loadingText}>Loading task data...</Text>
+          <Text style={styles.loadingText}>
+            {t('editTask.loading')}
+          </Text>
         </LinearGradient>
       </View>
     );
@@ -352,28 +358,30 @@ export default function EditTaskScreen({ navigation, route }) {
           >
             <Ionicons name="arrow-back" size={24} color="#ffffff" />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>EDIT TASK</Text>
+          <Text style={styles.headerTitle}>
+            {t('editTask.header')}
+          </Text>
           <View style={styles.placeholder} />
         </View>
 
         {/* Форма */}
-        <ScrollView style={styles.form}>
-          <Text style={styles.label}>Title</Text>
+        <ScrollView style={styles.form} contentContainerStyle={{ paddingBottom: 50 }}> 
+          <Text style={styles.label}>{t('editTask.fields.title')}</Text>
           <TextInput
             style={styles.input}
             value={title}
             onChangeText={setTitle}
-            placeholder="Enter task title"
+            placeholder={t('editTask.placeholders.title')}
             placeholderTextColor="#88889C"
             autoCapitalize="sentences"
           />
 
-          <Text style={styles.label}>Description</Text>
+          <Text style={styles.label}>{t('editTask.fields.description')}</Text>
           <TextInput
             style={[styles.input, styles.textArea]}
             value={description}
             onChangeText={setDescription}
-            placeholder="Enter task description"
+            placeholder={t('editTask.placeholders.description')}
             placeholderTextColor="#88889C"
             multiline
             numberOfLines={4}
@@ -381,7 +389,7 @@ export default function EditTaskScreen({ navigation, route }) {
             autoCapitalize="sentences"
           />
 
-          <Text style={styles.label}>Category</Text>
+          <Text style={styles.label}>{t('editTask.fields.category')}</Text>
           <TouchableOpacity
             style={styles.dropdownButton}
             onPress={() => setShowCategoryModal(true)}
@@ -390,7 +398,7 @@ export default function EditTaskScreen({ navigation, route }) {
             <Ionicons name="chevron-down" size={20} color="#ffffff" />
           </TouchableOpacity>
 
-          <Text style={styles.label}>Difficulty</Text>
+          <Text style={styles.label}>{t('editTask.fields.difficulty')}</Text>
           <View style={styles.difficultySelector}>
             {['S', 'A', 'B', 'C', 'D'].map((level) => (
               <TouchableOpacity
@@ -420,7 +428,7 @@ export default function EditTaskScreen({ navigation, route }) {
             ))}
           </View>
 
-          <Text style={styles.label}>Deadline</Text>
+          <Text style={styles.label}>{t('editTask.fields.deadline')}</Text>
           <View style={styles.dateTimeContainer}>
             <Text style={styles.deadlineDisplayText}>{formattedDeadline}</Text>
             <View style={styles.dateTimeButtonsContainer}>
@@ -435,7 +443,9 @@ export default function EditTaskScreen({ navigation, route }) {
                   end={{ x: 1, y: 1 }}
                 >
                   <Ionicons name="calendar-outline" size={18} color="#ffffff" />
-                  <Text style={styles.dateTimeButtonText}>Select Date</Text>
+                  <Text style={styles.dateTimeButtonText}>
+                    {t('editTask.buttons.selectDate')}
+                  </Text>
                 </LinearGradient>
               </TouchableOpacity>
 
@@ -450,7 +460,9 @@ export default function EditTaskScreen({ navigation, route }) {
                   end={{ x: 1, y: 1 }}
                 >
                   <Ionicons name="time-outline" size={18} color="#ffffff" />
-                  <Text style={styles.dateTimeButtonText}>Select Time</Text>
+                  <Text style={styles.dateTimeButtonText}>
+                    {t('editTask.buttons.selectTime')}
+                  </Text>
                 </LinearGradient>
               </TouchableOpacity>
             </View>
@@ -469,7 +481,7 @@ export default function EditTaskScreen({ navigation, route }) {
             />
           )}
 
-          <Text style={styles.label}>Unit Type</Text>
+          <Text style={styles.label}>{t('editTask.fields.unitType')}</Text>
           <TouchableOpacity
             style={styles.dropdownButton}
             onPress={() => setShowUnitTypeModal(true)}
@@ -478,22 +490,22 @@ export default function EditTaskScreen({ navigation, route }) {
             <Ionicons name="chevron-down" size={20} color="#ffffff" />
           </TouchableOpacity>
 
-          <Text style={styles.label}>Unit Amount</Text>
+          <Text style={styles.label}>{t('editTask.fields.unitAmount')}</Text>
           <TextInput
             style={styles.input}
             value={unitAmount}
             onChangeText={setUnitAmount}
-            placeholder="Enter unit amount"
+            placeholder={t('editTask.placeholders.unitAmount')}
             placeholderTextColor="#88889C"
             keyboardType="numeric"
           />
 
-          <Text style={styles.label}>Points Reward</Text>
+          <Text style={styles.label}>{t('editTask.fields.pointsReward')}</Text>
           <TextInput
             style={styles.input}
             value={points}
             onChangeText={setPoints}
-            placeholder="Enter Points reward"
+            placeholder={t('editTask.placeholders.pointsReward')}
             placeholderTextColor="#88889C"
             keyboardType="numeric"
           />
@@ -515,7 +527,9 @@ export default function EditTaskScreen({ navigation, route }) {
               {isSaving ? (
                 <ActivityIndicator color="#ffffff" size="small" />
               ) : (
-                <Text style={styles.buttonText}>UPDATE TASK</Text>
+                <Text style={styles.buttonText}>
+                  {t('editTask.buttons.updateTask')}
+                </Text>
               )}
             </LinearGradient>
             <View style={styles.buttonGlow} />
@@ -531,7 +545,9 @@ export default function EditTaskScreen({ navigation, route }) {
         >
           <View style={styles.modalContainer}>
             <View style={styles.modalContent}>
-              <Text style={styles.modalTitle}>Select Category</Text>
+              <Text style={styles.modalTitle}>
+                {t('editTask.modals.selectCategory')}
+              </Text>
               <FlatList
                 data={categories}
                 keyExtractor={(item) => item.id.toString()}
@@ -562,7 +578,9 @@ export default function EditTaskScreen({ navigation, route }) {
                 style={styles.modalCloseButton}
                 onPress={() => setShowCategoryModal(false)}
               >
-                <Text style={styles.modalCloseButtonText}>Close</Text>
+                <Text style={styles.modalCloseButtonText}>
+                  {t('common.close')}
+                </Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -577,7 +595,9 @@ export default function EditTaskScreen({ navigation, route }) {
         >
           <View style={styles.modalContainer}>
             <View style={styles.modalContent}>
-              <Text style={styles.modalTitle}>Select Unit Type</Text>
+              <Text style={styles.modalTitle}>
+                {t('editTask.modals.selectUnitType')}
+              </Text>
               <FlatList
                 data={unitTypes}
                 keyExtractor={(item) => item.id.toString()}
@@ -608,7 +628,9 @@ export default function EditTaskScreen({ navigation, route }) {
                 style={styles.modalCloseButton}
                 onPress={() => setShowUnitTypeModal(false)}
               >
-                <Text style={styles.modalCloseButtonText}>Close</Text>
+                <Text style={styles.modalCloseButtonText}>
+                  {t('common.close')}
+                </Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -618,22 +640,12 @@ export default function EditTaskScreen({ navigation, route }) {
   );
 }
 
+// styles ниже без изменений
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  background: {
-    flex: 1,
-  },
-  loadingContainer: {
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  loadingText: {
-    color: '#ffffff',
-    marginTop: 10,
-    fontSize: 16,
-  },
+  container: { flex: 1 },
+  background: { flex: 1 },
+  loadingContainer: { justifyContent: 'center', alignItems: 'center' },
+  loadingText: { color: '#ffffff', marginTop: 10, fontSize: 16 },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -644,22 +656,15 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(77, 171, 247, 0.3)',
   },
-  backButton: {
-    padding: 5,
-  },
+  backButton: { padding: 5 },
   headerTitle: {
     color: '#ffffff',
     fontSize: 18,
     fontWeight: 'bold',
     letterSpacing: 1,
   },
-  placeholder: {
-    width: 34,
-  },
-  form: {
-    flex: 1,
-    padding: 20,
-  },
+  placeholder: { width: 34 },
+  form: { flex: 1, padding: 20 },
   label: {
     color: '#c8d6e5',
     fontSize: 14,
@@ -675,10 +680,7 @@ const styles = StyleSheet.create({
     padding: 12,
     fontSize: 14,
   },
-  textArea: {
-    height: 100,
-    paddingTop: 12,
-  },
+  textArea: { height: 100, paddingTop: 12 },
   dropdownButton: {
     backgroundColor: 'rgba(16, 20, 45, 0.75)',
     borderWidth: 1,
@@ -689,10 +691,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
   },
-  dropdownButtonText: {
-    color: '#ffffff',
-    fontSize: 14,
-  },
+  dropdownButtonText: { color: '#ffffff', fontSize: 14 },
   modalContainer: {
     flex: 1,
     justifyContent: 'center',
@@ -724,14 +723,8 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(77, 171, 247, 0.3)',
   },
-  modalItemText: {
-    color: '#ffffff',
-    fontSize: 16,
-  },
-  selectedModalItemText: {
-    color: '#4dabf7',
-    fontWeight: '500',
-  },
+  modalItemText: { color: '#ffffff', fontSize: 16 },
+  selectedModalItemText: { color: '#4dabf7', fontWeight: '500' },
   modalCloseButton: {
     marginTop: 20,
     backgroundColor: 'rgba(77, 171, 247, 0.2)',
@@ -757,14 +750,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(77, 171, 247, 0.3)',
   },
-  selectedDifficulty: {
-    borderColor: '#ffffff',
-  },
-  difficultyText: {
-    color: '#ffffff',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
+  selectedDifficulty: { borderColor: '#ffffff' },
+  difficultyText: { color: '#ffffff', fontSize: 16, fontWeight: 'bold' },
   updateButton: {
     height: 50,
     borderRadius: 6,
@@ -773,11 +760,7 @@ const styles = StyleSheet.create({
     marginTop: 30,
     marginBottom: 30,
   },
-  buttonGradient: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
+  buttonGradient: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   buttonText: {
     color: '#ffffff',
     fontSize: 16,
@@ -786,10 +769,7 @@ const styles = StyleSheet.create({
   },
   buttonGlow: {
     position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
+    top: 0, left: 0, right: 0, bottom: 0,
     borderRadius: 6,
     borderWidth: 1,
     borderColor: '#4dabf7',

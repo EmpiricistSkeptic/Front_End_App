@@ -2,6 +2,7 @@
 import React from 'react';
 import { View, Text, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useTranslation } from 'react-i18next';
 
 const COLORS = {
   textPrimary: '#ffffff',
@@ -13,6 +14,8 @@ const COLORS = {
 };
 
 export default function NutritionSummary({ summary, onOpenGoals }) {
+  const { t } = useTranslation();
+
   const totalCalories  = Math.round(summary?.total_calories || 0);
   const caloriesGoal   = Math.round(summary?.calories_goal || 0);
   const remainCalories = Math.round(summary?.remaining?.calories ?? 0);
@@ -24,6 +27,10 @@ export default function NutritionSummary({ summary, onOpenGoals }) {
   const proteinsGoal   = Math.round(summary?.proteins_goal || 0);
   const fatsGoal       = Math.round(summary?.fats_goal || 0);
   const carbsGoal      = Math.round(summary?.carbs_goal || 0);
+
+  const remainProteins = Math.round(summary?.remaining?.proteins ?? 0);
+  const remainFats     = Math.round(summary?.remaining?.fats ?? 0);
+  const remainCarbs    = Math.round(summary?.remaining?.carbs ?? 0);
 
   return (
     <View style={{
@@ -37,52 +44,60 @@ export default function NutritionSummary({ summary, onOpenGoals }) {
       {/* Заголовок + кнопка редактирования */}
       <View style={{ flexDirection:'row', justifyContent:'space-between', alignItems:'center' }}>
         <View>
-          <Text style={{ color: COLORS.textSecondary, fontSize: 13, marginBottom: 4 }}>Сегодня</Text>
+          <Text style={{ color: COLORS.textSecondary, fontSize: 13, marginBottom: 4 }}>
+            {t('nutrition.summary.today')}
+          </Text>
           <Text style={{ color: COLORS.textPrimary, fontSize: 20, fontWeight: 'bold' }}>
-            {totalCalories} / {caloriesGoal} kcal
+            {totalCalories} / {caloriesGoal} {t('nutrition.units.kcal')}
           </Text>
         </View>
+
         <TouchableOpacity onPress={onOpenGoals} style={{ paddingHorizontal: 10, paddingVertical: 6 }}>
           <Ionicons name="create-outline" size={18} color={COLORS.accentBlue} />
         </TouchableOpacity>
       </View>
 
       <Text style={{ color: COLORS.textSecondary, fontSize: 13, marginTop: 4 }}>
-        Осталось: {remainCalories} kcal
+        {t('nutrition.summary.remaining')}: {remainCalories} {t('nutrition.units.kcal')}
       </Text>
 
       <View style={{ flexDirection:'row', justifyContent:'space-between', marginTop:12 }}>
         <View style={{ flex:1, marginHorizontal:4 }}>
-          <Text style={{ color: COLORS.placeholder, fontSize:12 }}>Белки</Text>
+          <Text style={{ color: COLORS.placeholder, fontSize:12 }}>
+            {t('nutrition.summary.macros.proteins')}
+          </Text>
           <Text style={{ color: COLORS.textPrimary, fontSize:14, fontWeight:'600' }}>
-            {totalProteins} / {proteinsGoal} г
+            {totalProteins} / {proteinsGoal} {t('nutrition.units.grams')}
           </Text>
           <Text style={{ color: COLORS.textSecondary, fontSize:11 }}>
-            Осталось: {Math.round((summary?.remaining?.proteins ?? 0))} г
+            {t('nutrition.summary.remaining')}: {remainProteins} {t('nutrition.units.grams')}
           </Text>
         </View>
+
         <View style={{ flex:1, marginHorizontal:4 }}>
-          <Text style={{ color: COLORS.placeholder, fontSize:12 }}>Жиры</Text>
+          <Text style={{ color: COLORS.placeholder, fontSize:12 }}>
+            {t('nutrition.summary.macros.fats')}
+          </Text>
           <Text style={{ color: COLORS.textPrimary, fontSize:14, fontWeight:'600' }}>
-            {totalFats} / {fatsGoal} г
+            {totalFats} / {fatsGoal} {t('nutrition.units.grams')}
           </Text>
           <Text style={{ color: COLORS.textSecondary, fontSize:11 }}>
-            Осталось: {Math.round((summary?.remaining?.fats ?? 0))} г
+            {t('nutrition.summary.remaining')}: {remainFats} {t('nutrition.units.grams')}
           </Text>
         </View>
+
         <View style={{ flex:1, marginHorizontal:4 }}>
-          <Text style={{ color: COLORS.placeholder, fontSize:12 }}>Углеводы</Text>
+          <Text style={{ color: COLORS.placeholder, fontSize:12 }}>
+            {t('nutrition.summary.macros.carbs')}
+          </Text>
           <Text style={{ color: COLORS.textPrimary, fontSize:14, fontWeight:'600' }}>
-            {totalCarbs} / {carbsGoal} г
+            {totalCarbs} / {carbsGoal} {t('nutrition.units.grams')}
           </Text>
           <Text style={{ color: COLORS.textSecondary, fontSize:11 }}>
-            Осталось: {Math.round((summary?.remaining?.carbs ?? 0))} г
+            {t('nutrition.summary.remaining')}: {remainCarbs} {t('nutrition.units.grams')}
           </Text>
         </View>
       </View>
     </View>
   );
 }
-
-
-

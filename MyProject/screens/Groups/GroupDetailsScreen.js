@@ -2,7 +2,6 @@ import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
-  SafeAreaView,
   StatusBar,
   Platform,
   Dimensions,
@@ -10,11 +9,14 @@ import {
   ActivityIndicator,
   Alert,
   StyleSheet,
+  KeyboardAvoidingView,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useFocusEffect, useRoute, useNavigation } from '@react-navigation/native';
+import { useFocusEffect, useRoute } from '@react-navigation/native';
+import { useTranslation } from 'react-i18next';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import {
   getGroup,
@@ -26,9 +28,12 @@ import {
 import MessageList from './components/MessageList';
 import MessageInput from './components/MessageInput';
 import useGroupChat from './hooks/useGroupChat';
-import GroupMembersList from './components/GroupMembersList'; // 🔹 новый импорт
+import GroupMembersList from './components/GroupMembersList';
 
 const { width, height } = Dimensions.get('window');
+
+// Высота контента хедера
+const HEADER_CONTENT_HEIGHT = 50;
 
 const COLORS = {
   backgroundGradientStart: '#121539',
@@ -43,17 +48,19 @@ const COLORS = {
 };
 
 export default function GroupDetailsScreen({ route, navigation }) {
+  const { t, i18n } = useTranslation();
   const { groupId, preGroup } = route.params || {};
   const rnRoute = useRoute();
-  const nav = useNavigation();
+  
+  // Хук для безопасных зон (челка, нижняя полоска)
+  const insets = useSafeAreaInsets();
 
   const [group, setGroup] = useState(preGroup || null);
   const [loading, setLoading] = useState(!preGroup);
   const [authLoading, setAuthLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [auth, setAuth] = useState({ userId: null, username: null });
-
-  const [showMembers, setShowMembers] = useState(false); // 🔹 переключатель "участники"
+  const [showMembers, setShowMembers] = useState(false);
 
   // Частицы
   const particles = useMemo(
@@ -69,7 +76,7 @@ export default function GroupDetailsScreen({ route, navigation }) {
     []
   );
 
-  // auth из AsyncStorage
+  // Загрузка auth
   useEffect(() => {
     (async () => {
       try {
@@ -77,7 +84,7 @@ export default function GroupDetailsScreen({ route, navigation }) {
         const uname = await AsyncStorage.getItem('username');
         setAuth({ userId: uid ? Number(uid) : null, username: uname || null });
       } catch (e) {
-        console.error('Failed to load auth data from AsyncStorage', e);
+        console.error('Failed to load auth', e);
         setAuth({ userId: null, username: null });
       } finally {
         setAuthLoading(false);
@@ -85,7 +92,7 @@ export default function GroupDetailsScreen({ route, navigation }) {
     })();
   }, []);
 
-  // первичная загрузка, если нет preGroup
+  // Загрузка группы
   useEffect(() => {
     const fetchGroup = async () => {
       setLoading(true);
@@ -93,25 +100,24 @@ export default function GroupDetailsScreen({ route, navigation }) {
         const g = await getGroup(groupId);
         setGroup(g);
       } catch (e) {
-        Alert.alert('Error', 'Group not found');
+        Alert.alert(t('groups.details.alerts.errorTitle'), t('groups.details.alerts.groupNotFound'));
         navigation.goBack();
       } finally {
         setLoading(false);
       }
     };
     if (!preGroup) fetchGroup();
-  }, [groupId]);
+  }, [groupId, preGroup, navigation, t]);
 
-  // принять обновлённые параметры после редактирования
+  // Обновление данных
   useEffect(() => {
     const updated = rnRoute.params?.preGroup;
     const refreshMark = rnRoute.params?.__refreshAt;
     if (updated && refreshMark) {
       setGroup(updated);
     }
-  }, [rnRoute.params?.__refreshAt]);
+  }, [rnRoute.params?.__refreshAt, rnRoute.params?.preGroup]);
 
-  // обновлять группу при фокусе
   useFocusEffect(
     useCallback(() => {
       let isActive = true;
@@ -131,10 +137,9 @@ export default function GroupDetailsScreen({ route, navigation }) {
   const canModerate = group?.is_owner === true || group?.is_admin === true;
   const canEditGroup = canModerate;
 
-  // живой чат
   const chat = useGroupChat(groupId, { enabled: canSeeChat });
 
-  // handlers
+  // --- Handlers ---
   const handleJoin = async () => {
     try {
       await joinGroup(groupId);
@@ -144,37 +149,39 @@ export default function GroupDetailsScreen({ route, navigation }) {
         members_count: (g?.members_count || 0) + 1,
       }));
     } catch (e) {
-      Alert.alert('Error', e?.response?.data?.detail || 'Failed to join');
+      Alert.alert(t('groups.details.alerts.errorTitle'), t('groups.details.alerts.joinFail'));
     }
   };
 
   const handleLeave = async () => {
     try {
       await leaveGroup(groupId);
-      Alert.alert('Left', 'You left the group');
       navigation.goBack();
     } catch (e) {
-      Alert.alert('Error', e?.response?.data?.detail || 'Failed to leave');
+      Alert.alert(t('groups.details.alerts.errorTitle'), t('groups.details.alerts.leaveFail'));
     }
   };
 
   const handleDeleteGroup = async () => {
-    Alert.alert('Delete group', 'This action cannot be undone. Delete the group?', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Delete',
-        style: 'destructive',
-        onPress: async () => {
-          try {
-            await deleteGroup(groupId);
-            Alert.alert('Deleted', 'Group has been deleted');
-            navigation.goBack();
-          } catch (e) {
-            Alert.alert('Error', e?.response?.data?.detail || 'Failed to delete group');
-          }
+    Alert.alert(
+      t('groups.details.alerts.deleteConfirmTitle'),
+      t('groups.details.alerts.deleteConfirmBody'),
+      [
+        { text: t('common.cancel'), style: 'cancel' },
+        {
+          text: t('groups.details.buttons.delete'),
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await deleteGroup(groupId);
+              navigation.goBack();
+            } catch (e) {
+              Alert.alert(t('groups.details.alerts.errorTitle'), t('groups.details.alerts.deleteFail'));
+            }
+          },
         },
-      },
-    ]);
+      ]
+    );
   };
 
   const handleEdit = () => {
@@ -182,14 +189,12 @@ export default function GroupDetailsScreen({ route, navigation }) {
   };
 
   const handleSend = async (text) => {
-    const t = String(text || '').trim();
-    if (!t) return;
+    const msg = String(text || '').trim();
+    if (!msg) return;
     setSending(true);
     try {
-      const ok = chat.sendMessage(t);
-      if (!ok) {
-        Alert.alert('Offline', 'Connection lost, please try again in a moment.');
-      }
+      const ok = chat.sendMessage(msg);
+      if (!ok) Alert.alert('Offline', 'Message not sent');
     } catch (e) {
       Alert.alert('Error', 'Failed to send');
     } finally {
@@ -202,13 +207,21 @@ export default function GroupDetailsScreen({ route, navigation }) {
       await deleteMessage(groupId, messageId);
       chat.deleteLocal(messageId);
     } catch (e) {
-      Alert.alert('Error', e?.response?.data?.detail || 'Failed to delete message');
+      Alert.alert('Error', 'Failed to delete');
     }
   };
 
+  const handleMemberPress = useCallback((userId) => {
+    // Используем push, чтобы профиль открылся поверх текущего экрана
+    navigation.push('Profile', { userId: userId });
+  }, [navigation]);
+
+  // Вычисляем полную высоту хедера для отступа
+  const totalHeaderHeight = HEADER_CONTENT_HEIGHT + insets.top;
+
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <StatusBar barStyle="light-content" />
+    <View style={styles.container}>
+      <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
       <LinearGradient
         colors={[COLORS.backgroundGradientStart, COLORS.backgroundGradientEnd]}
         style={{ flex: 1 }}
@@ -232,130 +245,122 @@ export default function GroupDetailsScreen({ route, navigation }) {
           ))}
         </View>
 
-        {/* HEADER */}
-        <View style={styles.header}>
+        {/* Хедер (вне KeyboardAvoidingView, чтобы он стоял на месте) */}
+        <View style={[styles.header, { height: totalHeaderHeight, paddingTop: insets.top }]}>
           <View style={styles.headerSide}>
             <TouchableOpacity onPress={() => navigation.goBack()}>
-              <Ionicons
-                name="chevron-back"
-                size={26}
-                color={COLORS.textSecondary}
-              />
+              <Ionicons name="chevron-back" size={26} color={COLORS.textSecondary} />
             </TouchableOpacity>
           </View>
           <View style={styles.headerCenter}>
             <Text style={styles.headerTitle} numberOfLines={1}>
-              {group?.name || 'GROUP'}
+              {group?.name || t('groups.details.fallbackTitle')}
             </Text>
           </View>
           <View style={[styles.headerSide, { alignItems: 'flex-end' }]}>
             <View style={{ flexDirection: 'row', alignItems: 'center' }}>
               {canEditGroup && (
-                <TouchableOpacity
-                  onPress={handleEdit}
-                  style={{ marginRight: 16 }}
-                >
-                  <Ionicons
-                    name="pencil"
-                    size={21}
-                    color={COLORS.accentBlue}
-                  />
+                <TouchableOpacity onPress={handleEdit} style={{ marginRight: 16 }}>
+                  <Ionicons name="pencil" size={21} color={COLORS.accentBlue} />
                 </TouchableOpacity>
               )}
               {group?.is_owner ? (
                 <TouchableOpacity onPress={handleDeleteGroup}>
-                  <Text style={styles.deleteText}>Delete</Text>
+                  <Text style={styles.deleteText}>{t('groups.details.buttons.delete')}</Text>
                 </TouchableOpacity>
               ) : group?.is_member ? (
                 <TouchableOpacity onPress={handleLeave}>
-                  <Text style={styles.leaveText}>Leave</Text>
+                  <Text style={styles.leaveText}>{t('groups.details.buttons.leave')}</Text>
                 </TouchableOpacity>
               ) : null}
             </View>
           </View>
         </View>
 
-        {loading || authLoading ? (
-          <View style={styles.loaderContainer}>
-            <ActivityIndicator size="large" color={COLORS.accentBlue} />
-            <Text style={{ color: COLORS.textSecondary, marginTop: 10 }}>
-              Loading...
-            </Text>
-          </View>
-        ) : (
-          <>
-            <View style={styles.content}>
-              {/* by ...  + кнопка MEMBERS */}
-              <View style={styles.bylineRow}>
-                <Text style={styles.bylineText} numberOfLines={1}>
-                  by {group?.owner_username}
-                </Text>
-                <TouchableOpacity
-                  style={styles.membersChip}
-                  onPress={() => setShowMembers((prev) => !prev)}
-                >
-                  <Ionicons
-                    name="people"
-                    size={16}
-                    color={COLORS.accentBlue}
-                    style={{ marginRight: 4 }}
-                  />
-                  <Text style={styles.membersChipText}>
-                    {group?.members_count ?? 0} MEMBERS
-                  </Text>
-                </TouchableOpacity>
-              </View>
-
-              {/* либо список участников, либо чат/приглашение */}
-              {showMembers ? (
-                <GroupMembersList groupId={groupId} navigation={navigation} />
-              ) : canSeeChat ? (
-                chat.connectionState === 'connecting' &&
-                chat.messages.length === 0 ? (
-                  <View style={styles.chatLoaderContainer}>
-                    <ActivityIndicator
-                      size="large"
-                      color={COLORS.accentBlue}
-                    />
-                  </View>
-                ) : (
-                  <MessageList
-                    messages={chat.messages}
-                    currentUserId={auth.userId}
-                    currentUsername={auth.username}
-                    canModerate={canModerate}
-                    onDelete={handleDeleteMessage}
-                  />
-                )
-              ) : (
-                <View style={styles.joinCard}>
-                  <Text style={styles.joinCardTitle}>
-                    Join this public group to view and send messages.
+        {/* 
+          ОСНОВНОЕ ИСПРАВЛЕНИЕ:
+          1. behavior: iOS = 'padding', Android = 'height'.
+             'height' на Android сжимает View, когда клава выезжает, и поле остается внизу сжатой области.
+          2. keyboardVerticalOffset: равен высоте хедера, чтобы контент не уезжал под него.
+        */}
+        <KeyboardAvoidingView
+          style={{ flex: 1 }}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? totalHeaderHeight : 0}
+        >
+          {loading || authLoading ? (
+            <View style={styles.loaderContainer}>
+              <ActivityIndicator size="large" color={COLORS.accentBlue} />
+              <Text style={{ color: COLORS.textSecondary, marginTop: 10 }}>
+                {t('common.loading')}
+              </Text>
+            </View>
+          ) : (
+            <>
+              <View style={styles.content}>
+                <View style={styles.bylineRow}>
+                  <Text style={styles.bylineText} numberOfLines={1}>
+                    {t('groups.details.by', { username: group?.owner_username })}
                   </Text>
                   <TouchableOpacity
-                    onPress={handleJoin}
-                    style={styles.joinButton}
+                    style={styles.membersChip}
+                    onPress={() => setShowMembers((prev) => !prev)}
                   >
-                    <Text style={styles.joinButtonText}>Join</Text>
+                    <Ionicons name="people" size={16} color={COLORS.accentBlue} style={{ marginRight: 4 }} />
+                    <Text style={styles.membersChipText}>
+                      {t('groups.details.members', { count: group?.members_count ?? 0 })}
+                    </Text>
                   </TouchableOpacity>
                 </View>
-              )}
-            </View>
 
-            {/* Инпут только если показываем чат и есть доступ */}
-            {!showMembers && canSeeChat && (
-              <MessageInput onSend={handleSend} sending={sending} />
-            )}
-          </>
-        )}
+                {showMembers ? (
+                  <GroupMembersList groupId={groupId} navigation={navigation} onMemberPress={handleMemberPress}/>
+                ) : canSeeChat ? (
+                  chat.connectionState === 'connecting' && chat.messages.length === 0 ? (
+                    <View style={styles.chatLoaderContainer}>
+                      <ActivityIndicator size="large" color={COLORS.accentBlue} />
+                    </View>
+                  ) : (
+                    <MessageList
+                      messages={chat.messages}
+                      currentUserId={auth.userId}
+                      currentUsername={auth.username}
+                      canModerate={canModerate}
+                      onDelete={handleDeleteMessage}
+                    />
+                  )
+                ) : (
+                  <View style={styles.joinCard}>
+                    <Text style={styles.joinCardTitle}>{t('groups.details.joinCard.title')}</Text>
+                    <TouchableOpacity onPress={handleJoin} style={styles.joinButton}>
+                      <Text style={styles.joinButtonText}>{t('groups.details.buttons.join')}</Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
+              </View>
+
+              {!showMembers && canSeeChat && (
+                // Отступ снизу для iPhone X и выше, но только если это iOS.
+                // На Android поведение 'height' само прижмет к низу экрана, поэтому лишний паддинг не нужен (или минимальный).
+                <View 
+                  style={[
+                    styles.inputWrapper, 
+                    { paddingBottom: Platform.OS === 'ios' ? Math.max(insets.bottom, 10) : 10 }
+                  ]}
+                >
+                  <MessageInput onSend={handleSend} sending={sending} />
+                </View>
+              )}
+            </>
+          )}
+        </KeyboardAvoidingView>
       </LinearGradient>
-    </SafeAreaView>
+    </View>
   );
 }
 
-// Стили
 const styles = StyleSheet.create({
-  safeArea: {
+  container: {
     flex: 1,
     backgroundColor: COLORS.backgroundGradientEnd,
   },
@@ -365,13 +370,13 @@ const styles = StyleSheet.create({
     height,
   },
   header: {
-    height: 70,
-    paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0,
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 15,
     borderBottomWidth: 1,
     borderBottomColor: COLORS.headerBorder,
+    backgroundColor: 'transparent',
+    zIndex: 10,
   },
   headerSide: {
     width: 90,
@@ -383,7 +388,7 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     color: COLORS.textPrimary,
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: 'bold',
     letterSpacing: 1,
   },
@@ -405,7 +410,6 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: 15,
     paddingTop: 10,
-    paddingBottom: 10,
   },
   bylineRow: {
     flexDirection: 'row',
@@ -458,8 +462,8 @@ const styles = StyleSheet.create({
     color: '#080b20',
     fontWeight: '700',
   },
+  inputWrapper: {
+    backgroundColor: COLORS.backgroundGradientEnd,
+    paddingTop: 5,
+  },
 });
-
-
-
-

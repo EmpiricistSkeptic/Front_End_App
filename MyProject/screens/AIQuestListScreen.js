@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import {
   View,
   Text,
@@ -13,15 +13,15 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect } from '@react-navigation/native';
 import { MaterialIcons, Ionicons } from '@expo/vector-icons';
 import moment from 'moment';
-import 'moment/locale/ru';
+import 'moment/locale/es';
+import { useTranslation } from 'react-i18next';
 
 import apiService from '../services/apiService';
 import { useProfile } from '../context/ProfileContext';
 
-// русская локаль для дат
-moment.locale('ru');
-
 export default function AIQuestListScreen({ navigation }) {
+  const { t, i18n } = useTranslation();
+
   const [quests, setQuests] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeFilter, setActiveFilter] = useState('ALL');
@@ -29,10 +29,15 @@ export default function AIQuestListScreen({ navigation }) {
   const [questDetailsVisible, setQuestDetailsVisible] = useState(false);
   const [loadingDetails, setLoadingDetails] = useState(false);
 
-  // берём refreshProfile из контекста, чтобы подтянуть XP/уровень после complete/fail
   const { refreshProfile } = useProfile();
 
-  // единая обработка 401/истёкшей сессии
+  // moment locale sync with app language (en/es)
+  useEffect(() => {
+    const lang = (i18n.language || 'en').toLowerCase();
+    if (lang.startsWith('es')) moment.locale('es');
+    else moment.locale('en'); // default
+  }, [i18n.language]);
+
   const handleSessionError = useCallback(
     (error) => {
       console.error('Session or network error (quests):', error);
@@ -60,7 +65,6 @@ export default function AIQuestListScreen({ navigation }) {
     [navigation]
   );
 
-  // загрузка списка квестов
   const fetchQuests = useCallback(async () => {
     try {
       const responseData = await apiService.get('quests/');
@@ -70,14 +74,13 @@ export default function AIQuestListScreen({ navigation }) {
       if (handleSessionError(error)) return;
       console.error('Error fetching quests', error);
       Alert.alert(
-        'Ошибка',
-        'Не удалось загрузить ваши квесты. Попробуйте еще раз.'
+        t('quests.alerts.errorTitle'),
+        t('quests.alerts.fetchFail')
       );
       setQuests([]);
     }
-  }, [handleSessionError]);
+  }, [handleSessionError, t]);
 
-  // загрузка деталей конкретного квеста
   const fetchQuestDetails = useCallback(
     async (id) => {
       setLoadingDetails(true);
@@ -90,18 +93,16 @@ export default function AIQuestListScreen({ navigation }) {
         if (handleSessionError(error)) return;
         console.error('Error fetching quest details', error);
         Alert.alert(
-          'Ошибка',
-          'Не удалось загрузить детали квеста. Попробуйте еще раз.'
+          t('quests.alerts.errorTitle'),
+          t('quests.alerts.detailsFail')
         );
       } finally {
         setLoadingDetails(false);
       }
     },
-    [handleSessionError]
+    [handleSessionError, t]
   );
 
-  // единый паттерн: грузим квесты при фокусе экрана (и первом открытии),
-  // без дублирующих useEffect
   useFocusEffect(
     useCallback(() => {
       let isActive = true;
@@ -111,9 +112,7 @@ export default function AIQuestListScreen({ navigation }) {
         try {
           await fetchQuests();
         } finally {
-          if (isActive) {
-            setLoading(false);
-          }
+          if (isActive) setLoading(false);
         }
       };
 
@@ -125,16 +124,14 @@ export default function AIQuestListScreen({ navigation }) {
     }, [fetchQuests])
   );
 
-  // выполнение квеста
   const handleCompleteQuest = async (questId) => {
     try {
       await apiService.patch(`quests/${questId}/complete/`);
       Alert.alert(
-        'Квест выполнен',
-        'Вы успешно выполнили этот квест! Награда получена.'
+        t('quests.alerts.completedTitle'),
+        t('quests.alerts.completedBody')
       );
 
-      // бэк уже пересчитал XP/уровень → подтягиваем профиль
       await Promise.all([
         fetchQuests(),
         selectedQuest && selectedQuest.id === questId
@@ -146,26 +143,28 @@ export default function AIQuestListScreen({ navigation }) {
       if (handleSessionError(error)) return;
       console.error('Error completing quest', error);
       Alert.alert(
-        'Ошибка',
-        'Не удалось отметить квест как выполненный. Попробуйте еще раз.'
+        t('quests.alerts.errorTitle'),
+        t('quests.alerts.completeFail')
       );
     }
   };
 
-  // провал квеста
   const handleFailQuest = (questId) => {
     Alert.alert(
-      'Отметить как проваленный?',
-      'Вы уверены, что хотите отметить этот квест как проваленный? Штрафы будут применены.',
+      t('quests.alerts.failConfirmTitle'),
+      t('quests.alerts.failConfirmBody'),
       [
-        { text: 'Отмена', style: 'cancel' },
+        { text: t('quests.alerts.cancel'), style: 'cancel' },
         {
-          text: 'Подтвердить',
+          text: t('quests.alerts.confirm'),
           style: 'destructive',
           onPress: async () => {
             try {
               await apiService.post(`quests/fail/${questId}/`);
-              Alert.alert('Квест провален', 'Квест отмечен как проваленный.');
+              Alert.alert(
+                t('quests.alerts.failedTitle'),
+                t('quests.alerts.failedBody')
+              );
 
               await Promise.all([
                 fetchQuests(),
@@ -178,8 +177,8 @@ export default function AIQuestListScreen({ navigation }) {
               if (handleSessionError(error)) return;
               console.error('Error failing quest', error);
               Alert.alert(
-                'Ошибка',
-                'Не удалось отметить квест как проваленный.'
+                t('quests.alerts.errorTitle'),
+                t('quests.alerts.failFail')
               );
             }
           },
@@ -188,7 +187,6 @@ export default function AIQuestListScreen({ navigation }) {
     );
   };
 
-  // фильтрация квестов мемоизирована
   const filteredQuests = useMemo(() => {
     if (activeFilter === 'ALL') return quests;
     return quests.filter((quest) => quest.quest_type === activeFilter);
@@ -227,13 +225,13 @@ export default function AIQuestListScreen({ navigation }) {
   const getQuestTypeText = (type) => {
     switch (type) {
       case 'DAILY':
-        return 'ЕЖЕДНЕВНЫЙ';
+        return t('quests.types.daily');
       case 'URGENT':
-        return 'СРОЧНЫЙ';
+        return t('quests.types.urgent');
       case 'MAIN':
-        return 'ОСНОВНОЙ';
+        return t('quests.types.main');
       case 'CHALLENGE':
-        return 'ЧЕЛЛЕНДЖ';
+        return t('quests.types.challenge');
       default:
         return type;
     }
@@ -252,15 +250,26 @@ export default function AIQuestListScreen({ navigation }) {
     }
   };
 
+  const getStatusText = (status) => {
+    switch (status) {
+      case 'ACTIVE':
+        return t('quests.status.active');
+      case 'COMPLETED':
+        return t('quests.status.completed');
+      case 'FAILED':
+        return t('quests.status.failed');
+      default:
+        return status;
+    }
+  };
+
   const getTimeRemaining = (expiresAt) => {
     if (!expiresAt) return null;
 
     const now = moment();
     const expiry = moment(expiresAt);
 
-    if (now > expiry) {
-      return 'Просрочено';
-    }
+    if (now > expiry) return t('quests.time.expired');
 
     const duration = moment.duration(expiry.diff(now));
     const hours = Math.floor(duration.asHours());
@@ -268,10 +277,10 @@ export default function AIQuestListScreen({ navigation }) {
 
     if (hours > 24) {
       const days = Math.floor(hours / 24);
-      return `${days} дн. ${hours % 24} ч.`;
+      return t('quests.time.daysHours', { days, hours: hours % 24 });
     }
 
-    return `${hours} ч. ${minutes} мин.`;
+    return t('quests.time.hoursMinutes', { hours, minutes });
   };
 
   const isExpired = (expiresAt) => {
@@ -279,15 +288,12 @@ export default function AIQuestListScreen({ navigation }) {
     return moment() > moment(expiresAt);
   };
 
-  const shouldShowCompletedDate = (status, completedAt) => {
-    return status !== 'ACTIVE' && completedAt;
-  };
+  const shouldShowCompletedDate = (status, completedAt) =>
+    status !== 'ACTIVE' && completedAt;
 
-  const formatCompletedDate = (completedAt) => {
-    return moment(completedAt).format('DD MMM YYYY, HH:mm');
-  };
+  const formatCompletedDate = (completedAt) =>
+    moment(completedAt).format('DD MMM YYYY, HH:mm');
 
-  // модалка деталей квеста
   const QuestDetailsModal = () => {
     if (!selectedQuest) return null;
 
@@ -305,10 +311,10 @@ export default function AIQuestListScreen({ navigation }) {
               style={styles.modalContent}
             >
               <View style={styles.modalHeader}>
-                <Text style={styles.modalTitle}>Детали квеста</Text>
-                <TouchableOpacity
-                  onPress={() => setQuestDetailsVisible(false)}
-                >
+                <Text style={styles.modalTitle}>
+                  {t('quests.details.title')}
+                </Text>
+                <TouchableOpacity onPress={() => setQuestDetailsVisible(false)}>
                   <MaterialIcons name="close" size={24} color="#ffffff" />
                 </TouchableOpacity>
               </View>
@@ -316,7 +322,9 @@ export default function AIQuestListScreen({ navigation }) {
               {loadingDetails ? (
                 <View style={styles.loadingContainer}>
                   <ActivityIndicator size="large" color="#4dabf7" />
-                  <Text style={styles.loadingText}>Загрузка...</Text>
+                  <Text style={styles.loadingText}>
+                    {t('quests.loading.details')}
+                  </Text>
                 </View>
               ) : (
                 <ScrollView style={styles.modalScrollView}>
@@ -336,6 +344,7 @@ export default function AIQuestListScreen({ navigation }) {
                         {getQuestTypeText(selectedQuest.quest_type)}
                       </Text>
                     </View>
+
                     <View
                       style={[
                         styles.statusBadge,
@@ -347,16 +356,14 @@ export default function AIQuestListScreen({ navigation }) {
                       ]}
                     >
                       <Text style={styles.statusText}>
-                        {selectedQuest.status === 'ACTIVE'
-                          ? 'АКТИВЕН'
-                          : selectedQuest.status === 'COMPLETED'
-                          ? 'ВЫПОЛНЕН'
-                          : 'ПРОВАЛЕН'}
+                        {getStatusText(selectedQuest.status)}
                       </Text>
                     </View>
                   </View>
 
-                  <Text style={styles.detailsTitle}>{selectedQuest.title}</Text>
+                  <Text style={styles.detailsTitle}>
+                    {selectedQuest.title}
+                  </Text>
 
                   {selectedQuest.quest_type === 'URGENT' &&
                     selectedQuest.expires_at && (
@@ -375,15 +382,13 @@ export default function AIQuestListScreen({ navigation }) {
                           }
                         />
                         <Text style={styles.detailsInfoText}>
-                          Срок выполнения:{' '}
+                          {t('quests.details.deadline')}{" "}
                           {moment(selectedQuest.expires_at).format(
                             'DD MMM YYYY, HH:mm'
                           )}
                           {isExpired(selectedQuest.expires_at)
-                            ? ' (Просрочено)'
-                            : ` (${getTimeRemaining(
-                                selectedQuest.expires_at
-                              )} осталось)`}
+                            ? ` (${t('quests.time.expired')})`
+                            : ` (${getTimeRemaining(selectedQuest.expires_at)} ${t('quests.time.left')})`}
                         </Text>
                       </View>
                     )}
@@ -391,7 +396,7 @@ export default function AIQuestListScreen({ navigation }) {
                   <View style={styles.detailsInfoRow}>
                     <MaterialIcons name="event" size={18} color="#4dabf7" />
                     <Text style={styles.detailsInfoText}>
-                      Создан:{' '}
+                      {t('quests.details.created')}{" "}
                       {moment(selectedQuest.created_at).format(
                         'DD MMM YYYY, HH:mm'
                       )}
@@ -418,8 +423,8 @@ export default function AIQuestListScreen({ navigation }) {
                       />
                       <Text style={styles.detailsInfoText}>
                         {selectedQuest.status === 'COMPLETED'
-                          ? 'Выполнен: '
-                          : 'Провален: '}
+                          ? t('quests.details.completedAt')
+                          : t('quests.details.failedAt')}
                         {formatCompletedDate(selectedQuest.completed_at)}
                       </Text>
                     </View>
@@ -427,12 +432,16 @@ export default function AIQuestListScreen({ navigation }) {
 
                   <View style={styles.divider} />
 
-                  <Text style={styles.sectionTitle}>Описание</Text>
+                  <Text style={styles.sectionTitle}>
+                    {t('quests.details.description')}
+                  </Text>
                   <Text style={styles.detailsDescription}>
                     {selectedQuest.description}
                   </Text>
 
-                  <Text style={styles.sectionTitle}>Награды</Text>
+                  <Text style={styles.sectionTitle}>
+                    {t('quests.details.rewards')}
+                  </Text>
                   <View style={styles.detailsRewardsContainer}>
                     {selectedQuest.reward_points > 0 && (
                       <View style={styles.detailsRewardItem}>
@@ -459,7 +468,7 @@ export default function AIQuestListScreen({ navigation }) {
                   {selectedQuest.penalty_info && (
                     <>
                       <Text style={styles.sectionTitle}>
-                        Штрафы при провале
+                        {t('quests.details.penalties')}
                       </Text>
                       <View style={styles.detailsPenaltyContainer}>
                         <MaterialIcons
@@ -496,7 +505,7 @@ export default function AIQuestListScreen({ navigation }) {
                             color="#ffffff"
                           />
                           <Text style={styles.actionButtonText}>
-                            ВЫПОЛНИТЬ
+                            {t('quests.buttons.complete')}
                           </Text>
                         </LinearGradient>
                       </TouchableOpacity>
@@ -518,7 +527,7 @@ export default function AIQuestListScreen({ navigation }) {
                             color="#ffffff"
                           />
                           <Text style={styles.actionButtonText}>
-                            ПРОВАЛИТЬ
+                            {t('quests.buttons.fail')}
                           </Text>
                         </LinearGradient>
                       </TouchableOpacity>
@@ -535,9 +544,9 @@ export default function AIQuestListScreen({ navigation }) {
 
   return (
     <LinearGradient colors={['#0c0e1a', '#1a1d33']} style={styles.container}>
-      <Text style={styles.headerText}>QUESTS</Text>
+      <Text style={styles.headerText}>{t('quests.header')}</Text>
 
-      {/* Фильтры */}
+      {/* Filters */}
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
@@ -556,116 +565,47 @@ export default function AIQuestListScreen({ navigation }) {
               activeFilter === 'ALL' && styles.activeFilterText,
             ]}
           >
-            ALL
+            {t('quests.filters.all')}
           </Text>
         </TouchableOpacity>
 
-        <TouchableOpacity
-          style={[
-            styles.filterButton,
-            activeFilter === 'DAILY' && styles.activeFilter,
-            activeFilter === 'DAILY' && { borderColor: '#4caf50' },
-          ]}
+        <FilterButton
+          active={activeFilter === 'DAILY'}
+          color="#4caf50"
+          icon="replay"
+          label={t('quests.filters.daily')}
           onPress={() => setActiveFilter('DAILY')}
-        >
-          <MaterialIcons
-            name="replay"
-            size={16}
-            color={activeFilter === 'DAILY' ? '#4caf50' : '#ffffff'}
-            style={styles.filterIcon}
-          />
-          <Text
-            style={[
-              styles.filterText,
-              activeFilter === 'DAILY' && styles.activeFilterText,
-              activeFilter === 'DAILY' && { color: '#4caf50' },
-            ]}
-          >
-            DAILY
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[
-            styles.filterButton,
-            activeFilter === 'URGENT' && styles.activeFilter,
-            activeFilter === 'URGENT' && { borderColor: '#f44336' },
-          ]}
+        />
+        <FilterButton
+          active={activeFilter === 'URGENT'}
+          color="#f44336"
+          icon="timer"
+          label={t('quests.filters.urgent')}
           onPress={() => setActiveFilter('URGENT')}
-        >
-          <MaterialIcons
-            name="timer"
-            size={16}
-            color={activeFilter === 'URGENT' ? '#f44336' : '#ffffff'}
-            style={styles.filterIcon}
-          />
-          <Text
-            style={[
-              styles.filterText,
-              activeFilter === 'URGENT' && styles.activeFilterText,
-              activeFilter === 'URGENT' && { color: '#f44336' },
-            ]}
-          >
-            URGENT
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[
-            styles.filterButton,
-            activeFilter === 'MAIN' && styles.activeFilter,
-            activeFilter === 'MAIN' && { borderColor: '#ffc107' },
-          ]}
+        />
+        <FilterButton
+          active={activeFilter === 'MAIN'}
+          color="#ffc107"
+          icon="star"
+          label={t('quests.filters.main')}
           onPress={() => setActiveFilter('MAIN')}
-        >
-          <MaterialIcons
-            name="star"
-            size={16}
-            color={activeFilter === 'MAIN' ? '#ffc107' : '#ffffff'}
-            style={styles.filterIcon}
-          />
-          <Text
-            style={[
-              styles.filterText,
-              activeFilter === 'MAIN' && styles.activeFilterText,
-              activeFilter === 'MAIN' && { color: '#ffc107' },
-            ]}
-          >
-            BASIC
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[
-            styles.filterButton,
-            activeFilter === 'CHALLENGE' && styles.activeFilter,
-            activeFilter === 'CHALLENGE' && { borderColor: '#9c27b0' },
-          ]}
+        />
+        <FilterButton
+          active={activeFilter === 'CHALLENGE'}
+          color="#9c27b0"
+          icon="flag"
+          label={t('quests.filters.challenge')}
           onPress={() => setActiveFilter('CHALLENGE')}
-        >
-          <MaterialIcons
-            name="flag"
-            size={16}
-            color={activeFilter === 'CHALLENGE' ? '#9c27b0' : '#ffffff'}
-            style={styles.filterIcon}
-          />
-          <Text
-            style={[
-              styles.filterText,
-              activeFilter === 'CHALLENGE' && styles.activeFilterText,
-              activeFilter === 'CHALLENGE' && { color: '#9c27b0' },
-            ]}
-          >
-            CHALLENGES
-          </Text>
-        </TouchableOpacity>
+        />
       </ScrollView>
 
-      {/* Список квестов */}
+      {/* Quests list */}
       <ScrollView style={styles.questsContainer}>
         {loading ? (
           <View style={styles.loadingContainer}>
-            <Text style={styles.loadingText}>Loading quests...</Text>
+            <Text style={styles.loadingText}>
+              {t('quests.loading.list')}
+            </Text>
             <ActivityIndicator
               size="large"
               color="#4dabf7"
@@ -680,9 +620,11 @@ export default function AIQuestListScreen({ navigation }) {
               color="#4dabf7"
               style={styles.emptyIcon}
             />
-            <Text style={styles.noQuestsText}>There are no active quests</Text>
+            <Text style={styles.noQuestsText}>
+              {t('quests.empty.title')}
+            </Text>
             <Text style={styles.noQuestsSubtext}>
-              Come back later for new quests
+              {t('quests.empty.subtitle')}
             </Text>
           </View>
         ) : (
@@ -723,11 +665,7 @@ export default function AIQuestListScreen({ navigation }) {
                         ]}
                       >
                         <Text style={styles.statusText}>
-                          {quest.status === 'ACTIVE'
-                            ? 'ACTIVE'
-                            : quest.status === 'COMPLETED'
-                            ? 'COMPLETED'
-                            : 'FAILED'}
+                          {getStatusText(quest.status)}
                         </Text>
                       </View>
                     </View>
@@ -738,8 +676,7 @@ export default function AIQuestListScreen({ navigation }) {
                         <View
                           style={[
                             styles.timeRemainingContainer,
-                            isExpired(quest.expires_at) &&
-                              styles.expiredContainer,
+                            isExpired(quest.expires_at) && styles.expiredContainer,
                           ]}
                         >
                           <MaterialIcons
@@ -758,8 +695,7 @@ export default function AIQuestListScreen({ navigation }) {
                           <Text
                             style={[
                               styles.timeRemainingText,
-                              isExpired(quest.expires_at) &&
-                                styles.expiredText,
+                              isExpired(quest.expires_at) && styles.expiredText,
                             ]}
                           >
                             {getTimeRemaining(quest.expires_at)}
@@ -868,12 +804,10 @@ export default function AIQuestListScreen({ navigation }) {
                       colors={['#4caf50', '#388e3c']}
                       style={styles.buttonGradient}
                     >
-                      <MaterialIcons
-                        name="check"
-                        size={18}
-                        color="#ffffff"
-                      />
-                      <Text style={styles.actionButtonText}>COMPLETE</Text>
+                      <MaterialIcons name="check" size={18} color="#ffffff" />
+                      <Text style={styles.actionButtonText}>
+                        {t('quests.buttons.complete')}
+                      </Text>
                     </LinearGradient>
                   </TouchableOpacity>
 
@@ -885,12 +819,10 @@ export default function AIQuestListScreen({ navigation }) {
                       colors={['#f44336', '#d32f2f']}
                       style={styles.buttonGradient}
                     >
-                      <MaterialIcons
-                        name="close"
-                        size={18}
-                        color="#ffffff"
-                      />
-                      <Text style={styles.actionButtonText}>FAIL</Text>
+                      <MaterialIcons name="close" size={18} color="#ffffff" />
+                      <Text style={styles.actionButtonText}>
+                        {t('quests.buttons.fail')}
+                      </Text>
                     </LinearGradient>
                   </TouchableOpacity>
                 </View>
@@ -905,11 +837,38 @@ export default function AIQuestListScreen({ navigation }) {
   );
 }
 
+// small helper component to keep filter JSX clean
+function FilterButton({ active, color, icon, label, onPress }) {
+  return (
+    <TouchableOpacity
+      style={[
+        styles.filterButton,
+        active && styles.activeFilter,
+        active && { borderColor: color },
+      ]}
+      onPress={onPress}
+    >
+      <MaterialIcons
+        name={icon}
+        size={16}
+        color={active ? color : '#ffffff'}
+        style={styles.filterIcon}
+      />
+      <Text
+        style={[
+          styles.filterText,
+          active && styles.activeFilterText,
+          active && { color },
+        ]}
+      >
+        {label}
+      </Text>
+    </TouchableOpacity>
+  );
+}
+
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    paddingTop: 15,
-  },
+  container: { flex: 1, paddingTop: 15 },
   headerText: {
     fontFamily: 'System',
     fontSize: 22,
@@ -944,20 +903,16 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(77, 171, 247, 0.2)',
     borderColor: '#4dabf7',
   },
-  filterIcon: {
-    marginRight: 4,
-  },
+  filterIcon: { marginRight: 4 },
   filterText: {
     color: '#e0e0e0',
     fontSize: 12,
     fontWeight: '600',
   },
-  activeFilterText: {
-    color: '#64b5f6',
-  },
-  questsContainer: {
-    flex: 1,
-  },
+  activeFilterText: { color: '#64b5f6' },
+
+  questsContainer: { flex: 1 },
+
   loadingContainer: {
     alignItems: 'center',
     justifyContent: 'center',
@@ -971,17 +926,14 @@ const styles = StyleSheet.create({
     fontFamily: 'System',
     letterSpacing: 1,
   },
-  loadingIndicator: {
-    marginTop: 10,
-  },
+  loadingIndicator: { marginTop: 10 },
+
   emptyContainer: {
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: 50,
   },
-  emptyIcon: {
-    marginBottom: 15,
-  },
+  emptyIcon: { marginBottom: 15 },
   noQuestsText: {
     color: '#ffffff',
     textAlign: 'center',
@@ -996,6 +948,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontFamily: 'System',
   },
+
   questWrapper: {
     marginHorizontal: 15,
     marginBottom: 15,
@@ -1003,9 +956,9 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.22, // чуть легче тень
+    shadowOpacity: 0.22,
     shadowRadius: 4,
-    elevation: 4, // легче по сравнению с 8
+    elevation: 4,
   },
   questItem: {
     borderLeftWidth: 4,
@@ -1064,9 +1017,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginLeft: 4,
   },
-  expiredText: {
-    color: '#f44336',
-  },
+  expiredText: { color: '#f44336' },
   completedDateContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1141,16 +1092,14 @@ const styles = StyleSheet.create({
     marginLeft: 'auto',
     alignSelf: 'center',
   },
+
   actionButtonsContainer: {
     flexDirection: 'row',
     borderBottomLeftRadius: 10,
     borderBottomRightRadius: 10,
     overflow: 'hidden',
   },
-  actionButton: {
-    flex: 1,
-    height: 40,
-  },
+  actionButton: { flex: 1, height: 40 },
   completeButton: {},
   failButton: {},
   buttonGradient: {
@@ -1171,7 +1120,6 @@ const styles = StyleSheet.create({
     fontFamily: 'System',
   },
 
-  // модалка
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.7)',
@@ -1190,10 +1138,7 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 10,
   },
-  modalContent: {
-    padding: 15,
-    borderRadius: 12,
-  },
+  modalContent: { padding: 15, borderRadius: 12 },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -1210,9 +1155,8 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
     fontFamily: 'System',
   },
-  modalScrollView: {
-    maxHeight: '100%',
-  },
+  modalScrollView: { maxHeight: '100%' },
+
   detailsTopRow: {
     flexDirection: 'row',
     justifyContent: 'flex-start',

@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import GroupCard from './GroupCard';
+import { useTranslation } from 'react-i18next';
 
 const COLORS = {
   textPrimary: '#ffffff',
@@ -132,8 +133,10 @@ export default function GroupList({
   onPressOpen,
   onPressJoin,
   onPressLeave,
-  onPressDelete, // <- пробрасываем дальше, появится только у владельца
+  onPressDelete,
 }) {
+  const { t } = useTranslation();
+
   const renderItem = ({ item }) => (
     <GroupCard
       item={item}
@@ -160,10 +163,10 @@ export default function GroupList({
       }}
     >
       <Text style={{ color: COLORS.textSecondary, marginBottom: 8 }}>
-        Ничего не найдено.
+        {t('groups.list.empty.title')}
       </Text>
       <Text style={{ color: COLORS.textSecondary, fontSize: 12 }}>
-        Попробуй изменить запрос или вкладку.
+        {t('groups.list.empty.subtitle')}
       </Text>
     </View>
   ) : null;
@@ -193,9 +196,8 @@ export default function GroupList({
       }
       contentContainerStyle={{
         paddingTop: 8,
-        paddingBottom: 24, // немного ниже, чтобы FAB/табы не перекрывали
+        paddingBottom: 24,
       }}
-      // Покажем скелетоны, если загружаем и данных ещё нет
       ListHeaderComponent={
         loading && (!data || data.length === 0) ? (
           <View style={{ paddingTop: 8 }}>

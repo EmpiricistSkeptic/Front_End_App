@@ -14,11 +14,14 @@ import {
   Platform,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useTranslation } from 'react-i18next';
 import { register } from '../services/authService';
 
 const { width, height } = Dimensions.get('window');
 
 export default function RegistrationScreen({ navigation }) {
+  const { t } = useTranslation();
+
   const [username, setUsername] = useState('');
   const [email, setEmail]       = useState('');
   const [password, setPassword] = useState('');
@@ -52,24 +55,29 @@ export default function RegistrationScreen({ navigation }) {
     const trimmedConfirmPassword = confirmPassword.trim();
 
     // простая фронтенд-валидация
-    if (!trimmedUsername || !trimmedEmail || !trimmedPassword || !trimmedConfirmPassword) {
-      setErrorMessage('Пожалуйста, заполните все поля');
+    if (
+      !trimmedUsername ||
+      !trimmedEmail ||
+      !trimmedPassword ||
+      !trimmedConfirmPassword
+    ) {
+      setErrorMessage(t('registration.errors.fillAllFields'));
       return;
     }
 
     if (trimmedPassword !== trimmedConfirmPassword) {
-      setErrorMessage('Пароли не совпадают');
+      setErrorMessage(t('registration.errors.passwordsMismatch'));
       return;
     }
 
     if (trimmedPassword.length < 6) {
-      setErrorMessage('Пароль должен быть не короче 6 символов');
+      setErrorMessage(t('registration.errors.passwordTooShort'));
       return;
     }
 
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(trimmedEmail)) {
-      setErrorMessage('Пожалуйста, введите корректный email');
+      setErrorMessage(t('registration.errors.invalidEmail'));
       return;
     }
 
@@ -83,16 +91,20 @@ export default function RegistrationScreen({ navigation }) {
         password2: trimmedConfirmPassword,
       });
 
-      Alert.alert('Успешно', 'Вы успешно зарегистрировались!', [
-        { text: 'OK', onPress: () => navigation.navigate('Login') },
-      ]);
+      Alert.alert(
+        t('registration.alerts.successTitle'),
+        t('registration.alerts.successMessage'),
+        [
+          { text: 'OK', onPress: () => navigation.navigate('Login') },
+        ]
+      );
     } catch (error) {
       const rawMessage = error?.message || '';
 
-      let msg = 'Не удалось зарегистрироваться. Попробуйте ещё раз.';
+      let msg = t('registration.errors.genericFail');
 
       if (rawMessage.includes('Network request failed')) {
-        msg = 'Не удалось подключиться к серверу. Проверьте интернет-соединение.';
+        msg = t('registration.errors.networkFail');
       } else if (rawMessage) {
         // показываем то, что собрал authService.register
         msg = rawMessage;
@@ -144,7 +156,9 @@ export default function RegistrationScreen({ navigation }) {
             {/* Header */}
             <View style={styles.windowHeader}>
               <View style={styles.headerDot} />
-              <Text style={styles.headerText}>SYSTEM</Text>
+              <Text style={styles.headerText}>
+                {t('registration.systemHeader')}
+              </Text>
             </View>
 
             {/* Скролл-контент чтобы не ломаться на маленьких экранах */}
@@ -152,13 +166,20 @@ export default function RegistrationScreen({ navigation }) {
               style={styles.contentScroll}
               contentContainerStyle={styles.windowContent}
               keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
             >
-              <Text style={styles.appTitle}>REGISTRATION</Text>
+              <Text style={styles.appTitle}>
+                {t('registration.title')}
+              </Text>
 
               <View style={styles.divider} />
 
-              <Text style={styles.welcomeText}>NEW HUNTER</Text>
-              <Text style={styles.subtitleText}>Create your hunter profile</Text>
+              <Text style={styles.welcomeText}>
+                {t('registration.subtitleTitle')}
+              </Text>
+              <Text style={styles.subtitleText}>
+                {t('registration.subtitleText')}
+              </Text>
 
               {errorMessage ? (
                 <View style={styles.errorContainer}>
@@ -168,10 +189,12 @@ export default function RegistrationScreen({ navigation }) {
 
               <View style={styles.formContainer}>
                 <View style={styles.inputContainer}>
-                  <Text style={styles.inputLabel}>USERNAME</Text>
+                  <Text style={styles.inputLabel}>
+                    {t('registration.fields.usernameLabel')}
+                  </Text>
                   <TextInput
                     style={styles.inputField}
-                    placeholder="Enter username"
+                    placeholder={t('registration.fields.usernamePlaceholder')}
                     placeholderTextColor="rgba(200, 214, 229, 0.5)"
                     value={username}
                     onChangeText={setUsername}
@@ -185,11 +208,13 @@ export default function RegistrationScreen({ navigation }) {
                 </View>
 
                 <View style={styles.inputContainer}>
-                  <Text style={styles.inputLabel}>EMAIL</Text>
+                  <Text style={styles.inputLabel}>
+                    {t('registration.fields.emailLabel')}
+                  </Text>
                   <TextInput
                     ref={emailInputRef}
                     style={styles.inputField}
-                    placeholder="Enter email"
+                    placeholder={t('registration.fields.emailPlaceholder')}
                     placeholderTextColor="rgba(200, 214, 229, 0.5)"
                     keyboardType="email-address"
                     value={email}
@@ -204,11 +229,13 @@ export default function RegistrationScreen({ navigation }) {
                 </View>
 
                 <View style={styles.inputContainer}>
-                  <Text style={styles.inputLabel}>PASSWORD</Text>
+                  <Text style={styles.inputLabel}>
+                    {t('registration.fields.passwordLabel')}
+                  </Text>
                   <TextInput
                     ref={passwordInputRef}
                     style={styles.inputField}
-                    placeholder="Enter password"
+                    placeholder={t('registration.fields.passwordPlaceholder')}
                     placeholderTextColor="rgba(200, 214, 229, 0.5)"
                     secureTextEntry
                     value={password}
@@ -223,11 +250,13 @@ export default function RegistrationScreen({ navigation }) {
                 </View>
 
                 <View style={styles.inputContainer}>
-                  <Text style={styles.inputLabel}>CONFIRM PASSWORD</Text>
+                  <Text style={styles.inputLabel}>
+                    {t('registration.fields.confirmPasswordLabel')}
+                  </Text>
                   <TextInput
                     ref={confirmInputRef}
                     style={styles.inputField}
-                    placeholder="Confirm password"
+                    placeholder={t('registration.fields.confirmPasswordPlaceholder')}
                     placeholderTextColor="rgba(200, 214, 229, 0.5)"
                     secureTextEntry
                     value={confirmPassword}
@@ -244,12 +273,20 @@ export default function RegistrationScreen({ navigation }) {
 
               <View style={styles.statsContainer}>
                 <View style={styles.statItem}>
-                  <Text style={styles.statLabel}>STATUS</Text>
-                  <Text style={styles.statValue}>REGISTRATION</Text>
+                  <Text style={styles.statLabel}>
+                    {t('registration.stats.statusLabel')}
+                  </Text>
+                  <Text style={styles.statValue}>
+                    {t('registration.stats.statusValue')}
+                  </Text>
                 </View>
                 <View style={styles.statItem}>
-                  <Text style={styles.statLabel}>LEVEL</Text>
-                  <Text style={styles.statValue}>INIT</Text>
+                  <Text style={styles.statLabel}>
+                    {t('registration.stats.levelLabel')}
+                  </Text>
+                  <Text style={styles.statValue}>
+                    {t('registration.stats.levelValue')}
+                  </Text>
                 </View>
               </View>
 
@@ -268,7 +305,9 @@ export default function RegistrationScreen({ navigation }) {
                     {loading ? (
                       <ActivityIndicator color="#ffffff" size="small" />
                     ) : (
-                      <Text style={styles.buttonText}>REGISTER</Text>
+                      <Text style={styles.buttonText}>
+                        {t('registration.buttons.register')}
+                      </Text>
                     )}
                   </LinearGradient>
                   <View style={styles.buttonGlow} />
@@ -276,7 +315,7 @@ export default function RegistrationScreen({ navigation }) {
 
                 <TouchableOpacity style={styles.loginLink} onPress={goToLogin}>
                   <Text style={styles.loginLinkText}>
-                    Already have an account? LOG IN
+                    {t('registration.buttons.toLogin')}
                   </Text>
                 </TouchableOpacity>
               </View>
@@ -284,7 +323,9 @@ export default function RegistrationScreen({ navigation }) {
 
             {/* Footer */}
             <View style={styles.footer}>
-              <Text style={styles.footerText}>HUNTER ASSOCIATION</Text>
+              <Text style={styles.footerText}>
+                {t('registration.footer')}
+              </Text>
             </View>
           </View>
         </KeyboardAvoidingView>
@@ -294,17 +335,15 @@ export default function RegistrationScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  background: {
-    flex: 1,
-  },
+  container: { flex: 1 },
+  background: { flex: 1 },
+
   keyboardAvoider: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
   },
+
   particlesContainer: {
     position: 'absolute',
     width,
@@ -315,6 +354,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#4dabf7',
     borderRadius: 50,
   },
+
   statusWindow: {
     width: width * 0.95,         // как на LoginScreen
     height: height * 0.9,
@@ -345,14 +385,14 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     letterSpacing: 1,
   },
-  contentScroll: {
-    flex: 1,
-  },
+
+  contentScroll: { flex: 1 },
   windowContent: {
     padding: 20,
     alignItems: 'center',
     flexGrow: 1,
   },
+
   appTitle: {
     color: '#4dabf7',
     fontSize: 28,
@@ -380,14 +420,14 @@ const styles = StyleSheet.create({
     color: '#c8d6e5',
     fontSize: 14,
     marginBottom: 15,
+    textAlign: 'center',
   },
+
   formContainer: {
     width: '100%',
     marginBottom: 15,
   },
-  inputContainer: {
-    marginBottom: 12,
-  },
+  inputContainer: { marginBottom: 12 },
   inputLabel: {
     color: '#c8d6e5',
     fontSize: 12,
@@ -405,6 +445,7 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     fontSize: 14,
   },
+
   statsContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -412,9 +453,7 @@ const styles = StyleSheet.create({
     marginBottom: 20,
     paddingHorizontal: 10,
   },
-  statItem: {
-    alignItems: 'center',
-  },
+  statItem: { alignItems: 'center' },
   statLabel: {
     color: '#c8d6e5',
     fontSize: 12,
@@ -425,18 +464,15 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
   },
-  buttonsContainer: {
-    width: '100%',
-  },
+
+  buttonsContainer: { width: '100%' },
   button: {
     height: 50,
     borderRadius: 6,
     overflow: 'hidden',
     position: 'relative',
   },
-  disabledButton: {
-    opacity: 0.7,
-  },
+  disabledButton: { opacity: 0.7 },
   buttonGradient: {
     flex: 1,
     justifyContent: 'center',
@@ -450,10 +486,7 @@ const styles = StyleSheet.create({
   },
   buttonGlow: {
     position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
+    top: 0, left: 0, right: 0, bottom: 0,
     borderRadius: 6,
     borderWidth: 1,
     borderColor: '#4dabf7',
@@ -462,6 +495,7 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     shadowOffset: { width: 0, height: 0 },
   },
+
   loginLink: {
     marginTop: 15,
     alignItems: 'center',
@@ -470,6 +504,7 @@ const styles = StyleSheet.create({
     color: '#4dabf7',
     fontSize: 14,
   },
+
   footer: {
     backgroundColor: 'rgba(16, 20, 45, 0.9)',
     padding: 10,
@@ -483,6 +518,7 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     letterSpacing: 1,
   },
+
   errorContainer: {
     backgroundColor: 'rgba(220, 53, 69, 0.2)',
     padding: 10,

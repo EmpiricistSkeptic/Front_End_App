@@ -1,0 +1,947 @@
+{
+  "welcome": {
+    "systemLabel": "SISTEMA",
+    "appTitle": "SUBE DE NIVEL",
+    "welcomeTitle": "BIENVENIDO, CAZADOR",
+    "subtitle": "Inicia sesión o regístrate para continuar",
+    "stats": {
+      "statusLabel": "ESTADO",
+      "statusValue": "EN ESPERA",
+      "accessLabel": "ACCESO",
+      "accessValue": "PENDIENTE"
+    },
+    "buttons": {
+      "login": "INICIAR SESIÓN",
+      "register": "REGISTRARSE"
+    },
+    "footer": "ASOCIACIÓN DE CAZADORES"
+  },
+
+  "registration": {
+    "systemHeader": "SISTEMA",
+    "title": "REGISTRO",
+    "subtitleTitle": "NUEVO CAZADOR",
+    "subtitleText": "Crea tu perfil de cazador",
+
+    "fields": {
+      "usernameLabel": "USUARIO",
+      "usernamePlaceholder": "Introduce tu usuario",
+      "emailLabel": "EMAIL",
+      "emailPlaceholder": "Introduce tu email",
+      "passwordLabel": "CONTRASEÑA",
+      "passwordPlaceholder": "Introduce tu contraseña",
+      "confirmPasswordLabel": "CONFIRMAR CONTRASEÑA",
+      "confirmPasswordPlaceholder": "Confirma tu contraseña"
+    },
+
+    "stats": {
+      "statusLabel": "ESTADO",
+      "statusValue": "REGISTRO",
+      "levelLabel": "NIVEL",
+      "levelValue": "INICIAL"
+    },
+
+    "buttons": {
+      "register": "REGISTRARSE",
+      "toLogin": "¿Ya tienes cuenta? INICIA SESIÓN"
+    },
+
+    "alerts": {
+      "successTitle": "Éxito",
+      "successMessage": "¡Te has registrado correctamente!"
+    },
+
+    "errors": {
+      "fillAllFields": "Por favor, completa todos los campos.",
+      "passwordsMismatch": "Las contraseñas no coinciden.",
+      "passwordTooShort": "La contraseña debe tener al menos 6 caracteres.",
+      "invalidEmail": "Introduce un email válido.",
+      "genericFail": "No se pudo registrar. Inténtalo de nuevo.",
+      "networkFail": "No se pudo conectar con el servidor. Revisa tu conexión."
+    },
+
+    "footer": "ASOCIACIÓN DE CAZADORES"
+  },
+
+  "login": {
+    "systemHeader": "SISTEMA",
+    "title": "INICIAR SESIÓN",
+
+    "fields": {
+      "usernameLabel": "USUARIO",
+      "usernamePlaceholder": "Introduce tu usuario",
+      "passwordLabel": "CONTRASEÑA",
+      "passwordPlaceholder": "Introduce tu contraseña"
+    },
+
+    "stats": {
+      "statusLabel": "ESTADO",
+      "statusValue": "VERIFICACIÓN",
+      "securityLabel": "SEGURIDAD",
+      "securityValue": "NIVEL 1"
+    },
+
+    "buttons": {
+      "login": "ENTRAR",
+      "toRegistration": "¿No tienes cuenta? REGÍSTRATE"
+    },
+
+    "errors": {
+      "fillAllFields": "Por favor, introduce usuario y contraseña.",
+      "networkFail": "No se pudo contactar con el servidor. Revisa tu conexión.",
+      "invalidCredentials": "Usuario o contraseña incorrectos.",
+      "serverFail": "Error del servidor. Inténtalo más tarde.",
+      "genericFail": "No se pudo iniciar sesión. Revisa tus datos o conexión."
+    },
+
+    "footer": "ASOCIACIÓN DE CAZADORES"
+  },
+
+  "home": {
+    "hunterRankLabel": "RANGO DE CAZADOR",
+    "levelText": "NIV {{level}}",
+    "rankText": "RANGO {{rank}}",
+    "combatPowerLabel": "PODER DE COMBATE",
+    "expFraction": "{{points}} / {{total}}",
+    "expPercent": "{{percent}}%",
+    "tabs": {
+      "tasks": "TAREAS",
+      "quests": "MISIONES",
+      "habits": "HÁBITOS"
+    }
+  },
+
+  "tasks": {
+    "activeTasksTitle": "TAREAS ACTIVAS",
+    "totalLabel": "Total: {{count}}",
+    "loadingTasks": "Cargando tareas...",
+    "noTasks": "No hay tareas activas. ¡Crea una nueva!",
+    "pointsReward": "+{{points}} PUNTOS",
+    "previous": "Anterior",
+    "next": "Siguiente",
+    "pageLabel": "Página {{page}}",
+
+    "modal": {
+      "deadline": "Fecha límite:",
+      "pointsReward": "Recompensa:",
+      "category": "Categoría:",
+      "targetAmount": "Objetivo:",
+      "status": "Estado:",
+      "lastUpdated": "Última actualización:",
+      "description": "Descripción:",
+      "edit": "Editar",
+      "delete": "Eliminar",
+      "completeTask": "COMPLETAR TAREA",
+      "completed": "COMPLETADA",
+      "inProgress": "EN PROGRESO"
+    },
+
+    "alerts": {
+      "successTitle": "Éxito",
+      "errorTitle": "Error",
+      "infoTitle": "Info",
+      "loadError": "No se pudieron cargar las tareas.",
+      "deleteSuccess": "Tarea eliminada correctamente.",
+      "deleteError": "No se pudo eliminar la tarea. Inténtalo de nuevo.",
+      "completeSuccess": "¡Tarea completada! Ganaste {{points}} PUNTOS.",
+      "alreadyCompleted": "Esta tarea ya está completada.",
+      "completeError": "No se pudo completar la tarea. Inténtalo de nuevo."
+    },
+
+    "difficultyNames": {
+      "S": "Suprema",
+      "A": "Avanzada",
+      "B": "Principiante",
+      "C": "Casual",
+      "D": "Diaria",
+      "E": "Fácil",
+      "unknown": "Desconocida"
+    }
+  },
+
+  "quests": {
+    "header": "MISIONES",
+
+    "filters": {
+      "all": "TODAS",
+      "daily": "DIARIAS",
+      "urgent": "URGENTES",
+      "main": "PRINCIPALES",
+      "challenge": "DESAFÍOS"
+    },
+
+    "types": {
+      "daily": "DIARIA",
+      "urgent": "URGENTE",
+      "main": "PRINCIPAL",
+      "challenge": "DESAFÍO"
+    },
+
+    "status": {
+      "active": "ACTIVA",
+      "completed": "COMPLETADA",
+      "failed": "FALLIDA"
+    },
+
+    "time": {
+      "expired": "Caducada",
+      "left": "restante",
+      "hoursMinutes": "{{hours}} h {{minutes}} min",
+      "daysHours": "{{days}} d {{hours}} h"
+    },
+
+    "loading": {
+      "list": "Cargando misiones...",
+      "details": "Cargando..."
+    },
+
+    "empty": {
+      "title": "No hay misiones activas",
+      "subtitle": "Vuelve más tarde para nuevas misiones"
+    },
+
+    "buttons": {
+      "complete": "COMPLETAR",
+      "fail": "FALLAR"
+    },
+
+    "details": {
+      "title": "Detalles de la misión",
+      "deadline": "Fecha límite:",
+      "created": "Creada:",
+      "completedAt": "Completada: ",
+      "failedAt": "Fallida: ",
+      "description": "Descripción",
+      "rewards": "Recompensas",
+      "penalties": "Penalizaciones al fallar"
+    },
+
+    "alerts": {
+      "errorTitle": "Error",
+      "fetchFail": "No se pudieron cargar tus misiones. Inténtalo de nuevo.",
+      "detailsFail": "No se pudieron cargar los detalles. Inténtalo de nuevo.",
+      "completeFail": "No se pudo marcar como completada. Inténtalo de nuevo.",
+      "failFail": "No se pudo marcar como fallida.",
+
+      "completedTitle": "Misión completada",
+      "completedBody": "¡Has completado esta misión! Recompensa obtenida.",
+
+      "failedTitle": "Misión fallida",
+      "failedBody": "Misión marcada como fallida.",
+
+      "failConfirmTitle": "¿Marcar como fallida?",
+      "failConfirmBody": "¿Seguro que quieres marcar esta misión como fallida? Se aplicarán penalizaciones.",
+      "cancel": "Cancelar",
+      "confirm": "Confirmar"
+    }
+  },
+
+  "habits": {
+    "sectionTitle": "HÁBITOS ACTIVOS",
+    "never": "Nunca",
+
+    "empty": {
+      "title": "Todavía no tienes hábitos activos.",
+      "subtitle": "Pulsa el botón '+' para añadir tu primer hábito."
+    },
+
+    "frequency": {
+      "daily": "Diario",
+      "weekly": "Semanal",
+      "monthly": "Mensual"
+    },
+
+    "buttons": {
+      "edit": "Editar",
+      "delete": "Eliminar",
+      "markDone": "MARCAR COMO HECHO",
+      "completedToday": "COMPLETADO HOY"
+    },
+
+    "details": {
+      "description": "Descripción",
+      "streak": "Racha",
+      "lastTracked": "Última vez",
+      "frequency": "Frecuencia"
+    },
+
+    "form": {
+      "createTitle": "Crear nuevo hábito",
+      "editTitle": "Editar hábito",
+      "icon": "Icono",
+      "changeIcon": "Cambiar icono",
+      "titleLabel": "Título *",
+      "titlePlaceholder": "Ej.: Beber agua, Leer un libro",
+      "descriptionLabel": "Descripción (opcional)",
+      "descriptionPlaceholder": "Añade detalles o motivación",
+      "frequency": "Frecuencia",
+      "notifications": "Notificaciones",
+      "notificationsHint": "Activa recordatorios para este hábito (función próximamente).",
+      "createHabit": "CREAR HÁBITO",
+      "saveChanges": "GUARDAR CAMBIOS",
+      "cancel": "CANCELAR"
+    },
+
+    "alerts": {
+      "ok": "OK",
+      "cancel": "Cancelar",
+      "confirm": "Confirmar",
+      "delete": "Eliminar",
+
+      "errorTitle": "Error",
+
+      "sessionExpiredTitle": "Sesión caducada",
+      "sessionExpiredBody": "Por favor, inicia sesión de nuevo.",
+
+      "loadingErrorTitle": "Error de carga",
+      "loadingErrorBody": "No se pudieron cargar tus hábitos. Inténtalo más tarde.",
+
+      "missingTitleTitle": "Falta el título",
+      "missingTitleBody": "Por favor, introduce un título para el hábito.",
+
+      "successTitle": "Éxito",
+      "createdBody": "¡Hábito creado correctamente!",
+      "updatedBody": "¡Hábito actualizado correctamente!",
+
+      "saveErrorTitle": "Error al guardar",
+      "saveErrorBody": "No se pudo {{action}} el hábito. {{detail}}",
+      "actionCreate": "crear",
+      "actionUpdate": "actualizar",
+      "tryAgain": "Inténtalo de nuevo.",
+
+      "confirmDeletionTitle": "Confirmar eliminación",
+      "confirmDeletionBody": "¿Seguro que quieres eliminar \"{{title}}\"?",
+
+      "deletedTitle": "Eliminado",
+      "deletedBody": "Hábito \"{{title}}\" eliminado.",
+
+      "deletionErrorTitle": "Error al eliminar",
+      "deletionErrorBody": "No se pudo eliminar el hábito. {{detail}}",
+
+      "alreadyTrackedTitle": "Ya marcado",
+      "alreadyTrackedBody": "Ya has marcado este hábito hoy.",
+      "alreadyTrackedBackendBody": "Este hábito ya fue marcado hoy.",
+
+      "trackingErrorTitle": "Error al marcar",
+      "trackingErrorBody": "Ocurrió un error inesperado. Inténtalo de nuevo.",
+
+      "notFoundTitle": "No encontrado",
+      "notFoundBody": "No se pudo encontrar el hábito para marcar.",
+
+      "noIdBody": "No se puede marcar un hábito sin ID."
+    }
+  },
+
+  "pomodoro": {
+    "headerTitle": "TEMPORIZADOR POMODORO",
+
+    "modes": {
+      "work": "TRABAJO",
+      "shortBreak": "PAUSA CORTA",
+      "longBreak": "PAUSA LARGA"
+    },
+
+    "session": {
+      "work": "Sesión de trabajo",
+      "break": "Sesión de descanso"
+    },
+
+    "buttons": {
+      "start": "Iniciar",
+      "pause": "Pausar",
+      "reset": "Reiniciar"
+    },
+
+    "settings": {
+      "title": "AJUSTES DEL TEMPORIZADOR",
+      "workDuration": "Duración de trabajo: {{minutes}} min",
+      "shortBreak": "Pausa corta: {{minutes}} min",
+      "longBreak": "Pausa larga: {{minutes}} min"
+    },
+
+    "alerts": {
+      "workCompleteTitle": "¡Sesión de trabajo terminada!",
+      "breakCompleteTitle": "¡Descanso terminado!",
+      "shortBreakMsg": "Es hora de una pausa corta",
+      "longBreakMsg": "Es hora de una pausa larga",
+      "backToWorkMsg": "Hora de volver al trabajo"
+    }
+  },
+
+  "profile": {
+    "loading": "Cargando perfil...",
+    "notFound": "Perfil no encontrado.",
+    "goBack": "Volver",
+
+    "header": {
+      "myProfile": "MI PERFIL",
+      "hunterProfile": "PERFIL DEL CAZADOR"
+    },
+
+    "placeholders": {
+      "username": "Nombre de usuario...",
+      "status": "Estado del cazador..."
+    },
+
+    "buttons": {
+      "saving": "GUARDANDO...",
+      "saveChanges": "GUARDAR CAMBIOS",
+      "editProfile": "EDITAR PERFIL"
+    },
+
+    "rankLabel": "RANGO {{rank}}",
+    "combatPower": "PODER DE COMBATE",
+    "statusTitle": "ESTADO DEL CAZADOR",
+    "statusEmpty": "Este cazador aún no ha establecido un estado.",
+
+    "tabs": {
+      "trophies": "TROFEOS",
+      "questLog": "REGISTRO DE MISIONES"
+    },
+
+    "achievements": {
+      "emptyTitle": "Aún no has desbloqueado trofeos.",
+      "emptySubtitle": "¡Emprende nuevas misiones para alcanzar la gloria!",
+      "completed": "¡COMPLETADO!",
+      "tierLabel": "NIVEL: {{tier}}",
+      "nextTierLabel": "Siguiente: {{tier}}"
+    },
+
+    "history": {
+      "title": "MISIONES COMPLETADAS",
+      "empty": "El registro de misiones está vacío.",
+      "unnamedQuest": "Misión sin nombre",
+      "completedLabel": "Completada:",
+      "recently": "Recientemente",
+      "cp": "PC"
+    },
+
+    "alerts": {
+      "errorTitle": "Error",
+      "successTitle": "Éxito",
+      "userNotFound": "Usuario no encontrado",
+      "imagePickFail": "No se pudo seleccionar la imagen",
+      "profileUpdated": "¡Perfil actualizado correctamente!",
+      "profileUpdateFail": "No se pudo actualizar el perfil."
+    }
+  },
+
+  "editTask": {
+    "header": "EDITAR TAREA",
+    "loading": "Cargando datos de la tarea...",
+
+    "fields": {
+      "title": "Título",
+      "description": "Descripción",
+      "category": "Categoría",
+      "difficulty": "Dificultad",
+      "deadline": "Fecha límite",
+      "unitType": "Tipo de unidad",
+      "unitAmount": "Cantidad de unidad",
+      "pointsReward": "Recompensa de puntos"
+    },
+
+    "placeholders": {
+      "title": "Introduce el título de la tarea",
+      "description": "Introduce la descripción de la tarea",
+      "selectCategory": "Selecciona una categoría",
+      "selectUnitType": "Selecciona un tipo de unidad",
+      "unitAmount": "Introduce la cantidad",
+      "pointsReward": "Introduce la recompensa en puntos"
+    },
+
+    "buttons": {
+      "selectDate": "Seleccionar fecha",
+      "selectTime": "Seleccionar hora",
+      "updateTask": "ACTUALIZAR TAREA"
+    },
+
+    "deadline": {
+      "noDateSelected": "No se ha seleccionado fecha",
+      "formatted": "{{date}} a las {{time}}"
+    },
+
+    "modals": {
+      "selectCategory": "Seleccionar categoría",
+      "selectUnitType": "Seleccionar tipo de unidad"
+    },
+
+    "alerts": {
+      "errorTitle": "Error",
+      "successTitle": "Éxito",
+      "missingTaskId": "Falta el ID de la tarea. Inténtalo de nuevo.",
+      "loadFail": "No se pudieron cargar los datos. Inténtalo otra vez.",
+      "titleRequired": "El título es obligatorio",
+      "categoryRequired": "Por favor, selecciona una categoría",
+      "unitTypeRequired": "Por favor, selecciona un tipo de unidad",
+      "invalidDeadline": "Fecha límite no válida",
+      "pointsNonNegative": "Los puntos deben ser un entero no negativo",
+      "unitAmountNonNegative": "La cantidad debe ser un entero no negativo",
+      "updateSuccess": "¡Tarea actualizada correctamente!",
+      "patchFail": "No se pudo actualizar con PATCH: {{msg}}",
+      "updateFail": "No se pudo actualizar la tarea: {{msg}}"
+    }
+  },
+
+  "createTask": {
+    "header": "CREAR NUEVA TAREA",
+    "loading": "Cargando datos...",
+
+    "fields": {
+      "title": "Título",
+      "description": "Descripción",
+      "category": "Categoría",
+      "difficulty": "Dificultad",
+      "deadline": "Fecha límite",
+      "unitType": "Tipo de unidad",
+      "unitAmount": "Cantidad de unidad",
+      "pointsReward": "Recompensa de puntos"
+    },
+
+    "placeholders": {
+      "title": "Introduce el título de la tarea",
+      "description": "Introduce la descripción",
+      "selectCategory": "Selecciona una categoría",
+      "selectUnitType": "Selecciona un tipo de unidad",
+      "unitAmount": "Introduce la cantidad",
+      "pointsReward": "Introduce la recompensa en puntos"
+    },
+
+    "buttons": {
+      "selectDate": "Seleccionar fecha",
+      "selectTime": "Seleccionar hora",
+      "createTask": "CREAR TAREA"
+    },
+
+    "deadline": {
+      "noDateSelected": "No se ha seleccionado fecha",
+      "formatted": "{{date}} a las {{time}}"
+    },
+
+    "modals": {
+      "selectCategory": "Seleccionar categoría",
+      "selectUnitType": "Seleccionar tipo de unidad"
+    },
+
+    "alerts": {
+      "errorTitle": "Error",
+      "successTitle": "Éxito",
+      "loadDictionariesFail": "No se pudieron cargar los datos. Inténtalo más tarde.",
+      "titleRequired": "El título es obligatorio",
+      "categoryRequired": "Selecciona una categoría",
+      "unitTypeRequired": "Selecciona un tipo de unidad",
+      "pointsPositive": "Los puntos deben ser un número positivo mayor que cero",
+      "unitAmountPositive": "La cantidad debe ser un número positivo mayor que cero",
+      "deadlineFuture": "La fecha límite debe estar en el futuro",
+      "createSuccess": "¡Tarea creada correctamente!",
+      "createFailDefault": "No se pudo crear la tarea. Inténtalo de nuevo."
+    }
+  },
+
+  "assistant": {
+    "header": "ASISTENTE IA",
+
+    "loadingHistory": "Cargando historial del diálogo...",
+
+    "inputPlaceholder": "Introduce un comando para el Sistema...",
+
+    "emptyHistoryShort": "El historial está vacío. Empieza un diálogo con el Sistema.",
+
+    "empty": {
+      "introTitle": "SISTEMA EN LÍNEA",
+      "introSubtitle": "No se detectó historial de conversación. Usa estos ejemplos para empezar a hablar con el Sistema. Toca cualquier ejemplo para insertarlo en el campo de comando."
+    },
+
+    "protocols": {
+      "buttonTitle": "PROTOCOLOS DEL SISTEMA",
+      "buttonSubtitle": "Toca para ver qué puedes pedirle al Sistema.",
+      "modalTitle": "Protocolos del Sistema",
+      "modalIntro": "Estos son comandos de ejemplo para interactuar con el Sistema. Toca cualquier ejemplo para insertarlo en el campo de entrada y luego edítalo o envíalo."
+    },
+
+    "help": {
+      "status": {
+        "title": "Estado y progreso",
+        "subtitle": "Pídele al Sistema un informe rápido de tu estado actual.",
+        "examples": [
+          "Sistema, dame mi informe de estado de hoy.",
+          "Sistema, muéstrame mi progreso actual y objetivos cercanos."
+        ]
+      },
+      "quests": {
+        "title": "Misiones y desafíos",
+        "subtitle": "Genera misiones y retos para subir de nivel más rápido.",
+        "examples": [
+          "Sistema, crea una nueva misión para progresar en programación.",
+          "Sistema, dame un desafío semanal para superar mis límites."
+        ]
+      },
+      "motivation": {
+        "title": "Motivación y debuffs mentales",
+        "subtitle": "Llama al Sistema cuando baje tu fuerza de voluntad.",
+        "examples": [
+          "Sistema, tengo poca motivación, necesito apoyo.",
+          "Sistema, debuff mental detectado, necesito un impulso breve pero fuerte."
+        ]
+      },
+      "skills": {
+        "title": "Habilidades y aprendizaje",
+        "subtitle": "Reporta progreso de habilidades o pide el siguiente paso.",
+        "examples": [
+          "Sistema, registra mi progreso en español de hoy.",
+          "Sistema, ¿cuál es el siguiente paso para mejorar mi programación?"
+        ]
+      },
+      "training": {
+        "title": "Entrenamiento y forma física",
+        "subtitle": "Solicita planes de entrenamiento y prioridades.",
+        "examples": [
+          "Sistema, recomienda el enfoque de entrenamiento físico para hoy.",
+          "Sistema, dame una misión de fuerza para esta semana."
+        ]
+      },
+      "nutrition": {
+        "title": "Nutrición y energía",
+        "subtitle": "Deja que el Sistema evalúe tus parámetros de energía.",
+        "examples": [
+          "Sistema, evalúa mi nutrición y balance energético de hoy.",
+          "Sistema, ¿cómo debo ajustar calorías y macros?"
+        ]
+      },
+      "media": {
+        "title": "Libros, anime, manga",
+        "subtitle": "Pide medios inspiradores para tu crecimiento.",
+        "examples": [
+          "Sistema, recomiéndame un anime o manga que encaje con mi camino.",
+          "Sistema, sugiere un libro que apoye mi desarrollo."
+        ]
+      },
+      "reflection": {
+        "title": "Revisión semanal",
+        "subtitle": "Deja que el Sistema revise tu rendimiento reciente.",
+        "examples": [
+          "Sistema, haz una revisión de rendimiento de los últimos 7 días.",
+          "Sistema, resume mis logros principales y puntos débiles de esta semana."
+        ]
+      }
+    },
+
+    "systemMessages": {
+      "historyFormatError": "Error: formato de historial inválido desde el servidor. Inicia un nuevo diálogo.",
+      "sendErrorPrefix": "Error"
+    },
+
+    "errors": {
+      "unknown": "Error desconocido.",
+      "badAssistantResponse": "Respuesta inválida del servicio de IA.",
+      "loadHistoryDefault": "No se pudo cargar el historial del diálogo.",
+      "loadHistoryNoResponse": "El servidor de historial no responde. Revisa tu conexión.",
+      "loadHistoryServerFail": "El servidor no pudo cargar el historial.",
+      "loadHistoryWithStatus": "Error {{status}}: {{detail}}",
+
+      "loadMoreDefault": "No se pudieron cargar mensajes antiguos.",
+      "loadMoreServerFail": "El servidor devolvió un error.",
+      "loadMoreWithStatus": "Error {{status}}: {{detail}}",
+
+      "sendDefault": "No se pudo obtener respuesta del Sistema.",
+      "sendNoResponse": "El Sistema no responde. Revisa tu conexión.",
+      "sendServerFail": "El servidor devolvió un error.",
+      "sendWithStatus": "Error {{status}}: {{detail}}"
+    }
+  },
+
+  "nutrition": {
+    "units": {
+      "kcal": "kcal",
+      "grams": "g"
+    },
+    "header": {
+      "title": "NUTRICIÓN"
+    },
+    "loading": {
+      "general": "Cargando datos..."
+    },
+    "summary": {
+      "today": "Hoy",
+      "remaining": "Restante",
+      "macros": {
+        "proteins": "Proteínas",
+        "fats": "Grasas",
+        "carbs": "Carbohidratos"
+      }
+    },
+    "history": {
+      "title": "Historial",
+      "periods": {
+        "week": "7 días",
+        "month": "30 días"
+      },
+      "empty": "No hay datos para el período seleccionado."
+    },
+    "mealsToday": {
+      "title": "Comidas de hoy",
+      "empty": "Todavía no se ha comido nada hoy."
+    },
+    "goals": {
+      "title": "Editar objetivos",
+      "loading": "Cargando…",
+      "fields": {
+        "calories": "Calorías (kcal)",
+        "proteins": "Proteínas (g)",
+        "fats": "Grasas (g)",
+        "carbs": "Carbohidratos (g)"
+      },
+      "errors": {
+        "caloriesRange": "Calorías: 1–10000.",
+        "proteinsRange": "Proteínas: 0–1000 g.",
+        "fatsRange": "Grasas: 0–1000 g.",
+        "carbsRange": "Carbohidratos: 0–1500 g.",
+        "saveFailed": "No se pudieron guardar los objetivos."
+      }
+    },
+    "alerts": {
+      "deleteConfirmTitle": "Eliminar comida",
+      "deleteConfirmBody": "¿Eliminar esta entrada de tu registro diario?",
+      "delete": "Eliminar",
+      "deleteSuccess": "Entrada eliminada.",
+      "deleteError": "No se pudo eliminar la entrada."
+    },
+    "foodSearch": {
+      "title": "Añadir comida",
+      "productLabel": "Producto",
+      "productPlaceholder": "ej. pechuga de pollo",
+      "noCaloriesData": "Sin datos de calorías",
+      "noResults": "No se encontró nada.",
+      "weightLabel": "Peso (g)",
+      "weightPlaceholder": "ej. 300",
+      "addButton": "Añadir",
+      "hint": "1) Escribe producto → selecciona → 2) Pon gramos → 3) Añadir."
+    }
+  },
+
+  "groupsHome": {
+    "header": "GRUPOS",
+    "searchPlaceholder": "Buscar grupos...",
+    "tabs": {
+      "discover": "Descubrir",
+      "mine": "Mis grupos",
+      "hunters": "Cazadores"
+    }
+  },
+  
+  "groups": {
+  "header": {
+    "title": "GRUPOS"
+  },
+  "search": {
+    "placeholder": "Buscar grupos..."
+  },
+  "tabs": {
+    "discover": "Descubrir",
+    "mine": "Mis grupos",
+    "hunters": "Cazadores"
+  },
+
+  "details": {
+    "fallbackTitle": "GRUPO",
+    "by": "por {{username}}",
+    "members": "{{count}} MIEMBROS",
+
+    "buttons": {
+      "join": "Unirse",
+      "leave": "Salir",
+      "delete": "Eliminar"
+    },
+
+    "joinCard": {
+      "title": "Únete a este grupo público para ver y enviar mensajes."
+    },
+
+    "alerts": {
+      "errorTitle": "Error",
+      "groupNotFound": "Grupo no encontrado",
+
+      "joinFail": "No se pudo unir",
+      "leaveFail": "No se pudo salir",
+
+      "leftTitle": "Saliste",
+      "leftBody": "Has salido del grupo",
+
+      "deleteConfirmTitle": "Eliminar grupo",
+      "deleteConfirmBody": "Esta acción no se puede deshacer. ¿Eliminar el grupo?",
+
+      "deletedTitle": "Eliminado",
+      "deletedBody": "El grupo ha sido eliminado",
+      "deleteFail": "No se pudo eliminar el grupo",
+
+      "offlineTitle": "Sin conexión",
+      "offlineBody": "Conexión perdida, intenta de nuevo en un momento.",
+      "sendFail": "No se pudo enviar",
+      "deleteMessageFail": "No se pudo eliminar el mensaje"
+    }
+  },
+
+  "create": {
+    "header": {
+      "title": "CREAR GRUPO"
+    },
+    "fields": {
+      "name": "Nombre",
+      "description": "Descripción",
+      "public": "Público"
+    },
+    "placeholders": {
+      "name": "Nombre del grupo",
+      "description": "Opcional"
+    },
+    "buttons": {
+      "create": "Crear",
+      "creating": "Creando..."
+    },
+    "alerts": {
+      "errorTitle": "Error",
+      "validationTitle": "Validación",
+      "nameRequired": "El nombre es obligatorio",
+      "createFailDefault": "No se pudo crear"
+    }
+  },
+
+  "edit": {
+    "header": {
+      "title": "EDITAR GRUPO"
+    },
+    "fields": {
+      "name": "Nombre",
+      "description": "Descripción",
+      "public": "Público"
+    },
+    "placeholders": {
+      "name": "Nombre del grupo",
+      "description": "Opcional"
+    },
+    "buttons": {
+      "save": "Guardar",
+      "saving": "Guardando..."
+    },
+    "alerts": {
+      "errorTitle": "Error",
+      "validationTitle": "Validación",
+      "nameRequired": "El nombre es obligatorio",
+      "updateFailDefault": "No se pudo actualizar"
+    }
+  },
+  "myTab": {
+    "alerts": {
+      "leftTitle": "Saliste",
+      "leftBody": "Has salido de \"{{name}}\"",
+      "leaveFail": "No se pudo salir"
+    }
+  },
+
+  "chat": {
+    "input": {
+      "placeholder": "Escribe un mensaje..."
+    },
+    "messages": {
+      "unknownUser": "desconocido",
+      "deleteConfirmTitle": "Eliminar mensaje",
+      "deleteConfirmBody": "¿Seguro que quieres eliminar este mensaje?"
+    }
+  },
+  "list": {
+    "empty": {
+      "title": "No se encontró nada.",
+      "subtitle": "Prueba a cambiar la búsqueda o la pestaña."
+    }
+  },
+  "card": {
+    "visibility": {
+      "public": "Público",
+      "private": "Privado"
+    },
+    "members_one": "{{count}} miembros",
+    "members_other": "{{count}} miembro",
+    "byOwner": "por {{name}}",
+    "unknownOwner": "desconocido",
+    "roles": {
+      "owner": "Propietario",
+      "admin": "Administrador",
+      "member": "Miembro"
+    }
+  },
+
+  "actions": {
+    "view": "Ver",
+    "join": "Unirse",
+    "leave": "Salir",
+    "delete": "Eliminar"
+  },
+
+  "membersList": {
+    "loading": "Cargando cazadores...",
+    "empty": "Aún no hay cazadores en este grupo.",
+    "errors": {
+      "loadFailed": "No se pudieron cargar los miembros"
+    },
+    "labels": {
+      "rank": "RANGO {{rank}}",
+      "cp": "PC: {{points}}"
+    },
+    "roles": {
+      "member": "Miembro",
+      "owner": "Propietario",
+      "officer": "Oficial"
+    }
+  },
+  "huntersTab": {
+    "loading": "Escaneando cazadores...",
+    "errors": {
+      "loadFailed": "No se pudieron cargar los cazadores."
+    },
+    "empty": {
+      "title": "No se encontraron cazadores",
+      "subtitle": "Prueba otro nombre o borra la búsqueda."
+    },
+    "labels": {
+      "rank": "RANGO {{rank}}",
+      "combatPower": "Poder de combate: {{points}}",
+      "eliteHint": "Cazador élite del gremio"
+    },
+    "sort": {
+      "level": "Nivel",
+      "power": "Poder",
+      "asc": "↑",
+      "desc": "↓"
+    }
+  }
+},
+
+  "tabBar": {
+    "tasks": "Tareas",
+    "timer": "Temporizador",
+    "calories": "Nutrición",
+    "guild": "Gremio",
+    "assistant": "Asistente"
+  },
+
+  "common": {
+    "ok": "OK",
+    "close": "Cerrar",
+    "unknownError": "Error desconocido",
+    "loading": "Cargando...",
+    "cancel": "Cancelar",
+    "save": "Guardar",
+    "delete": "Eliminar",
+    "success": "Éxito",
+    "error": "Error"
+  },
+  "levelUp": {
+  "systemTitle": "NOTIFICACIÓN DEL SISTEMA",
+  "title": "¡SUBIDA DE NIVEL!",
+  "currentLevelLabel": "NIVEL ACTUAL",
+  "description": "Has superado tus límites.",
+  "subDescription": "Todas las estadísticas han sido restauradas.",
+  "button": "ACEPTAR"
+}
+}
+

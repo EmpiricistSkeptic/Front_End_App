@@ -29,6 +29,7 @@ import {
   MaterialIcons,
 } from '@expo/vector-icons';
 import apiService from '../services/apiService';
+import { useTranslation } from 'react-i18next';
 
 const { width, height } = Dimensions.get('window');
 
@@ -53,103 +54,109 @@ const COLORS = {
 };
 
 const systemPrefixRegex = /^\[(System|Система)\]/i;
-
-// Подсказки по возможностям ассистента (на английском)
-const ASSISTANT_HELP_SECTIONS = [
-  {
-    id: 'status',
-    title: 'Status & Progress Overview',
-    subtitle: 'Ask the System for a quick report about your current state.',
-    examples: [
-      'System, give me my status report for today.',
-      'System, show my current progress and nearest objectives.',
-    ],
-  },
-  {
-    id: 'quests',
-    title: 'Quests & Challenges',
-    subtitle: 'Generate missions and challenges to level up faster.',
-    examples: [
-      'System, create a new quest for coding progression.',
-      'System, give me a weekly challenge to push my limits.',
-    ],
-  },
-  {
-    id: 'motivation',
-    title: 'Motivation & Mental Debuffs',
-    subtitle: 'Call the System when your willpower drops.',
-    examples: [
-      'System, I am low on motivation, support protocol needed.',
-      'System, mental debuff detected, I need a short but strong boost.',
-    ],
-  },
-  {
-    id: 'skills',
-    title: 'Skills & Learning',
-    subtitle: 'Report skill progress or ask for next learning steps.',
-    examples: [
-      'System, log my progress in Spanish for today.',
-      'System, what is the next step to improve my programming skill?',
-    ],
-  },
-  {
-    id: 'training',
-    title: 'Training & Physical Form',
-    subtitle: 'Request focused training plans and priorities.',
-    examples: [
-      'System, recommend today’s physical training focus.',
-      'System, give me a strength training quest for this week.',
-    ],
-  },
-  {
-    id: 'nutrition',
-    title: 'Nutrition & System Fuel',
-    subtitle: 'Let the System evaluate your fuel parameters.',
-    examples: [
-      'System, evaluate my nutrition and energy balance for today.',
-      'System, how should I adjust my calories and macros?',
-    ],
-  },
-  {
-    id: 'media',
-    title: 'Books, Anime, Manga',
-    subtitle: 'Ask for inspiring media related to your growth.',
-    examples: [
-      'System, recommend an anime or manga that matches my journey.',
-      'System, suggest a book that will support my development.',
-    ],
-  },
-  {
-    id: 'reflection',
-    title: 'Weekly Review & Reflection',
-    subtitle: 'Let the System review your recent performance.',
-    examples: [
-      'System, run a performance review for the last 7 days.',
-      'System, summarize my main achievements and weak spots this week.',
-    ],
-  },
-];
+const SYSTEM_PREFIX = '[System]';
 
 // --- Основной компонент ---
 const AssistantScreen = ({ navigation }) => {
-  // --- Состояния сообщений и загрузки ---
-  const [messages, setMessages] = useState([]); // newest → oldest
+  const { t, i18n } = useTranslation();
+
+  // Подсказки по возможностям ассистента
+  const ASSISTANT_HELP_SECTIONS = useMemo(
+    () => [
+      {
+        id: 'status',
+        title: t('assistant.help.status.title'),
+        subtitle: t('assistant.help.status.subtitle'),
+        examples: [
+          t('assistant.help.status.examples.0'),
+          t('assistant.help.status.examples.1'),
+        ],
+      },
+      {
+        id: 'quests',
+        title: t('assistant.help.quests.title'),
+        subtitle: t('assistant.help.quests.subtitle'),
+        examples: [
+          t('assistant.help.quests.examples.0'),
+          t('assistant.help.quests.examples.1'),
+        ],
+      },
+      {
+        id: 'motivation',
+        title: t('assistant.help.motivation.title'),
+        subtitle: t('assistant.help.motivation.subtitle'),
+        examples: [
+          t('assistant.help.motivation.examples.0'),
+          t('assistant.help.motivation.examples.1'),
+        ],
+      },
+      {
+        id: 'skills',
+        title: t('assistant.help.skills.title'),
+        subtitle: t('assistant.help.skills.subtitle'),
+        examples: [
+          t('assistant.help.skills.examples.0'),
+          t('assistant.help.skills.examples.1'),
+        ],
+      },
+      {
+        id: 'training',
+        title: t('assistant.help.training.title'),
+        subtitle: t('assistant.help.training.subtitle'),
+        examples: [
+          t('assistant.help.training.examples.0'),
+          t('assistant.help.training.examples.1'),
+        ],
+      },
+      {
+        id: 'nutrition',
+        title: t('assistant.help.nutrition.title'),
+        subtitle: t('assistant.help.nutrition.subtitle'),
+        examples: [
+          t('assistant.help.nutrition.examples.0'),
+          t('assistant.help.nutrition.examples.1'),
+        ],
+      },
+      {
+        id: 'media',
+        title: t('assistant.help.media.title'),
+        subtitle: t('assistant.help.media.subtitle'),
+        examples: [
+          t('assistant.help.media.examples.0'),
+          t('assistant.help.media.examples.1'),
+        ],
+      },
+      {
+        id: 'reflection',
+        title: t('assistant.help.reflection.title'),
+        subtitle: t('assistant.help.reflection.subtitle'),
+        examples: [
+          t('assistant.help.reflection.examples.0'),
+          t('assistant.help.reflection.examples.1'),
+        ],
+      },
+    ],
+    [t, i18n.language]
+  );
+
+  // --- Состояния ---
+  const [messages, setMessages] = useState([]);
   const [inputText, setInputText] = useState('');
-  const [isLoading, setIsLoading] = useState(false); // запрос к ассистенту
-  const [isHistoryLoading, setIsHistoryLoading] = useState(true); // первая загрузка истории
+  const [isLoading, setIsLoading] = useState(false);
+  const [isHistoryLoading, setIsHistoryLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // пагинация истории
+  // пагинация
   const [nextPageUrl, setNextPageUrl] = useState(null);
   const [loadingMore, setLoadingMore] = useState(false);
 
-  // подсказки / протоколы
+  // модалка
   const [helpVisible, setHelpVisible] = useState(false);
 
   const flatListRef = useRef(null);
   const inputRef = useRef(null);
 
-  // Мемоизированные частицы — не прыгают на каждый рендер
+  // Частицы фона
   const particles = useMemo(
     () =>
       [...Array(20)].map((_, i) => ({
@@ -168,7 +175,6 @@ const AssistantScreen = ({ navigation }) => {
 
   const handleInsertExample = useCallback(example => {
     setInputText(example);
-    // Фокусим инпут, чтобы пользователь сразу мог редактировать
     if (inputRef.current) {
       inputRef.current.focus();
     }
@@ -181,7 +187,7 @@ const AssistantScreen = ({ navigation }) => {
     const text = (m.text || '').toLowerCase();
     return (
       text.includes('история переписки пуста') ||
-      text.includes('history') && text.includes('empty')
+      (text.includes('history') && text.includes('empty'))
     );
   }, []);
 
@@ -189,7 +195,7 @@ const AssistantScreen = ({ navigation }) => {
     !isHistoryLoading &&
     (messages.length === 0 || isInitialHistorySystemMessage(messages));
 
-  // --- Загрузка первой страницы истории ---
+  // --- Загрузка истории ---
   const loadInitialHistory = useCallback(async () => {
     setIsHistoryLoading(true);
     setError(null);
@@ -205,7 +211,6 @@ const AssistantScreen = ({ navigation }) => {
       let next = null;
 
       if (Array.isArray(historyData)) {
-        // кейс: бэк вернул просто массив (например, одну системную фразу)
         pageResults = historyData;
       } else if (
         historyData &&
@@ -215,86 +220,61 @@ const AssistantScreen = ({ navigation }) => {
         pageResults = historyData.results;
         next = historyData.next || null;
       } else {
-        console.error(
-          'Неожиданный формат ответа от /chat/history/:',
-          historyData
-        );
         pageResults = [
           {
             id: 'error-format-history',
-            text:
-              '[System] Ошибка: неверный формат истории от сервера. Начните новый диалог.',
+            text: `${SYSTEM_PREFIX} ${t('assistant.systemMessages.historyFormatError')}`,
             sender: 'ai',
             timestamp: new Date().toISOString(),
           },
         ];
       }
 
-      // БЭК ОТДАЁТ СТРАНИЦУ В ПОРЯДКЕ oldest→newest.
-      // Для inverted FlatList мы храним newest→oldest:
       const newestFirst = [...pageResults].reverse();
       setMessages(newestFirst);
       setNextPageUrl(next);
     } catch (err) {
       console.error('Ошибка загрузки истории чата:', err);
-      let errorMessage = 'Не удалось загрузить историю диалога.';
+      let errorMessage = t('assistant.errors.loadHistoryDefault');
       if (err.response) {
-        console.error(
-          'Детали ошибки ответа:',
-          err.response.status,
-          err.response.data
-        );
-        errorMessage = `Ошибка ${err.response.status}: ${
-          err.response.data?.detail || 'Сервер не смог загрузить историю'
-        }`;
-      } else if (err.request) {
-        console.error('Детали ошибки запроса:', err.request);
-        errorMessage = 'Сервер истории не отвечает. Проверьте подключение.';
-      } else {
-        console.error('Другая ошибка:', err.message, err);
-        errorMessage = err.message || 'Неизвестная ошибка при загрузке.';
+        errorMessage = t('assistant.errors.loadHistoryWithStatus', {
+          status: err.response.status,
+          detail:
+            err.response.data?.detail ||
+            t('assistant.errors.loadHistoryServerFail'),
+        });
       }
       setError(errorMessage);
       setMessages([
         {
           id: 'error-load-history',
-          text: `[System] ${errorMessage}`,
+          text: `${SYSTEM_PREFIX} ${errorMessage}`,
           sender: 'ai',
           timestamp: new Date().toISOString(),
         },
       ]);
-      setNextPageUrl(null);
     } finally {
       setIsHistoryLoading(false);
     }
-  }, []);
+  }, [t]);
 
-  // первая загрузка
   useEffect(() => {
     loadInitialHistory();
   }, [loadInitialHistory]);
 
-  // --- Дозагрузка старой истории (пагинация вверх, но при inverted это onEndReached) ---
+  // --- Дозагрузка истории ---
   const loadMoreHistory = useCallback(async () => {
     if (!nextPageUrl || loadingMore || isHistoryLoading) return;
-
     setLoadingMore(true);
     setError(null);
 
     try {
-      console.log('Загрузка следующей страницы истории:', nextPageUrl);
-
       let responseData;
       if (typeof nextPageUrl === 'string') {
         responseData = await apiService.get(nextPageUrl);
       } else {
         responseData = null;
       }
-
-      console.log(
-        'Дополнительная история (raw):',
-        JSON.stringify(responseData, null, 2)
-      );
 
       let newPageResults = [];
       let newNext = null;
@@ -311,116 +291,83 @@ const AssistantScreen = ({ navigation }) => {
       }
 
       if (newPageResults.length > 0) {
-        // снова: бэк прислал страницу oldest→newest, а нам нужен newest→oldest
         const newestFirst = [...newPageResults].reverse();
-        // Для inverted: более старые сообщения добавляем В КОНЕЦ массива
         setMessages(prev => [...prev, ...newestFirst]);
       }
-
       setNextPageUrl(newNext);
     } catch (err) {
       console.error('Ошибка дозагрузки истории:', err);
-      let msg = 'Не удалось загрузить старые сообщения.';
-      if (err.response) {
-        msg = `Ошибка ${err.response.status}: ${
-          err.response.data?.detail || 'Сервер вернул ошибку'
-        }`;
-      }
-      setError(msg);
+      setError(t('assistant.errors.loadMoreDefault'));
     } finally {
       setLoadingMore(false);
     }
-  }, [nextPageUrl, loadingMore, isHistoryLoading]);
+  }, [nextPageUrl, loadingMore, isHistoryLoading, t]);
 
-  // --- Отправка нового сообщения ---
-  const handleSend = useCallback(
-    async () => {
-      if (inputText.trim() === '' || isLoading || isHistoryLoading) return;
+  // --- Отправка сообщения ---
+  const handleSend = useCallback(async () => {
+    if (inputText.trim() === '' || isLoading || isHistoryLoading) return;
 
-      const userMessageText = inputText.trim();
-      const userMessage = {
-        id: `user-${Date.now()}`,
-        text: userMessageText,
-        sender: 'user',
-        timestamp: new Date().toISOString(),
-      };
+    const userMessageText = inputText.trim();
+    const userMessage = {
+      id: `user-${Date.now()}`,
+      text: userMessageText,
+      sender: 'user',
+      timestamp: new Date().toISOString(),
+    };
 
-      // Для inverted: новые сообщения добавляем В НАЧАЛО массива
-      setMessages(prev => [userMessage, ...prev]);
-      setInputText('');
-      setIsLoading(true);
-      setError(null);
-      Keyboard.dismiss();
+    setMessages(prev => [userMessage, ...prev]);
+    setInputText('');
+    setIsLoading(true);
+    setError(null);
+    // Не скрываем клавиатуру автоматически, чтобы пользователь мог писать дальше
+    // Keyboard.dismiss(); 
 
-      try {
-        const responseData = await apiService.post('/assistant/', {
-          message: userMessageText,
-        });
+    try {
+      const responseData = await apiService.post('/assistant/', {
+        message: userMessageText,
+      });
 
-        console.log(
-          'Ответ от /assistant/:',
-          JSON.stringify(responseData, null, 2)
-        );
-
-        if (responseData?.response) {
-          const aiMessage = {
-            id: `ai-${Date.now()}`,
-            text: responseData.response,
-            sender: 'ai',
-            timestamp: new Date().toISOString(),
-          };
-          // опять же — в начало
-          setMessages(prev => [aiMessage, ...prev]);
-        } else {
-          console.error(
-            'Ответ от /assistant/ не содержит поля "response":',
-            responseData
-          );
-          throw new Error('Некорректный ответ от ИИ-сервиса');
-        }
-      } catch (err) {
-        console.error('Ошибка отправки сообщения или получения ответа:', err);
-        let errorMessage = 'Не удалось получить ответ от Системы.';
-        if (err.response) {
-          console.error(
-            'Детали ошибки ответа:',
-            err.response.status,
-            err.response.data
-          );
-          errorMessage = `Ошибка ${err.response.status}: ${
-            err.response.data?.detail || 'Сервер вернул ошибку'
-          }`;
-        } else if (err.request) {
-          console.error('Детали ошибки запроса:', err.request);
-          errorMessage = 'Система не отвечает. Проверьте подключение.';
-        } else {
-          console.error('Другая ошибка:', err.message, err);
-          errorMessage = err.message || 'Неизвестная ошибка при коммуникации.';
-        }
-        setError(errorMessage);
-
-        const errorMessageObj = {
-          id: `error-${Date.now()}`,
-          text: `[System] Ошибка: ${errorMessage}`,
+      if (responseData?.response) {
+        const aiMessage = {
+          id: `ai-${Date.now()}`,
+          text: responseData.response,
           sender: 'ai',
           timestamp: new Date().toISOString(),
         };
-        setMessages(prev => [errorMessageObj, ...prev]);
-      } finally {
-        setIsLoading(false);
+        setMessages(prev => [aiMessage, ...prev]);
+      } else {
+        throw new Error(t('assistant.errors.badAssistantResponse'));
       }
-    },
-    [inputText, isLoading, isHistoryLoading]
-  );
+    } catch (err) {
+      console.error('Ошибка отправки:', err);
+      let errorMessage = t('assistant.errors.sendDefault');
+      if (err.response) {
+        errorMessage = t('assistant.errors.sendWithStatus', {
+          status: err.response.status,
+          detail:
+            err.response.data?.detail || t('assistant.errors.sendServerFail'),
+        });
+      }
+      setError(errorMessage);
+      const errorMessageObj = {
+        id: `error-${Date.now()}`,
+        text: `${SYSTEM_PREFIX} ${t('assistant.systemMessages.sendErrorPrefix')}: ${errorMessage}`,
+        sender: 'ai',
+        timestamp: new Date().toISOString(),
+      };
+      setMessages(prev => [errorMessageObj, ...prev]);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [inputText, isLoading, isHistoryLoading, t]);
 
-  // --- Рендер элемента списка (сообщения) ---
+  // --- Рендер элемента сообщения ---
   const renderMessageItem = useCallback(({ item }) => {
     const isUser = item.sender === 'user';
     const isSystemOrError =
       item.sender === 'ai' && systemPrefixRegex.test(item.text || '');
     const isError =
-      isSystemOrError &&
-      /ошибка|error/i.test((item.text || '').toLowerCase());
+      isSystemOrError && /ошибка|error/i.test((item.text || '').toLowerCase());
 
     return (
       <View
@@ -469,13 +416,11 @@ const AssistantScreen = ({ navigation }) => {
       contentContainerStyle={styles.emptyScrollContent}
     >
       <View style={styles.emptyIntroCard}>
-        <Text style={styles.emptyIntroTitle}>SYSTEM ONLINE</Text>
+        <Text style={styles.emptyIntroTitle}>{t('assistant.empty.introTitle')}</Text>
         <Text style={styles.emptyIntroSubtitle}>
-          No dialogue history detected. Use these examples to start talking to
-          the System. Tap any example to insert it into the command field.
+          {t('assistant.empty.introSubtitle')}
         </Text>
       </View>
-
       {ASSISTANT_HELP_SECTIONS.map(section => (
         <View key={section.id} style={styles.helpSectionCard}>
           <Text style={styles.helpSectionTitle}>{section.title}</Text>
@@ -496,7 +441,9 @@ const AssistantScreen = ({ navigation }) => {
     </ScrollView>
   );
 
-  // --- Основной JSX компонента ---
+  // Высота хедера для смещения клавиатуры (примерно 60 + статус бар)
+  const headerHeight = 60 + (Platform.OS === 'android' ? StatusBar.currentHeight || 0 : 0);
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="light-content" />
@@ -504,7 +451,7 @@ const AssistantScreen = ({ navigation }) => {
         colors={[COLORS.backgroundGradientStart, COLORS.backgroundGradientEnd]}
         style={styles.container}
       >
-        {/* Частицы (мемоизированные) */}
+        {/* Фон: Частицы */}
         <View style={styles.particlesContainer} pointerEvents="none">
           {particles.map(p => (
             <View
@@ -523,12 +470,12 @@ const AssistantScreen = ({ navigation }) => {
           ))}
         </View>
 
-        {/* Хедер */}
+        {/* Хедер (фиксированный) */}
         <View style={styles.header}>
-          <Text style={styles.headerTitle}>AI ASSISTANT</Text>
+          <Text style={styles.headerTitle}>{t('assistant.header')}</Text>
         </View>
 
-        {/* Панель с кнопкой System Protocols */}
+        {/* Панель помощи */}
         {!isHistoryLoading && (
           <View style={styles.helpBar}>
             <TouchableOpacity style={styles.helpButton} onPress={openHelp}>
@@ -539,9 +486,11 @@ const AssistantScreen = ({ navigation }) => {
                 style={{ marginRight: 10 }}
               />
               <View style={{ flex: 1 }}>
-                <Text style={styles.helpButtonTitle}>SYSTEM PROTOCOLS</Text>
+                <Text style={styles.helpButtonTitle}>
+                  {t('assistant.protocols.buttonTitle')}
+                </Text>
                 <Text style={styles.helpButtonSubtitle}>
-                  Tap to see what you can ask the System.
+                  {t('assistant.protocols.buttonSubtitle')}
                 </Text>
               </View>
               <Ionicons
@@ -553,65 +502,66 @@ const AssistantScreen = ({ navigation }) => {
           </View>
         )}
 
-        {/* История / список сообщений или расширенный empty state */}
-        {isHistoryLoading ? (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color={COLORS.accentBlue} />
-            <Text style={styles.loadingText}>Загрузка истории диалога...</Text>
-          </View>
-        ) : isChatEmpty ? (
-          renderEmptyState()
-        ) : (
-          <FlatList
-            ref={flatListRef}
-            data={messages}
-            renderItem={renderMessageItem}
-            keyExtractor={item => item.id.toString()}
-            style={styles.messageList}
-            contentContainerStyle={styles.messageListContent}
-            ListEmptyComponent={
-              <View style={styles.emptyChatContainer}>
-                <Ionicons
-                  name="chatbubbles-outline"
-                  size={48}
-                  color={COLORS.placeholder}
-                />
-                <Text style={styles.emptyChatText}>
-                  История пуста. Начните диалог с Системой.
-                </Text>
-              </View>
-            }
-            inverted
-            onEndReached={loadMoreHistory}
-            onEndReachedThreshold={0.2}
-            ListFooterComponent={
-              loadingMore ? (
-                <View style={{ paddingVertical: 8, alignItems: 'center' }}>
-                  <ActivityIndicator size="small" color={COLORS.accentBlue} />
+        {/* Основной контент внутри KeyboardAvoidingView */}
+        <KeyboardAvoidingView
+          style={{ flex: 1 }}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? headerHeight : 0}
+        >
+          {isHistoryLoading ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="large" color={COLORS.accentBlue} />
+              <Text style={styles.loadingText}>{t('assistant.loadingHistory')}</Text>
+            </View>
+          ) : isChatEmpty ? (
+            renderEmptyState()
+          ) : (
+            <FlatList
+              ref={flatListRef}
+              data={messages}
+              renderItem={renderMessageItem}
+              keyExtractor={item => item.id.toString()}
+              style={styles.messageList}
+              contentContainerStyle={styles.messageListContent}
+              ListEmptyComponent={
+                <View style={styles.emptyChatContainer}>
+                  <Ionicons
+                    name="chatbubbles-outline"
+                    size={48}
+                    color={COLORS.placeholder}
+                  />
+                  <Text style={styles.emptyChatText}>
+                    {t('assistant.emptyHistoryShort')}
+                  </Text>
                 </View>
-              ) : null
-            }
-          />
-        )}
+              }
+              inverted
+              onEndReached={loadMoreHistory}
+              onEndReachedThreshold={0.2}
+              ListFooterComponent={
+                loadingMore ? (
+                  <View style={{ paddingVertical: 8, alignItems: 'center' }}>
+                    <ActivityIndicator size="small" color={COLORS.accentBlue} />
+                  </View>
+                ) : null
+              }
+            />
+          )}
 
-        {/* Ошибка под списком (если есть) */}
-        {error && !isHistoryLoading && (
-          <Text style={styles.errorText}>{error}</Text>
-        )}
+          {/* Ошибка */}
+          {error && !isHistoryLoading && (
+            <Text style={styles.errorText}>{error}</Text>
+          )}
 
-        {/* Контейнер ввода (не показывается во время первой загрузки истории) */}
-        {!isHistoryLoading && (
-          <KeyboardAvoidingView
-            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-            keyboardVerticalOffset={Platform.OS === 'ios' ? 110 : 0}
-          >
+          {/* Поле ввода с защитным отступом снизу для навигации */}
+          {!isHistoryLoading && (
             <View style={styles.inputContainer}>
               <TextInput
                 ref={inputRef}
                 style={styles.textInput}
                 value={inputText}
                 onChangeText={setInputText}
-                placeholder="Enter a command for the System..."
+                placeholder={t('assistant.inputPlaceholder')}
                 placeholderTextColor={COLORS.placeholder}
                 multiline
                 editable={!isLoading && !isHistoryLoading}
@@ -641,9 +591,10 @@ const AssistantScreen = ({ navigation }) => {
                 )}
               </TouchableOpacity>
             </View>
-          </KeyboardAvoidingView>
-        )}
-        {/* Модальное окно с подсказками System Protocols */}
+          )}
+        </KeyboardAvoidingView>
+
+        {/* Модалка протоколов */}
         <Modal
           visible={helpVisible}
           transparent
@@ -653,15 +604,15 @@ const AssistantScreen = ({ navigation }) => {
           <View style={styles.helpModalOverlay}>
             <View style={styles.helpModalContent}>
               <View style={styles.helpModalHeader}>
-                <Text style={styles.helpModalTitle}>System Protocols</Text>
+                <Text style={styles.helpModalTitle}>
+                  {t('assistant.protocols.modalTitle')}
+                </Text>
                 <TouchableOpacity onPress={closeHelp}>
                   <Ionicons name="close" size={22} color={COLORS.textSecondary} />
                 </TouchableOpacity>
               </View>
               <Text style={styles.helpModalIntro}>
-                These are example commands you can use to interact with the
-                System. Tap any example to insert it into the input field, then
-                edit it or send it.
+                {t('assistant.protocols.modalIntro')}
               </Text>
               <ScrollView
                 style={{ maxHeight: height * 0.6 }}
@@ -702,7 +653,7 @@ const AssistantScreen = ({ navigation }) => {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: COLORS.backgroundGradientEnd,
+    backgroundColor: COLORS.backgroundGradientStart, // Цвет верха
   },
   container: {
     flex: 1,
@@ -718,12 +669,14 @@ const styles = StyleSheet.create({
     borderRadius: 50,
   },
   header: {
-    height: 60,
+    height: 40,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0,
+    marginTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0,
     borderBottomWidth: 1,
     borderBottomColor: COLORS.headerBorder,
+    backgroundColor: 'transparent',
+    zIndex: 10,
   },
   headerTitle: {
     color: COLORS.textPrimary,
@@ -773,7 +726,7 @@ const styles = StyleSheet.create({
   },
   messageListContent: {
     paddingTop: 8,
-    paddingBottom: 15,
+    paddingBottom: 20, // Немного отступа для последнего сообщения
     flexGrow: 1,
   },
   emptyChatContainer: {
@@ -860,11 +813,13 @@ const styles = StyleSheet.create({
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'flex-end',
-    paddingVertical: 10,
+    paddingTop: 10,
     paddingHorizontal: 15,
     borderTopWidth: 1,
     borderTopColor: COLORS.inputContainerBorder,
     backgroundColor: COLORS.backgroundGradientEnd,
+    // ИСПРАВЛЕНИЕ: Добавляем большой отступ снизу, чтобы поднять инпут над нижней навигацией
+    paddingBottom: Platform.OS === 'ios' ? 90 : 70, 
   },
   textInput: {
     flex: 1,
@@ -901,27 +856,6 @@ const styles = StyleSheet.create({
     shadowOpacity: 0,
     elevation: 0,
   },
-  bottomNav: {
-    width: '100%',
-    paddingBottom: 20,
-  },
-  navBackground: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    paddingVertical: 12,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(77, 171, 247, 0.3)',
-  },
-  navItem: {
-    alignItems: 'center',
-  },
-  navText: {
-    color: '#c8d6e5',
-    fontSize: 10,
-    marginTop: 5,
-  },
-
-  // Empty state with extended hints
   emptyScroll: {
     flex: 1,
     paddingHorizontal: 15,
@@ -995,8 +929,6 @@ const styles = StyleSheet.create({
     color: COLORS.textSecondary,
     fontSize: 11.5,
   },
-
-  // Help modal
   helpModalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.6)',
