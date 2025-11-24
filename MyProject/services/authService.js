@@ -186,6 +186,51 @@ export const isAuthenticated = async () => {
   return Boolean(token);
 };
 
+export const fetchWithAuth = async (endpoint, options = {}) => {
+  // 1. Формируем полный URL
+  const url = endpoint.startsWith('http') ? endpoint : `${BASE_URL}${endpoint}`;
+  
+  // 2. Получаем текущий токен
+  let token = await getAccessToken();
+
+  // 3. Настраиваем заголовки
+  const headers = {
+    'Content-Type': 'application/json',
+    ...options.headers, // позволяем переопределять заголовки
+  };
+
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
+  // 4. Делаем первый запрос
+  let response = await fetch(url, { ...options, headers });
+
+  // 5. Если сервер ответил 401 (Unauthorized), пробуем обновить токен
+  if (response.status === 401) {
+    console.log("Access token expired. Attempting to refresh...");
+
+    try {
+      // Пытаемся обновить токен
+      const newToken = await refreshAccessToken();
+      
+      if (newToken) {
+        // Если успешно обновили, повторяем запрос с новым токеном
+        headers['Authorization'] = `Bearer ${newToken}`;
+        response = await fetch(url, { ...options, headers });
+      }
+    } catch (error) {
+      console.error("Token refresh failed:", error);
+      // Если обновить не вышло (например, refresh токен тоже истек),
+      // logout() уже вызовется внутри refreshAccessToken или здесь
+      await logout();
+      throw new Error('Session expired. Please login again.');
+    }
+  }
+
+  return response;
+};
+
 export default {
   login,
   register,
@@ -193,4 +238,5 @@ export default {
   logout,
   isAuthenticated,
   getAccessToken,
+  fetchWithAuth,
 };

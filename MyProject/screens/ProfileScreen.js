@@ -587,7 +587,7 @@ export default function ProfileScreen({ navigation, route }) {
 
         <ScrollView
           style={styles.mainContent}
-          contentContainerStyle={{ paddingBottom: 80 }}
+          contentContainerStyle={{ paddingBottom: 130 }}
         >
           <View style={styles.profileHeader}>
             <View style={styles.avatarContainer}>

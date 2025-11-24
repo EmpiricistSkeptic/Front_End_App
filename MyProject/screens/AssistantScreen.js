@@ -4,6 +4,7 @@ import React, {
   useEffect,
   useCallback,
   useMemo,
+  useLayoutEffect,
 } from 'react';
 import {
   View,
@@ -14,24 +15,21 @@ import {
   TouchableOpacity,
   KeyboardAvoidingView,
   Platform,
-  SafeAreaView,
   ActivityIndicator,
-  Keyboard,
   Dimensions,
   StatusBar,
   ScrollView,
   Modal,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import {
-  Ionicons,
-  MaterialCommunityIcons,
-  MaterialIcons,
-} from '@expo/vector-icons';
-import apiService from '../services/apiService';
+import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
+import { useSafeAreaInsets } from 'react-native-safe-area-context'; // ВАЖНО: Добавлен хук
+
+import apiService from '../services/apiService';
 
 const { width, height } = Dimensions.get('window');
+const HEADER_CONTENT_HEIGHT = 50; // Фиксированная высота контента хедера
 
 // --- Цвета и стили ---
 const COLORS = {
@@ -59,6 +57,43 @@ const SYSTEM_PREFIX = '[System]';
 // --- Основной компонент ---
 const AssistantScreen = ({ navigation }) => {
   const { t, i18n } = useTranslation();
+  
+  // Хук для безопасных зон (челка, нижняя полоска)
+  const insets = useSafeAreaInsets();
+
+  // --- ЛОГИКА СКРЫТИЯ НИЖНЕЙ НАВИГАЦИИ ---
+  useLayoutEffect(() => {
+    const parent = navigation.getParent();
+    if (parent) {
+      parent.setOptions({
+        tabBarStyle: { display: 'none' },
+      });
+    }
+    return () => {
+      if (parent) {
+        parent.setOptions({
+          tabBarStyle: { display: 'flex' },
+        });
+      }
+    };
+  }, [navigation]);
+
+  // --- Состояния ---
+  const [messages, setMessages] = useState([]);
+  const [inputText, setInputText] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [isHistoryLoading, setIsHistoryLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  // пагинация
+  const [nextPageUrl, setNextPageUrl] = useState(null);
+  const [loadingMore, setLoadingMore] = useState(false);
+
+  // модалка
+  const [helpVisible, setHelpVisible] = useState(false);
+
+  const flatListRef = useRef(null);
+  const inputRef = useRef(null);
 
   // Подсказки по возможностям ассистента
   const ASSISTANT_HELP_SECTIONS = useMemo(
@@ -139,23 +174,6 @@ const AssistantScreen = ({ navigation }) => {
     [t, i18n.language]
   );
 
-  // --- Состояния ---
-  const [messages, setMessages] = useState([]);
-  const [inputText, setInputText] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-  const [isHistoryLoading, setIsHistoryLoading] = useState(true);
-  const [error, setError] = useState(null);
-
-  // пагинация
-  const [nextPageUrl, setNextPageUrl] = useState(null);
-  const [loadingMore, setLoadingMore] = useState(false);
-
-  // модалка
-  const [helpVisible, setHelpVisible] = useState(false);
-
-  const flatListRef = useRef(null);
-  const inputRef = useRef(null);
-
   // Частицы фона
   const particles = useMemo(
     () =>
@@ -201,22 +219,12 @@ const AssistantScreen = ({ navigation }) => {
     setError(null);
     try {
       const historyData = await apiService.get('/chat/history/');
-
-      console.log(
-        'История получена с бэкенда (raw):',
-        JSON.stringify(historyData, null, 2)
-      );
-
       let pageResults = [];
       let next = null;
 
       if (Array.isArray(historyData)) {
         pageResults = historyData;
-      } else if (
-        historyData &&
-        typeof historyData === 'object' &&
-        Array.isArray(historyData.results)
-      ) {
+      } else if (historyData?.results) {
         pageResults = historyData.results;
         next = historyData.next || null;
       } else {
@@ -229,30 +237,11 @@ const AssistantScreen = ({ navigation }) => {
           },
         ];
       }
-
-      const newestFirst = [...pageResults].reverse();
-      setMessages(newestFirst);
+      setMessages([...pageResults].reverse());
       setNextPageUrl(next);
     } catch (err) {
       console.error('Ошибка загрузки истории чата:', err);
-      let errorMessage = t('assistant.errors.loadHistoryDefault');
-      if (err.response) {
-        errorMessage = t('assistant.errors.loadHistoryWithStatus', {
-          status: err.response.status,
-          detail:
-            err.response.data?.detail ||
-            t('assistant.errors.loadHistoryServerFail'),
-        });
-      }
-      setError(errorMessage);
-      setMessages([
-        {
-          id: 'error-load-history',
-          text: `${SYSTEM_PREFIX} ${errorMessage}`,
-          sender: 'ai',
-          timestamp: new Date().toISOString(),
-        },
-      ]);
+      setError(t('assistant.errors.loadHistoryDefault'));
     } finally {
       setIsHistoryLoading(false);
     }
@@ -266,42 +255,19 @@ const AssistantScreen = ({ navigation }) => {
   const loadMoreHistory = useCallback(async () => {
     if (!nextPageUrl || loadingMore || isHistoryLoading) return;
     setLoadingMore(true);
-    setError(null);
-
     try {
-      let responseData;
-      if (typeof nextPageUrl === 'string') {
-        responseData = await apiService.get(nextPageUrl);
-      } else {
-        responseData = null;
-      }
-
-      let newPageResults = [];
-      let newNext = null;
-
-      if (Array.isArray(responseData)) {
-        newPageResults = responseData;
-      } else if (
-        responseData &&
-        typeof responseData === 'object' &&
-        Array.isArray(responseData.results)
-      ) {
-        newPageResults = responseData.results;
-        newNext = responseData.next || null;
-      }
-
+      const responseData = await apiService.get(nextPageUrl);
+      let newPageResults = responseData.results || [];
       if (newPageResults.length > 0) {
-        const newestFirst = [...newPageResults].reverse();
-        setMessages(prev => [...prev, ...newestFirst]);
+        setMessages(prev => [...prev, ...newPageResults.reverse()]);
       }
-      setNextPageUrl(newNext);
+      setNextPageUrl(responseData.next || null);
     } catch (err) {
       console.error('Ошибка дозагрузки истории:', err);
-      setError(t('assistant.errors.loadMoreDefault'));
     } finally {
       setLoadingMore(false);
     }
-  }, [nextPageUrl, loadingMore, isHistoryLoading, t]);
+  }, [nextPageUrl, loadingMore, isHistoryLoading]);
 
   // --- Отправка сообщения ---
   const handleSend = useCallback(async () => {
@@ -319,8 +285,6 @@ const AssistantScreen = ({ navigation }) => {
     setInputText('');
     setIsLoading(true);
     setError(null);
-    // Не скрываем клавиатуру автоматически, чтобы пользователь мог писать дальше
-    // Keyboard.dismiss(); 
 
     try {
       const responseData = await apiService.post('/assistant/', {
@@ -340,34 +304,28 @@ const AssistantScreen = ({ navigation }) => {
       }
     } catch (err) {
       console.error('Ошибка отправки:', err);
-      let errorMessage = t('assistant.errors.sendDefault');
-      if (err.response) {
-        errorMessage = t('assistant.errors.sendWithStatus', {
-          status: err.response.status,
-          detail:
-            err.response.data?.detail || t('assistant.errors.sendServerFail'),
-        });
-      }
-      setError(errorMessage);
-      const errorMessageObj = {
-        id: `error-${Date.now()}`,
-        text: `${SYSTEM_PREFIX} ${t('assistant.systemMessages.sendErrorPrefix')}: ${errorMessage}`,
-        sender: 'ai',
-        timestamp: new Date().toISOString(),
-      };
-      setMessages(prev => [errorMessageObj, ...prev]);
+      setError(t('assistant.errors.sendDefault'));
+      setMessages(prev => [
+        {
+          id: `error-${Date.now()}`,
+          text: `${SYSTEM_PREFIX} Ошибка отправки`,
+          sender: 'ai',
+          timestamp: new Date().toISOString(),
+        },
+        ...prev,
+      ]);
     } finally {
       setIsLoading(false);
     }
   }, [inputText, isLoading, isHistoryLoading, t]);
 
-  // --- Рендер элемента сообщения ---
+  // --- Рендер сообщения ---
   const renderMessageItem = useCallback(({ item }) => {
     const isUser = item.sender === 'user';
-    const isSystemOrError =
-      item.sender === 'ai' && systemPrefixRegex.test(item.text || '');
     const isError =
-      isSystemOrError && /ошибка|error/i.test((item.text || '').toLowerCase());
+      item.sender === 'ai' &&
+      /ошибка|error/i.test((item.text || '').toLowerCase()) &&
+      systemPrefixRegex.test(item.text || '');
 
     return (
       <View
@@ -396,11 +354,7 @@ const AssistantScreen = ({ navigation }) => {
             style={[
               styles.messageText,
               isUser ? styles.userMessageText : styles.aiMessageText,
-              isSystemOrError
-                ? isError
-                  ? styles.errorMessageTextInBubble
-                  : styles.systemMessageTextHighlight
-                : null,
+              isError ? styles.errorMessageTextInBubble : null,
             ]}
           >
             {item.text}
@@ -416,7 +370,9 @@ const AssistantScreen = ({ navigation }) => {
       contentContainerStyle={styles.emptyScrollContent}
     >
       <View style={styles.emptyIntroCard}>
-        <Text style={styles.emptyIntroTitle}>{t('assistant.empty.introTitle')}</Text>
+        <Text style={styles.emptyIntroTitle}>
+          {t('assistant.empty.introTitle')}
+        </Text>
         <Text style={styles.emptyIntroSubtitle}>
           {t('assistant.empty.introSubtitle')}
         </Text>
@@ -441,15 +397,19 @@ const AssistantScreen = ({ navigation }) => {
     </ScrollView>
   );
 
-  // Высота хедера для смещения клавиатуры (примерно 60 + статус бар)
-  const headerHeight = 60 + (Platform.OS === 'android' ? StatusBar.currentHeight || 0 : 0);
+  // Рассчитываем полную высоту хедера (контент + статус бар/челка)
+  const totalHeaderHeight = HEADER_CONTENT_HEIGHT + insets.top;
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <StatusBar barStyle="light-content" />
+    <View style={styles.container}>
+      <StatusBar
+        barStyle="light-content"
+        translucent
+        backgroundColor="transparent"
+      />
       <LinearGradient
         colors={[COLORS.backgroundGradientStart, COLORS.backgroundGradientEnd]}
-        style={styles.container}
+        style={{ flex: 1 }}
       >
         {/* Фон: Частицы */}
         <View style={styles.particlesContainer} pointerEvents="none">
@@ -470,12 +430,28 @@ const AssistantScreen = ({ navigation }) => {
           ))}
         </View>
 
-        {/* Хедер (фиксированный) */}
-        <View style={styles.header}>
+        {/* --- ХЕДЕР (вне KeyboardAvoidingView, фиксированный) --- */}
+        <View
+          style={[
+            styles.header,
+            { height: totalHeaderHeight, paddingTop: insets.top },
+          ]}
+        >
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={() => navigation.goBack()}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
+            <Ionicons name="chevron-back" size={28} color={COLORS.accentBlue} />
+          </TouchableOpacity>
+
           <Text style={styles.headerTitle}>{t('assistant.header')}</Text>
+
+          {/* Пустой View для баланса */}
+          <View style={styles.headerRightPlaceholder} />
         </View>
 
-        {/* Панель помощи */}
+        {/* Панель помощи (если история загружена) */}
         {!isHistoryLoading && (
           <View style={styles.helpBar}>
             <TouchableOpacity style={styles.helpButton} onPress={openHelp}>
@@ -489,9 +465,6 @@ const AssistantScreen = ({ navigation }) => {
                 <Text style={styles.helpButtonTitle}>
                   {t('assistant.protocols.buttonTitle')}
                 </Text>
-                <Text style={styles.helpButtonSubtitle}>
-                  {t('assistant.protocols.buttonSubtitle')}
-                </Text>
               </View>
               <Ionicons
                 name="chevron-forward-outline"
@@ -502,16 +475,22 @@ const AssistantScreen = ({ navigation }) => {
           </View>
         )}
 
-        {/* Основной контент внутри KeyboardAvoidingView */}
+        {/* --- KEYBOARD AVOIDING VIEW --- */}
+        {/*
+            behavior: для iOS 'padding', для Android 'height'.
+            keyboardVerticalOffset: равен высоте хедера (для iOS), чтобы контент не уезжал под него.
+        */}
         <KeyboardAvoidingView
           style={{ flex: 1 }}
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          keyboardVerticalOffset={Platform.OS === 'ios' ? headerHeight : 0}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? totalHeaderHeight : 0}
         >
           {isHistoryLoading ? (
             <View style={styles.loadingContainer}>
               <ActivityIndicator size="large" color={COLORS.accentBlue} />
-              <Text style={styles.loadingText}>{t('assistant.loadingHistory')}</Text>
+              <Text style={styles.loadingText}>
+                {t('assistant.loadingHistory')}
+              </Text>
             </View>
           ) : isChatEmpty ? (
             renderEmptyState()
@@ -523,18 +502,6 @@ const AssistantScreen = ({ navigation }) => {
               keyExtractor={item => item.id.toString()}
               style={styles.messageList}
               contentContainerStyle={styles.messageListContent}
-              ListEmptyComponent={
-                <View style={styles.emptyChatContainer}>
-                  <Ionicons
-                    name="chatbubbles-outline"
-                    size={48}
-                    color={COLORS.placeholder}
-                  />
-                  <Text style={styles.emptyChatText}>
-                    {t('assistant.emptyHistoryShort')}
-                  </Text>
-                </View>
-              }
               inverted
               onEndReached={loadMoreHistory}
               onEndReachedThreshold={0.2}
@@ -548,14 +515,22 @@ const AssistantScreen = ({ navigation }) => {
             />
           )}
 
-          {/* Ошибка */}
           {error && !isHistoryLoading && (
             <Text style={styles.errorText}>{error}</Text>
           )}
 
-          {/* Поле ввода с защитным отступом снизу для навигации */}
+          {/* --- ПОЛЕ ВВОДА --- */}
+          {/* Отступ снизу (paddingBottom) берем из insets.bottom для iPhone X+ */}
           {!isHistoryLoading && (
-            <View style={styles.inputContainer}>
+            <View
+              style={[
+                styles.inputContainer,
+                {
+                  paddingBottom:
+                    Platform.OS === 'ios' ? Math.max(insets.bottom, 10) : 25,
+                },
+              ]}
+            >
               <TextInput
                 ref={inputRef}
                 style={styles.textInput}
@@ -581,7 +556,10 @@ const AssistantScreen = ({ navigation }) => {
                 }
               >
                 {isLoading ? (
-                  <ActivityIndicator size="small" color={COLORS.sendButtonText} />
+                  <ActivityIndicator
+                    size="small"
+                    color={COLORS.sendButtonText}
+                  />
                 ) : (
                   <Ionicons
                     name="arrow-up"
@@ -594,7 +572,7 @@ const AssistantScreen = ({ navigation }) => {
           )}
         </KeyboardAvoidingView>
 
-        {/* Модалка протоколов */}
+        {/* Модалка помощи */}
         <Modal
           visible={helpVisible}
           transparent
@@ -608,12 +586,13 @@ const AssistantScreen = ({ navigation }) => {
                   {t('assistant.protocols.modalTitle')}
                 </Text>
                 <TouchableOpacity onPress={closeHelp}>
-                  <Ionicons name="close" size={22} color={COLORS.textSecondary} />
+                  <Ionicons
+                    name="close"
+                    size={22}
+                    color={COLORS.textSecondary}
+                  />
                 </TouchableOpacity>
               </View>
-              <Text style={styles.helpModalIntro}>
-                {t('assistant.protocols.modalIntro')}
-              </Text>
               <ScrollView
                 style={{ maxHeight: height * 0.6 }}
                 contentContainerStyle={{ paddingBottom: 10 }}
@@ -645,18 +624,15 @@ const AssistantScreen = ({ navigation }) => {
           </View>
         </Modal>
       </LinearGradient>
-    </SafeAreaView>
+    </View>
   );
 };
 
 // --- Стили ---
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: COLORS.backgroundGradientStart, // Цвет верха
-  },
   container: {
     flex: 1,
+    backgroundColor: COLORS.backgroundGradientEnd,
   },
   particlesContainer: {
     position: 'absolute',
@@ -669,20 +645,30 @@ const styles = StyleSheet.create({
     borderRadius: 50,
   },
   header: {
-    height: 40,
-    justifyContent: 'center',
+    flexDirection: 'row',
     alignItems: 'center',
-    marginTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0,
+    justifyContent: 'space-between',
     borderBottomWidth: 1,
     borderBottomColor: COLORS.headerBorder,
     backgroundColor: 'transparent',
     zIndex: 10,
+    paddingHorizontal: 10,
+  },
+  backButton: {
+    width: 40,
+    justifyContent: 'center',
+    alignItems: 'flex-start',
   },
   headerTitle: {
     color: COLORS.textPrimary,
     fontSize: 18,
     fontWeight: 'bold',
     letterSpacing: 1,
+    textAlign: 'center',
+    flex: 1,
+  },
+  headerRightPlaceholder: {
+    width: 40,
   },
   helpBar: {
     paddingHorizontal: 15,
@@ -705,11 +691,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     letterSpacing: 0.5,
   },
-  helpButtonSubtitle: {
-    color: COLORS.textSecondary,
-    fontSize: 11,
-    marginTop: 2,
-  },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
@@ -726,7 +707,7 @@ const styles = StyleSheet.create({
   },
   messageListContent: {
     paddingTop: 8,
-    paddingBottom: 20, // Немного отступа для последнего сообщения
+    paddingBottom: 20,
     flexGrow: 1,
   },
   emptyChatContainer: {
@@ -794,11 +775,6 @@ const styles = StyleSheet.create({
   aiMessageText: {
     color: COLORS.textSecondary,
   },
-  systemMessageTextHighlight: {
-    color: COLORS.accentBlue,
-    fontWeight: '600',
-    fontStyle: 'italic',
-  },
   errorMessageTextInBubble: {
     color: COLORS.error,
     fontWeight: '600',
@@ -810,6 +786,7 @@ const styles = StyleSheet.create({
     paddingBottom: 5,
     fontSize: 13,
   },
+  // Контейнер ввода
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'flex-end',
@@ -818,8 +795,6 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: COLORS.inputContainerBorder,
     backgroundColor: COLORS.backgroundGradientEnd,
-    // ИСПРАВЛЕНИЕ: Добавляем большой отступ снизу, чтобы поднять инпут над нижней навигацией
-    paddingBottom: Platform.OS === 'ios' ? 90 : 70, 
   },
   textInput: {
     flex: 1,
@@ -849,6 +824,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.8,
     shadowRadius: 6,
     elevation: 8,
+    // На Андроиде иногда нужна небольшая коррекция, но обычно 0 ок при использовании KAV
     marginBottom: Platform.OS === 'android' ? 4 : 0,
   },
   sendButtonDisabled: {
@@ -956,11 +932,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
     letterSpacing: 0.5,
-  },
-  helpModalIntro: {
-    color: COLORS.textSecondary,
-    fontSize: 12.5,
-    marginBottom: 8,
   },
 });
 

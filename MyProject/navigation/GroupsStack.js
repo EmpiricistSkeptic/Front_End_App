@@ -12,10 +12,14 @@ const Stack = createNativeStackNavigator();
 export default function GroupsStack() {
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="GroupsHomeMain" component={GroupsHomeScreen} />
+      <Stack.Screen name="GroupsHomeMain" component={GroupsHomeScreen} options={{
+              animation: 'slide_from_bottom' // Можно добавить красивую анимацию появления
+            }} />
       
       {/* Профиль доступен внутри стека */}
-      <Stack.Screen name="Profile" component={ProfileScreen} />
+      <Stack.Screen name="Profile" component={ProfileScreen} options={{
+              animation: 'slide_from_bottom' // Можно добавить красивую анимацию появления
+            }} />
       
     </Stack.Navigator>
   );

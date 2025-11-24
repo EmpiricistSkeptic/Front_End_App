@@ -15,14 +15,18 @@ export default function HomeStack() {
           Внутри него уже работают Top Tabs (Tasks/Quests/Habits).
           Навигатор об этом не знает, для него это просто "Один экран".
       */}
-      <Stack.Screen name="HomeMain" component={HomeScreen} />
+      <Stack.Screen name="HomeMain" component={HomeScreen} options={{
+              animation: 'slide_from_bottom' // Можно добавить красивую анимацию появления
+            }} />
 
       {/* 
           Добавляем Профиль сюда. 
           Так как он внутри этого стека, а этот стек внутри Нижнего Меню,
           меню останется видимым!
       */}
-      <Stack.Screen name="Profile" component={ProfileScreen} />
+      <Stack.Screen name="Profile" component={ProfileScreen} options={{
+              animation: 'slide_from_bottom' // Можно добавить красивую анимацию появления
+            }} />
     </Stack.Navigator>
   );
 }

@@ -15,6 +15,8 @@ import CustomTabBar from '../components/CustomTabBar';
 
 const Tab = createBottomTabNavigator();
 
+const EmptyComponent = () => <View />;
+
 export default function TabNavigator() {
   return (
     <Tab.Navigator
@@ -46,8 +48,17 @@ export default function TabNavigator() {
       />
       <Tab.Screen 
         name="Assistant" 
-        component={AssistantScreen} 
+        component={EmptyComponent} // Ставим пустышку
         options={{ title: 'Assistant' }} 
+        listeners={({ navigation }) => ({
+          tabPress: (e) => {
+            // 1. Отменяем стандартный переход на вкладку
+            e.preventDefault();
+            
+            // 2. Вместо этого открываем экран из App.js (Global Stack)
+            navigation.navigate('AssistantDetail');
+          },
+        })}
       />
     </Tab.Navigator>
   );

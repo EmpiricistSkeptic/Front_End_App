@@ -17,6 +17,7 @@ import CreateGroupScreen from './screens/Groups/CreateGroupScreen';
 import EditGroupScreen from './screens/Groups/EditGroupScreen';
 import CreateTaskScreen from './screens/CreateTaskScreen';
 import EditTaskScreen from './screens/EditTaskScreen';
+import AssistantScreen from './screens/AssistantScreen';
 
 // Импортируем наш НОВЫЙ навигатор табов
 import TabNavigator from './navigation/TabNavigator';
@@ -43,14 +44,23 @@ export default function App() {
           <Stack.Screen
             name="Welcome"
             component={WelcomeScreen}
+            options={{
+              animation: 'slide_from_bottom' // Можно добавить красивую анимацию появления
+            }}
           />
           <Stack.Screen
             name="Login"
             component={LoginScreen}
+            options={{
+              animation: 'slide_from_bottom' // Можно добавить красивую анимацию появления
+            }}
           />
           <Stack.Screen
             name="Registration"
             component={RegistrationScreen}
+            options={{
+              animation: 'slide_from_bottom' // Можно добавить красивую анимацию появления
+            }}
           />
 
           {/* ГЛАВНЫЙ ЭКРАН С НИЖНИМ МЕНЮ */}
@@ -58,20 +68,41 @@ export default function App() {
           <Stack.Screen
             name="MainTabs"
             component={TabNavigator}
+            options={{
+              animation: 'slide_from_bottom' // Можно добавить красивую анимацию появления
+            }}
           />
 
           {/* Экраны, которые открываются поверх меню (без меню внизу) */}
-          <Stack.Screen name="GroupDetails" component={GroupDetailsScreen} />
-          <Stack.Screen name="Profile" component={ProfileScreen} />
-          <Stack.Screen name="CreateGroup" component={CreateGroupScreen} />
-          <Stack.Screen name="EditGroup" component={EditGroupScreen} />
+          <Stack.Screen name="GroupDetails" component={GroupDetailsScreen} options={{
+              animation: 'slide_from_bottom' // Можно добавить красивую анимацию появления
+            }} />
+          <Stack.Screen name="Profile" component={ProfileScreen} options={{
+              animation: 'slide_from_bottom' // Можно добавить красивую анимацию появления
+            }} />
+          <Stack.Screen 
+            name="AssistantDetail" // Назовем уникально, чтобы не путать с табом
+            component={AssistantScreen} 
+          />
+          <Stack.Screen name="CreateGroup" component={CreateGroupScreen} options={{
+              animation: 'slide_from_bottom' // Можно добавить красивую анимацию появления
+            }} />
+          <Stack.Screen name="EditGroup" component={EditGroupScreen} options={{
+              animation: 'slide_from_bottom' // Можно добавить красивую анимацию появления
+            }} />
           <Stack.Screen
             name="CreateTask"
             component={CreateTaskScreen}
+            options={{
+              animation: 'slide_from_bottom' // Можно добавить красивую анимацию появления
+            }}
           />
           <Stack.Screen
             name="EditTask"
             component={EditTaskScreen}
+            options={{
+              animation: 'slide_from_bottom' // Можно добавить красивую анимацию появления
+            }}
           />
         </Stack.Navigator>
       </NavigationContainer>
