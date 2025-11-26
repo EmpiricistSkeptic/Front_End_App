@@ -95,7 +95,7 @@ export default function ProfileScreen({ navigation, route }) {
   const profileAvatar =
     (isEditing && avatar)
       ? avatar
-      : (displayProfile?.avatar_url || displayProfile?.avatar);
+      : (displayProfile?.avatar || displayProfile?.avatar_url || null);
 
   const particles = useMemo(
     () =>

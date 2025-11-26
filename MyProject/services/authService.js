@@ -148,14 +148,29 @@ export const register = async (payload) => {
 export const refreshAccessToken = async () => {
   const refresh = await getRefreshToken();
   if (!refresh) throw new Error('No refresh token');
+
   const resp = await fetch(`${BASE_URL}/api/token/refresh/`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ refresh }),
   });
-  if (!resp.ok) throw new Error(`Refresh failed: ${resp.status}`);
+
+  if (!resp.ok) {
+     // Если сервер ответил ошибкой (например, refresh токен просрочен или в бане),
+     // выбрасываем ошибку, чтобы fetchWithAuth вызвал logout.
+     throw new Error(`Refresh failed: ${resp.status}`);
+  }
+
   const data = await resp.json();
+
+  // 1. Сохраняем новый access токен
   await AsyncStorage.setItem(ACCESS_KEY, data.access);
+
+  // 2. ВАЖНО: Если сервер вернул новый refresh токен (из-за ROTATE_REFRESH_TOKENS), сохраняем его!
+  if (data.refresh) {
+    await AsyncStorage.setItem(REFRESH_KEY, data.refresh);
+  }
+
   return data.access;
 };
 

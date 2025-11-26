@@ -12,6 +12,10 @@ import {
   Switch,
   Alert,
   ActivityIndicator,
+  KeyboardAvoidingView,
+  ScrollView,
+  TouchableWithoutFeedback,
+  Keyboard,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -31,6 +35,7 @@ const COLORS = {
   particle: '#4dabf7',
   headerBorder: 'rgba(77, 171, 247, 0.3)',
   inputBackground: 'rgba(16, 20, 45, 0.9)',
+  cardBackground: 'rgba(255, 255, 255, 0.05)',
 };
 
 export default function CreateGroupScreen({ navigation }) {
@@ -41,7 +46,7 @@ export default function CreateGroupScreen({ navigation }) {
   const [isPublic, setIsPublic] = useState(true);
   const [saving, setSaving] = useState(false);
 
-  // ✅ мемоизированные частицы
+  // ✅ Мемоизированные частицы
   const particles = useMemo(
     () =>
       [...Array(20)].map((_, i) => ({
@@ -91,7 +96,7 @@ export default function CreateGroupScreen({ navigation }) {
         is_public: Boolean(isPublic),
       });
 
-      // подтягиваем детальные поля (is_member, members_count)
+      // Подтягиваем детальные поля (is_member, members_count)
       let detailed;
       try {
         detailed = await getGroup(created.id);
@@ -116,13 +121,14 @@ export default function CreateGroupScreen({ navigation }) {
   }, [name, desc, isPublic, navigation, t, pickErrorMessage]);
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: COLORS.backgroundGradientEnd }}>
-      <StatusBar barStyle="light-content" />
+    <View style={{ flex: 1, backgroundColor: COLORS.backgroundGradientEnd }}>
+      <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
+      
       <LinearGradient
         colors={[COLORS.backgroundGradientStart, COLORS.backgroundGradientEnd]}
         style={{ flex: 1 }}
       >
-        {/* Particles */}
+        {/* Particles Background */}
         <View style={{ position: 'absolute', width, height }} pointerEvents="none">
           {particles.map((p) => (
             <View
@@ -141,122 +147,184 @@ export default function CreateGroupScreen({ navigation }) {
           ))}
         </View>
 
-        {/* Header */}
-        <View
-          style={{
-            height: 60,
-            justifyContent: 'center',
-            alignItems: 'center',
-            paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0,
-            borderBottomWidth: 1,
-            borderBottomColor: COLORS.headerBorder,
-          }}
-        >
-          <Text
+        {/* SafeAreaView для контента */}
+        <SafeAreaView style={{ flex: 1 }}>
+          
+          {/* Header */}
+          <View
             style={{
-              color: COLORS.textPrimary,
-              fontSize: 18,
-              fontWeight: 'bold',
-              letterSpacing: 1,
+              height: 60,
+              flexDirection: 'row',
+              alignItems: 'center', // Выравнивание по центру по вертикали
+              justifyContent: 'center', // Выравнивание заголовка по центру
+              paddingHorizontal: 16,
+              borderBottomWidth: 1,
+              borderBottomColor: COLORS.headerBorder,
+              marginTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0,
             }}
           >
-            {t('groups.create.header.title')}
-          </Text>
+            {/* Кнопка Назад (абсолютное позиционирование слева, но выровнено по центру высоты) */}
+            <TouchableOpacity
+              onPress={() => navigation.goBack()}
+              style={{
+                position: 'absolute',
+                left: 10,
+                height: '100%',
+                justifyContent: 'center',
+                paddingHorizontal: 10,
+                zIndex: 10,
+              }}
+            >
+              <Ionicons name="chevron-back" size={28} color={COLORS.textSecondary} />
+            </TouchableOpacity>
 
-          <TouchableOpacity
-            onPress={() => navigation.goBack()}
-            style={{ position: 'absolute', left: 15, top: 18 }}
-          >
-            <Ionicons name="chevron-back" size={24} color={COLORS.textSecondary} />
-          </TouchableOpacity>
-        </View>
-
-        <View style={{ flex: 1, padding: 15 }}>
-          <Text style={{ color: COLORS.textSecondary, fontSize: 12, marginBottom: 6 }}>
-            {t('groups.create.fields.name')}
-          </Text>
-          <TextInput
-            style={{
-              backgroundColor: COLORS.inputBackground,
-              borderRadius: 12,
-              borderWidth: 1,
-              borderColor: COLORS.borderBlue,
-              color: COLORS.textPrimary,
-              paddingHorizontal: 12,
-              paddingVertical: 10,
-            }}
-            placeholder={t('groups.create.placeholders.name')}
-            placeholderTextColor={COLORS.placeholder}
-            value={name}
-            onChangeText={setName}
-            autoCapitalize="none"
-            autoCorrect={false}
-          />
-
-          <Text
-            style={{
-              color: COLORS.textSecondary,
-              fontSize: 12,
-              marginBottom: 6,
-              marginTop: 12,
-            }}
-          >
-            {t('groups.create.fields.description')}
-          </Text>
-          <TextInput
-            style={{
-              backgroundColor: COLORS.inputBackground,
-              borderRadius: 12,
-              borderWidth: 1,
-              borderColor: COLORS.borderBlue,
-              color: COLORS.textPrimary,
-              paddingHorizontal: 12,
-              paddingVertical: 10,
-              minHeight: 90,
-            }}
-            placeholder={t('groups.create.placeholders.description')}
-            placeholderTextColor={COLORS.placeholder}
-            value={desc}
-            onChangeText={setDesc}
-            multiline
-          />
-
-          <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 12 }}>
-            <Text style={{ color: COLORS.textSecondary, marginRight: 10 }}>
-              {t('groups.create.fields.public')}
+            <Text
+              style={{
+                color: COLORS.textPrimary,
+                fontSize: 18,
+                fontWeight: 'bold',
+                letterSpacing: 0.5,
+              }}
+            >
+              {t('groups.create.header.title')}
             </Text>
-            <Switch value={isPublic} onValueChange={setIsPublic} />
           </View>
 
-          <TouchableOpacity
-            onPress={handleCreate}
-            disabled={saving}
-            style={{
-              marginTop: 18,
-              alignSelf: 'flex-start',
-              paddingHorizontal: 16,
-              paddingVertical: 10,
-              borderRadius: 22,
-              backgroundColor: saving ? '#5f7191' : COLORS.accentBlue,
-              flexDirection: 'row',
-              alignItems: 'center',
-            }}
+          {/* Main Content */}
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            style={{ flex: 1 }}
           >
-            {saving ? (
-              <>
-                <ActivityIndicator size="small" color="#080b20" style={{ marginRight: 8 }} />
-                <Text style={{ color: '#080b20', fontWeight: '700' }}>
-                  {t('groups.create.buttons.creating')}
-                </Text>
-              </>
-            ) : (
-              <Text style={{ color: '#080b20', fontWeight: '700' }}>
-                {t('groups.create.buttons.create')}
-              </Text>
-            )}
-          </TouchableOpacity>
-        </View>
+            <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+              <ScrollView 
+                contentContainerStyle={{ padding: 20, paddingBottom: 40 }}
+                showsVerticalScrollIndicator={false}
+              >
+                {/* Name Input */}
+                <View style={{ marginBottom: 24 }}>
+                  <Text style={{ color: COLORS.textSecondary, fontSize: 14, marginBottom: 8, fontWeight: '600' }}>
+                    {t('groups.create.fields.name')}
+                  </Text>
+                  <TextInput
+                    style={{
+                      backgroundColor: COLORS.inputBackground,
+                      borderRadius: 16,
+                      borderWidth: 1,
+                      borderColor: COLORS.borderBlue,
+                      color: COLORS.textPrimary,
+                      paddingHorizontal: 16,
+                      paddingVertical: 14,
+                      fontSize: 16,
+                    }}
+                    placeholder={t('groups.create.placeholders.name')}
+                    placeholderTextColor={COLORS.placeholder}
+                    value={name}
+                    onChangeText={setName}
+                    autoCapitalize="sentences"
+                    autoCorrect={false}
+                  />
+                </View>
+
+                {/* Description Input */}
+                <View style={{ marginBottom: 24 }}>
+                  <Text style={{ color: COLORS.textSecondary, fontSize: 14, marginBottom: 8, fontWeight: '600' }}>
+                    {t('groups.create.fields.description')}
+                  </Text>
+                  <TextInput
+                    style={{
+                      backgroundColor: COLORS.inputBackground,
+                      borderRadius: 16,
+                      borderWidth: 1,
+                      borderColor: COLORS.borderBlue,
+                      color: COLORS.textPrimary,
+                      paddingHorizontal: 16,
+                      paddingVertical: 14,
+                      fontSize: 16,
+                      minHeight: 100,
+                      textAlignVertical: 'top', // Для Android, чтобы текст начинался сверху
+                    }}
+                    placeholder={t('groups.create.placeholders.description')}
+                    placeholderTextColor={COLORS.placeholder}
+                    value={desc}
+                    onChangeText={setDesc}
+                    multiline
+                  />
+                </View>
+
+                {/* Public Switch Block */}
+                <View
+                  style={{
+                    backgroundColor: COLORS.cardBackground,
+                    borderRadius: 16,
+                    padding: 16,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    marginBottom: 32,
+                    borderWidth: 1,
+                    borderColor: 'rgba(255,255,255,0.1)',
+                  }}
+                >
+                  <View style={{ flex: 1, marginRight: 10 }}>
+                    <Text style={{ color: COLORS.textPrimary, fontSize: 16, fontWeight: '600', marginBottom: 4 }}>
+                      {t('groups.create.fields.public')}
+                    </Text>
+                    <Text style={{ color: COLORS.textSecondary, fontSize: 12 }}>
+                      {isPublic 
+                        ? t('groups.create.fields.publicHintOn') || 'Anyone can find and join' 
+                        : t('groups.create.fields.publicHintOff') || 'Invitation only'
+                      }
+                    </Text>
+                  </View>
+                  <Switch 
+                    value={isPublic} 
+                    onValueChange={setIsPublic}
+                    trackColor={{ false: '#3e3e3e', true: COLORS.borderBlue }}
+                    thumbColor={isPublic ? COLORS.accentBlue : '#f4f3f4'} 
+                  />
+                </View>
+
+                {/* Create Button */}
+                <TouchableOpacity
+                  onPress={handleCreate}
+                  disabled={saving}
+                  activeOpacity={0.8}
+                  style={{
+                    width: '100%',
+                    paddingVertical: 16,
+                    borderRadius: 24,
+                    backgroundColor: saving ? '#5f7191' : COLORS.accentBlue,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    shadowColor: COLORS.accentBlue,
+                    shadowOffset: { width: 0, height: 4 },
+                    shadowOpacity: 0.3,
+                    shadowRadius: 8,
+                    elevation: 5,
+                  }}
+                >
+                  {saving ? (
+                    <ActivityIndicator size="small" color="#080b20" style={{ marginRight: 8 }} />
+                  ) : null}
+                  <Text 
+                    style={{ 
+                      color: '#080b20', 
+                      fontSize: 16, 
+                      fontWeight: 'bold',
+                      textTransform: 'uppercase',
+                      letterSpacing: 1
+                    }}
+                  >
+                    {saving ? t('groups.create.buttons.creating') : t('groups.create.buttons.create')}
+                  </Text>
+                </TouchableOpacity>
+
+              </ScrollView>
+            </TouchableWithoutFeedback>
+          </KeyboardAvoidingView>
+        </SafeAreaView>
       </LinearGradient>
-    </SafeAreaView>
+    </View>
   );
 }

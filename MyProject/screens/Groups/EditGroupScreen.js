@@ -1,8 +1,21 @@
 // src/screens/Groups/EditGroupScreen.js
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import {
-  View, Text, SafeAreaView, StatusBar, Platform, Dimensions,
-  TouchableOpacity, TextInput, Switch, Alert, ActivityIndicator
+  View,
+  Text,
+  SafeAreaView,
+  StatusBar,
+  Platform,
+  Dimensions,
+  TouchableOpacity,
+  TextInput,
+  Switch,
+  Alert,
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  ScrollView,
+  TouchableWithoutFeedback,
+  Keyboard,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -22,6 +35,7 @@ const COLORS = {
   particle: '#4dabf7',
   headerBorder: 'rgba(77, 171, 247, 0.3)',
   inputBackground: 'rgba(16, 20, 45, 0.9)',
+  cardBackground: 'rgba(255, 255, 255, 0.05)',
 };
 
 export default function EditGroupScreen({ route, navigation }) {
@@ -35,7 +49,7 @@ export default function EditGroupScreen({ route, navigation }) {
   const [desc, setDesc] = useState(preGroup?.description || '');
   const [isPublic, setIsPublic] = useState(Boolean(preGroup?.is_public));
 
-  // ✅ частицы мемоизированы — не дергаются на каждом рендере
+  // ✅ Частицы мемоизированы
   const particles = useMemo(
     () =>
       [...Array(20)].map((_, i) => ({
@@ -61,7 +75,10 @@ export default function EditGroupScreen({ route, navigation }) {
         setDesc(g?.description || '');
         setIsPublic(Boolean(g?.is_public));
       } catch (e) {
-        Alert.alert(t('groups.edit.alerts.errorTitle'), t('groups.edit.alerts.groupNotFound'));
+        Alert.alert(
+          t('groups.edit.alerts.errorTitle'),
+          t('groups.edit.alerts.groupNotFound')
+        );
         navigation.goBack();
       } finally {
         active && setLoading(false);
@@ -76,7 +93,10 @@ export default function EditGroupScreen({ route, navigation }) {
   const handleSave = useCallback(async () => {
     const nm = name.trim();
     if (!nm) {
-      Alert.alert(t('groups.edit.alerts.validationTitle'), t('groups.edit.alerts.nameRequired'));
+      Alert.alert(
+        t('groups.edit.alerts.validationTitle'),
+        t('groups.edit.alerts.nameRequired')
+      );
       return;
     }
 
@@ -88,7 +108,7 @@ export default function EditGroupScreen({ route, navigation }) {
         is_public: Boolean(isPublic),
       });
 
-      // обновляем параметры GroupDetails и возвращаемся
+      // Обновляем параметры GroupDetails и возвращаемся
       navigation.navigate({
         name: 'GroupDetails',
         params: {
@@ -113,19 +133,20 @@ export default function EditGroupScreen({ route, navigation }) {
   }, [name, desc, isPublic, groupId, navigation, t]);
 
   return (
-    <SafeAreaView style={{ flex:1, backgroundColor: COLORS.backgroundGradientEnd }}>
-      <StatusBar barStyle="light-content" />
+    <View style={{ flex: 1, backgroundColor: COLORS.backgroundGradientEnd }}>
+      <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
+      
       <LinearGradient
         colors={[COLORS.backgroundGradientStart, COLORS.backgroundGradientEnd]}
-        style={{ flex:1 }}
+        style={{ flex: 1 }}
       >
-        {/* Particles */}
-        <View style={{ position:'absolute', width, height }} pointerEvents="none">
+        {/* Particles Background */}
+        <View style={{ position: 'absolute', width, height }} pointerEvents="none">
           {particles.map((p) => (
             <View
               key={p.key}
               style={{
-                position:'absolute',
+                position: 'absolute',
                 left: p.left,
                 top: p.top,
                 width: p.size,
@@ -138,99 +159,192 @@ export default function EditGroupScreen({ route, navigation }) {
           ))}
         </View>
 
-        {/* Header */}
-        <View style={{
-          height:60, justifyContent:'center', alignItems:'center',
-          paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0,
-          borderBottomWidth:1, borderBottomColor: COLORS.headerBorder
-        }}>
-          <Text style={{ color: COLORS.textPrimary, fontSize:18, fontWeight:'bold', letterSpacing:1 }}>
-            {t('groups.edit.header.title')}
-          </Text>
-
-          <TouchableOpacity
-            onPress={() => navigation.goBack()}
-            style={{ position:'absolute', left:15, top: 18 }}
+        <SafeAreaView style={{ flex: 1 }}>
+          
+          {/* Header */}
+          <View
+            style={{
+              height: 60,
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'center',
+              paddingHorizontal: 16,
+              borderBottomWidth: 1,
+              borderBottomColor: COLORS.headerBorder,
+              marginTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0,
+            }}
           >
-            <Ionicons name="chevron-back" size={24} color={COLORS.textSecondary} />
-          </TouchableOpacity>
-        </View>
-
-        {loading ? (
-          <View style={{ flex:1, justifyContent:'center', alignItems:'center' }}>
-            <ActivityIndicator size="large" color={COLORS.accentBlue} />
-            <Text style={{ color: COLORS.textSecondary, marginTop: 10 }}>
-              {t('common.loading')}
-            </Text>
-          </View>
-        ) : (
-          <View style={{ flex:1, padding: 15 }}>
-            <Text style={{ color: COLORS.textSecondary, fontSize: 12, marginBottom: 6 }}>
-              {t('groups.edit.fields.name')}
-            </Text>
-            <TextInput
-              style={{
-                backgroundColor: COLORS.inputBackground,
-                borderRadius: 12,
-                borderWidth: 1,
-                borderColor: COLORS.borderBlue,
-                color: COLORS.textPrimary,
-                paddingHorizontal: 12,
-                paddingVertical: 10
-              }}
-              placeholder={t('groups.edit.placeholders.name')}
-              placeholderTextColor={COLORS.placeholder}
-              value={name}
-              onChangeText={setName}
-            />
-
-            <Text style={{ color: COLORS.textSecondary, fontSize: 12, marginBottom: 6, marginTop: 12 }}>
-              {t('groups.edit.fields.description')}
-            </Text>
-            <TextInput
-              style={{
-                backgroundColor: COLORS.inputBackground,
-                borderRadius: 12,
-                borderWidth: 1,
-                borderColor: COLORS.borderBlue,
-                color: COLORS.textPrimary,
-                paddingHorizontal: 12,
-                paddingVertical: 10,
-                minHeight: 90
-              }}
-              placeholder={t('groups.edit.placeholders.description')}
-              placeholderTextColor={COLORS.placeholder}
-              value={desc}
-              onChangeText={setDesc}
-              multiline
-            />
-
-            <View style={{ flexDirection:'row', alignItems:'center', marginTop: 12 }}>
-              <Text style={{ color: COLORS.textSecondary, marginRight: 10 }}>
-                {t('groups.edit.fields.public')}
-              </Text>
-              <Switch value={isPublic} onValueChange={setIsPublic} />
-            </View>
-
             <TouchableOpacity
-              onPress={handleSave}
-              disabled={saving}
+              onPress={() => navigation.goBack()}
               style={{
-                marginTop: 18,
-                alignSelf:'flex-start',
-                paddingHorizontal: 16,
-                paddingVertical: 10,
-                borderRadius: 22,
-                backgroundColor: saving ? '#5f7191' : COLORS.accentBlue
+                position: 'absolute',
+                left: 10,
+                height: '100%',
+                justifyContent: 'center',
+                paddingHorizontal: 10,
+                zIndex: 10,
               }}
             >
-              <Text style={{ color: '#080b20', fontWeight: '700' }}>
-                {saving ? t('groups.edit.buttons.saving') : t('common.save')}
-              </Text>
+              <Ionicons name="chevron-back" size={28} color={COLORS.textSecondary} />
             </TouchableOpacity>
+
+            <Text
+              style={{
+                color: COLORS.textPrimary,
+                fontSize: 18,
+                fontWeight: 'bold',
+                letterSpacing: 0.5,
+              }}
+            >
+              {t('groups.edit.header.title')}
+            </Text>
           </View>
-        )}
+
+          {/* Main Content */}
+          {loading ? (
+            <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+              <ActivityIndicator size="large" color={COLORS.accentBlue} />
+              <Text style={{ color: COLORS.textSecondary, marginTop: 10 }}>
+                {t('common.loading')}
+              </Text>
+            </View>
+          ) : (
+            <KeyboardAvoidingView
+              behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+              style={{ flex: 1 }}
+            >
+              <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+                <ScrollView
+                  contentContainerStyle={{ padding: 20, paddingBottom: 40 }}
+                  showsVerticalScrollIndicator={false}
+                >
+                  
+                  {/* Name Input */}
+                  <View style={{ marginBottom: 24 }}>
+                    <Text style={{ color: COLORS.textSecondary, fontSize: 14, marginBottom: 8, fontWeight: '600' }}>
+                      {t('groups.edit.fields.name')}
+                    </Text>
+                    <TextInput
+                      style={{
+                        backgroundColor: COLORS.inputBackground,
+                        borderRadius: 16,
+                        borderWidth: 1,
+                        borderColor: COLORS.borderBlue,
+                        color: COLORS.textPrimary,
+                        paddingHorizontal: 16,
+                        paddingVertical: 14,
+                        fontSize: 16,
+                      }}
+                      placeholder={t('groups.edit.placeholders.name')}
+                      placeholderTextColor={COLORS.placeholder}
+                      value={name}
+                      onChangeText={setName}
+                      autoCapitalize="sentences"
+                      autoCorrect={false}
+                    />
+                  </View>
+
+                  {/* Description Input */}
+                  <View style={{ marginBottom: 24 }}>
+                    <Text style={{ color: COLORS.textSecondary, fontSize: 14, marginBottom: 8, fontWeight: '600' }}>
+                      {t('groups.edit.fields.description')}
+                    </Text>
+                    <TextInput
+                      style={{
+                        backgroundColor: COLORS.inputBackground,
+                        borderRadius: 16,
+                        borderWidth: 1,
+                        borderColor: COLORS.borderBlue,
+                        color: COLORS.textPrimary,
+                        paddingHorizontal: 16,
+                        paddingVertical: 14,
+                        fontSize: 16,
+                        minHeight: 100,
+                        textAlignVertical: 'top', // Важно для Android
+                      }}
+                      placeholder={t('groups.edit.placeholders.description')}
+                      placeholderTextColor={COLORS.placeholder}
+                      value={desc}
+                      onChangeText={setDesc}
+                      multiline
+                    />
+                  </View>
+
+                  {/* Public Switch Block */}
+                  <View
+                    style={{
+                      backgroundColor: COLORS.cardBackground,
+                      borderRadius: 16,
+                      padding: 16,
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      marginBottom: 32,
+                      borderWidth: 1,
+                      borderColor: 'rgba(255,255,255,0.1)',
+                    }}
+                  >
+                    <View style={{ flex: 1, marginRight: 10 }}>
+                      <Text style={{ color: COLORS.textPrimary, fontSize: 16, fontWeight: '600', marginBottom: 4 }}>
+                        {t('groups.edit.fields.public')}
+                      </Text>
+                      <Text style={{ color: COLORS.textSecondary, fontSize: 12 }}>
+                        {isPublic 
+                          ? 'Group is visible to everyone' 
+                          : 'Group is invite only'
+                        }
+                      </Text>
+                    </View>
+                    <Switch
+                      value={isPublic}
+                      onValueChange={setIsPublic}
+                      trackColor={{ false: '#3e3e3e', true: COLORS.borderBlue }}
+                      thumbColor={isPublic ? COLORS.accentBlue : '#f4f3f4'}
+                    />
+                  </View>
+
+                  {/* Save Button */}
+                  <TouchableOpacity
+                    onPress={handleSave}
+                    disabled={saving}
+                    activeOpacity={0.8}
+                    style={{
+                      width: '100%',
+                      paddingVertical: 16,
+                      borderRadius: 24,
+                      backgroundColor: saving ? '#5f7191' : COLORS.accentBlue,
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      shadowColor: COLORS.accentBlue,
+                      shadowOffset: { width: 0, height: 4 },
+                      shadowOpacity: 0.3,
+                      shadowRadius: 8,
+                      elevation: 5,
+                    }}
+                  >
+                     {saving ? (
+                      <ActivityIndicator size="small" color="#080b20" style={{ marginRight: 8 }} />
+                    ) : null}
+                    <Text 
+                      style={{ 
+                        color: '#080b20', 
+                        fontSize: 16, 
+                        fontWeight: 'bold',
+                        textTransform: 'uppercase',
+                        letterSpacing: 1
+                      }}
+                    >
+                      {saving ? t('groups.edit.buttons.saving') : t('common.save')}
+                    </Text>
+                  </TouchableOpacity>
+
+                </ScrollView>
+              </TouchableWithoutFeedback>
+            </KeyboardAvoidingView>
+          )}
+        </SafeAreaView>
       </LinearGradient>
-    </SafeAreaView>
+    </View>
   );
 }

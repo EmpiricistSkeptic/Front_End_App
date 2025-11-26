@@ -19,11 +19,20 @@ export const ProfileProvider = ({ children }) => {
 
   const refreshProfile = useCallback(async () => {
     const response = await apiService.get('profile/me/');
+
     const level = response.level || 1;
     const points = response.points || 0;
     const totalPoints = calculateXpThreshold(level);
     const expPercentage =
       totalPoints > 0 ? (points / totalPoints) * 100 : 0;
+
+    // “сырой” URL аватара, который приходит с бэка
+    const rawAvatar = response.avatar_url || response.avatar || null;
+
+    // Добавляем параметр версии, чтобы ломать кеш
+    const avatarWithVersion = rawAvatar
+      ? `${rawAvatar}${rawAvatar.includes('?') ? '&' : '?'}v=${Date.now()}`
+      : null;
 
     setProfileData({
       ...response,
@@ -31,11 +40,14 @@ export const ProfileProvider = ({ children }) => {
       points,
       totalPoints,
       expPercentage,
-      avatar: response.avatar_url || response.avatar || null,
+      // используем урл с версией
+      avatar: avatarWithVersion,
+      // если вдруг где-то понадобится — хранится и сырой вариант
+      avatarRaw: rawAvatar,
     });
   }, []);
 
-  // Можно один раз подгрузить профиль при старте приложения
+  // Один раз подгружаем профиль при старте приложения
   useEffect(() => {
     refreshProfile().catch((err) =>
       console.error('Initial profile load error:', err)
@@ -64,7 +76,4 @@ export const useProfile = () => {
   return ctx;
 };
 
-// Можем экспортнуть сам контекст, если очень нужно, но лучше им не пользоваться напрямую
 export { ProfileContext };
-
-
