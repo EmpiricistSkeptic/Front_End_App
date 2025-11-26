@@ -1234,9 +1234,15 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
   },
   addButton: {
-    padding: 8,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    padding: 9, // Чуть увеличим область нажатия
+    backgroundColor: '#4dabf7', // Яркий синий цвет (акцентный цвет твоего приложения)
     borderRadius: 50,
+    // Добавим тень, чтобы кнопка парила над фоном
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4.65,
+    elevation: 8,
   },
 
   habitsContainer: { flex: 1 },
@@ -1262,15 +1268,28 @@ const styles = StyleSheet.create({
   },
 
   habitItem: {
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
-    borderRadius: 12,
-    padding: 15,
-    marginBottom: 12,
+    backgroundColor: '#1E2248', 
+    
+    borderRadius: 16, // Скруглим углы чуть сильнее для красоты
+    padding: 16,      // Чуть больше воздуха внутри
+    marginBottom: 14,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    
+    // ГРАНИЦЫ: Делаем тонкую, но заметную рамку
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
+    borderColor: 'rgba(255, 255, 255, 0.15)',
+    
+    // ТЕНЬ: Самое важное для отделения от фона (особенно на Android)
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 6,
+    },
+    shadowOpacity: 0.35,
+    shadowRadius: 5,
+    elevation: 8,
   },
   habitTrackedToday: {
     backgroundColor: 'rgba(52, 199, 89, 0.15)',
@@ -1286,7 +1305,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 8,
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 12,

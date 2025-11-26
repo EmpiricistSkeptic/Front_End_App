@@ -27,6 +27,7 @@ const DEFAULT_POMODORO = {
   long_break_minutes: 15,
 };
 
+
 export default function PomodoroScreen({ navigation }) {
   const { t } = useTranslation();
 
@@ -46,6 +47,23 @@ export default function PomodoroScreen({ navigation }) {
   const [isRunning, setIsRunning] = useState(false);
   const [workSessionsCompleted, setWorkSessionsCompleted] = useState(0);
 
+  useEffect(() => {
+  const configureAudio = async () => {
+    try {
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: false,
+        playsInSilentModeIOS: true, // Важно для iOS
+        shouldDuckAndroid: true,
+        playThroughEarpieceAndroid: false,
+        staysActiveInBackground: false,
+      });
+    } catch (e) {
+      console.error('Audio config error', e);
+    }
+  };
+  configureAudio();
+}, []);
+
   const particles = useMemo(
     () =>
       [...Array(20)].map((_, i) => ({
@@ -60,25 +78,25 @@ export default function PomodoroScreen({ navigation }) {
   );
 
   const playSound = useCallback(async () => {
-    let sound;
-    try {
-      const result = await Audio.Sound.createAsync(
-        require('../assets/notification.mp3')
-      );
-      sound = result.sound;
-      await sound.playAsync();
-    } catch (error) {
-      console.error('Sound play error', error);
-    } finally {
-      if (sound) {
-        try {
-          await sound.unloadAsync();
-        } catch (e) {
-          console.warn('Sound unload error', e);
-        }
+  try {
+    const { sound } = await Audio.Sound.createAsync(
+      require('../assets/notification.mp3')
+    );
+
+    // Подписываемся на обновления статуса проигрывания
+    sound.setOnPlaybackStatusUpdate(async (status) => {
+      // Если проигрывание завершилось
+      if (status.didJustFinish) {
+        // Выгружаем звук из памяти
+        await sound.unloadAsync();
       }
-    }
-  }, []);
+    });
+
+    await sound.playAsync();
+  } catch (error) {
+    console.error('Sound play error', error);
+  }
+}, []);
 
   const handleTimerComplete = useCallback(() => {
     playSound();

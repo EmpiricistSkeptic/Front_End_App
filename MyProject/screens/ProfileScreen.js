@@ -39,7 +39,7 @@ import { logout as authLogout } from '../services/authService';
 import { useTranslation } from 'react-i18next';
 
 const { width, height } = Dimensions.get('window');
-const BASE_URL_MEDIA = 'http://192.168.0.102:8000';
+const BASE_URL_MEDIA = 'http://52.91.185.120';
 
 // ---- Вспомогательные функции ----
 function calculateXpThreshold(level) {

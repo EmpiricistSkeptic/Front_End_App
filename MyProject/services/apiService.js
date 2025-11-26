@@ -1,7 +1,7 @@
 import { getAccessToken, refreshAccessToken, logout } from './authService';
 
 // Базовый URL вашего API
-const BASE_URL = 'http://192.168.0.103:8000';
+const BASE_URL = 'http://52.91.185.120';
 // Общий префикс для всех API-эндпоинтов
 const API_PREFIX = '/api';
 

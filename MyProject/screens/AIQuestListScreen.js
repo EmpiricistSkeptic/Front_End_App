@@ -151,34 +151,43 @@ export default function AIQuestListScreen({ navigation }) {
 
   const handleFailQuest = (questId) => {
     Alert.alert(
-      t('quests.alerts.failConfirmTitle'),
+      t('quests.alerts.failConfirmTitle'), // Текст остается прежним ("Вы уверены...?")
       t('quests.alerts.failConfirmBody'),
       [
         { text: t('quests.alerts.cancel'), style: 'cancel' },
         {
-          text: t('quests.alerts.confirm'),
+          text: t('quests.alerts.confirm'), // Текст кнопки ("Да, провалить")
           style: 'destructive',
           onPress: async () => {
             try {
-              await apiService.post(`quests/fail/${questId}/`);
+              // ИЗМЕНЕНИЕ: Используем метод delete вместо post
+              // Предполагается, что ваш API поддерживает DELETE запрос на 'quests/{id}/'
+              await apiService.delete(`quests/${questId}/`); 
+              
               Alert.alert(
-                t('quests.alerts.failedTitle'),
+                t('quests.alerts.failedTitle'), // Текст: "Квест провален" (но по факту удален)
                 t('quests.alerts.failedBody')
               );
 
+              // Сразу убираем квест из локального списка, чтобы он исчез с экрана
+              setQuests((currentQuests) => 
+                currentQuests.filter((q) => q.id !== questId)
+              );
+              
+              // Закрываем модальное окно, если удаляли из него
+              setQuestDetailsVisible(false);
+
+              // Обновляем профиль и список (на случай рассинхрона)
               await Promise.all([
                 fetchQuests(),
-                selectedQuest && selectedQuest.id === questId
-                  ? fetchQuestDetails(questId)
-                  : Promise.resolve(),
                 refreshProfile(),
               ]);
             } catch (error) {
               if (handleSessionError(error)) return;
-              console.error('Error failing quest', error);
+              console.error('Error deleting quest', error);
               Alert.alert(
                 t('quests.alerts.errorTitle'),
-                t('quests.alerts.failFail')
+                t('quests.alerts.failFail') // Текст ошибки оставляем прежним
               );
             }
           },
@@ -600,7 +609,7 @@ export default function AIQuestListScreen({ navigation }) {
       </ScrollView>
 
       {/* Quests list */}
-      <ScrollView style={styles.questsContainer}>
+      <ScrollView style={styles.questsContainer} contentContainerStyle={{ paddingBottom: 120 }}>
         {loading ? (
           <View style={styles.loadingContainer}>
             <Text style={styles.loadingText}>

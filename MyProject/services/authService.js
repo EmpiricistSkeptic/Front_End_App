@@ -1,7 +1,7 @@
 // authService.js
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const BASE_URL = "http://192.168.0.103:8000";
+const BASE_URL = "http://52.91.185.120";
 
 // --- Ключи для хранения в AsyncStorage ---
 const ACCESS_KEY = 'jwt_access_token';
